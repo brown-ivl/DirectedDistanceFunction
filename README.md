@@ -1,1 +1,1 @@
-# DirectedSDF
+# Directed Distance Function
