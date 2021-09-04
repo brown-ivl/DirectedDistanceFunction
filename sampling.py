@@ -8,7 +8,6 @@ CHECK OTHER PAPERS for how to sample lightfields
 
 Also - add additional training examples by adding d to start point and d to depth
 '''
-import visualization
 import rasterization
 import utils
 
@@ -145,6 +144,7 @@ if __name__ == "__main__":
     method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
 
     if args.viz:
+        import visualization
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         for i, sampling_method in enumerate(sampling_methods):
             visualizer = visualization.RayVisualizer(verts, lines)

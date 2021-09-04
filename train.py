@@ -10,6 +10,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
+import trimesh
 
 from data import DepthData
 from model import SimpleMLP
@@ -140,10 +141,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_workers", type=int, default=1, help="Number of workers for dataloaders. Recommended is 2*num cores")
 
     # DATA
-    parser.add_argument("--samples_per_mesh", type=int, default=100000, help="Number of rays to sample for each mesh")
-    # parser.add_argument("--data_path", type=str, default="C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data", help="path to data files")
-    # parser.add_argument("--instance", type=str, default="50002_hips_poses_0694", help="the name of the mesh instance")
-    # parser.add_argument("--gender", type=str, default="male", help="the gender of the mesh subject")
+    parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
 
     # MODEL
     parser.add_argument("--lmbda", type=float, default=100., help="Multiplier for depth l2 loss")
@@ -164,27 +162,32 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--load", action="store_true", help="Load the model from file")
     parser.add_argument("-d", "--viz_depth", action="store_true", help="Visualize the learned depth map and intersection mask versus the ground truth")
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
-    parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
-    # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
+    # parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
+    parser.add_argument("--model_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/large_files/ddf_models")
     args = parser.parse_args()
 
     model_path = os.path.join(args.model_dir, f"{args.name}.pt")
     model = SimpleMLP().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    base_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data"
-    instance = "50002_hips_poses_0694"
-    gender = "male"
-    smpl_data_path = os.path.join(base_path, f"{instance}_smpl.npy")
-    faces_path = os.path.join(base_path, f"{gender}_template_mesh_faces.npy")
+    # base_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data"
+    # instance = "50002_hips_poses_0694"
+    # gender = "male"
+    # smpl_data_path = os.path.join(base_path, f"{instance}_smpl.npy")
+    # faces_path = os.path.join(base_path, f"{gender}_template_mesh_faces.npy")
 
-    smpl_data = np.load(smpl_data_path, allow_pickle=True).item()
-    verts = np.array(smpl_data["smpl_mesh_v"])
-    faces = np.array(np.load(faces_path, allow_pickle=True))
+    # smpl_data = np.load(smpl_data_path, allow_pickle=True).item()
+    # verts = np.array(smpl_data["smpl_mesh_v"])
+    # faces = np.array(np.load(faces_path, allow_pickle=True))
+
+    mesh_path = "/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj"
+    mesh = trimesh.load(mesh_path)
+    faces = mesh.faces
+    verts = mesh.vertices
     verts = utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_ray_space, sampling.sample_vertex_noise, sampling.sample_vertex_all_directions, sampling.sample_vertex_tangential]
-    sampling_frequency = [0.5, 0.0, 0.25, 0.25]
+    sampling_frequency = [1.0, 0.0, 0.0, 0.0]
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
     test_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=int(args.samples_per_mesh*0.1))
