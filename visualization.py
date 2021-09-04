@@ -35,7 +35,10 @@ def make_mesh(verts, faces, color=None):
     mesh.triangles = o3d.utility.Vector3iVector(faces)
     mesh.compute_vertex_normals()
     if color is not None:
-        mesh.paint_uniform_color(color)
+        if len(color.shape) == 1:
+            mesh.paint_uniform_color(color)
+        else:
+            mesh.vertex_colors = o3d.utility.Vector3dVector(color)
     return mesh
 
 
@@ -54,6 +57,7 @@ class RayVisualizer():
         self.ray_inds = []
         self.ray_colors = []
         self.mesh_inds = []
+        self.colored_meshes = []
         # self.mesh_colors = []
 
     def add_point(self, point, color):
@@ -67,6 +71,10 @@ class RayVisualizer():
 
     def add_mesh_faces(self, faces):
         self.mesh_inds += faces
+
+    def add_colored_mesh(self, verts, faces, colors):
+        self.colored_meshes.append(make_mesh(verts, faces, color=colors))
+
 
     def add_sample(self, ray_start, ray_end, occ, depth, intersected_faces):
         '''
@@ -99,5 +107,6 @@ class RayVisualizer():
         if len(self.ray_points) > 0:
             to_show.append(make_line_set(np.array(self.ray_points), np.array(self.ray_inds), np.array(self.ray_colors)))
         if len(self.mesh_inds) > 0:
-            to_show.append(make_mesh(self.verts, self.mesh_inds, color=[1.,0.,0.]))
+            to_show.append(make_mesh(self.verts, self.mesh_inds, color=np.array([1.,0.,0.])))
+        to_show += self.colored_meshes
         o3d.visualization.draw_geometries(to_show)

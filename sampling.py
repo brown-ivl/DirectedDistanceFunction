@@ -17,7 +17,9 @@ import argparse
 import os
 import datetime
 import matplotlib.pyplot as plt
+import trimesh
 from scipy.stats import norm, uniform
+from tqdm import tqdm
 
 
 def sample_uniform_ray_space(radius, **kwargs):
@@ -107,10 +109,14 @@ def sample_vertex_tangential(radius, verts=None, noise=0.01, vert_normals=None, 
     bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
     position = uniform.rvs()
     start_point = bound1*position + (1.-position)*bound2
-    # start_point = verts[v] + direction + norm.rvs(scale=noise, size=3)
     return start_point, end_point, None
-    # return bound1, bound2
 
+def uniform_ray_space_equal_intersections():
+    '''
+    Samples a ray uniformly at random from ray space (two points on surface of sphere). Then, all of the intersections along the ray are found,
+    and one of the rays is sampled
+    '''
+    pass
 
 if __name__ == "__main__":
 
@@ -118,19 +124,25 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--viz", action="store_true", help="visualize randomly sampled rays")
     parser.add_argument("-s", "--speed", action="store_true", help="show speed benchmarks for randomly generated rays")
     parser.add_argument("-d", "--depthmap", action="store_true", help="show a depth map image of the mesh")
+    parser.add_argument("-c", "--coverage", action="store_true", help="show the intersected vertices of the mesh")
     args = parser.parse_args()
 
     
-    # base_path = os.path.join("~", "Brown","ivl-research","large_files","sample_data")
-    base_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data"
-    instance = "50002_hips_poses_0694"
-    gender = "male"
-    smpl_data_path = os.path.join(base_path, f"{instance}_smpl.npy")
-    faces_path = os.path.join(base_path, f"{gender}_template_mesh_faces.npy")
+    # # base_path = os.path.join("~", "Brown","ivl-research","large_files","sample_data")
+    # base_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data"
+    # instance = "50002_hips_poses_0694"
+    # gender = "male"
+    # smpl_data_path = os.path.join(base_path, f"{instance}_smpl.npy")
+    # faces_path = os.path.join(base_path, f"{gender}_template_mesh_faces.npy")
+    # smpl_data = np.load(smpl_data_path, allow_pickle=True).item()
+    # verts = np.array(smpl_data["smpl_mesh_v"])
+    # faces = np.array(np.load(faces_path, allow_pickle=True))
 
-    smpl_data = np.load(smpl_data_path, allow_pickle=True).item()
-    verts = np.array(smpl_data["smpl_mesh_v"])
-    faces = np.array(np.load(faces_path, allow_pickle=True))
+    file_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data\\stanford_bunny.obj"
+    mesh = trimesh.load(file_path)
+    faces = mesh.faces
+    verts = mesh.vertices
+    
     verts = utils.mesh_normalize(verts)
     radius = 1.25
     fixed_endpoint = 700
@@ -141,22 +153,24 @@ if __name__ == "__main__":
     near_face_threshold = rasterization.max_edge(verts, faces)
     vert_normals = utils.get_vertex_normals(verts, faces)
 
-    sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
-    method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
+    # sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
+    # method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
+    sampling_methods = [sample_vertex_all_directions, sample_vertex_tangential]
+    method_names = ["sample_vertex_all_directions", "sample_vertex_tangential"]
 
     if args.viz:
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         for i, sampling_method in enumerate(sampling_methods):
             visualizer = visualization.RayVisualizer(verts, lines)
             print(method_names[i])
-            for _ in range(1):
+            for _ in range(100):
                 # Sample a ray
                 ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=fixed_endpoint)
                 # rotate and compute depth/occupancy
                 rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
                 occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
                 # update visualizer
-                visualizer.add_sample(ray_start, ray_end, occ, depth, intersected_faces)
+                visualizer.add_sample(ray_start, ray_end, occ, depth, faces[intersected_faces] if intersected_faces.shape[0] > 0 else [])
             visualizer.add_point([1.,0.,0.], [1.,0.,0.])
             visualizer.add_point([0.,1.,0.], [0.,1.,0.])
             visualizer.add_point([0.,0.,1.], [0.,0.,1.])
@@ -169,7 +183,7 @@ if __name__ == "__main__":
             print(method_names[i])
             start = datetime.datetime.now()
             for _ in range(n_samples):
-                ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=fixed_endpoint)
+                ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=None)
                 rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
                 occ, depth = rasterization.ray_occ_depth(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
             end = datetime.datetime.now()
@@ -177,19 +191,63 @@ if __name__ == "__main__":
             print(f"\t{n_samples/secs :.0f} rays per second")
 
     if args.depthmap:
-        cam_center = [1.0,0.0,1.0]
-        direction = [-1.0,-0.0,-1.0]
-        focal_length = 1.5
+        cam_center = [0.,1.5,0.]
+        direction = [0.,-1.5,0.]
+        focal_length = 1.0
         sensor_size = [1.0,1.0]
-        resolution = [250,250]
+        resolution = [100,100]
 
-        # rays = utils.camera_view_rays([1.3,1.3,0.1], [-1.3,-1.3,-0.1], 1.5, [1.0,1.0], resolution)
-        # depths = np.array([rasterization.ray_occ_depth(faces, rasterization.rotate_mesh(verts, ray[0], ray[1]), ray_start_depth=np.linalg.norm(ray[1]-ray[0]), near_face_threshold=near_face_threshold)[1] for ray in rays])
-        # depths = np.reshape(depths, tuple(resolution))
+        # show u and v vectors
+        # direction /= np.linalg.norm(direction)
+        # if direction[0] == 0. and direction[2] == 0.:
+        #     u_direction = np.array([1.,0.,0.])
+        #     v_direction = np.array([0.,0.,1.])*(-1. if direction[1] > 0. else 1.)
+        # else:
+        #     u_direction = np.cross(direction, np.array([0.,1.,0.]))
+        #     v_direction = np.cross(direction, u_direction)
+        #     v_direction /= np.linalg.norm(v_direction)
+        #     u_direction /= np.linalg.norm(u_direction)
+
+        # lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        # visualizer = visualization.RayVisualizer(verts, lines)
+        # visualizer.add_point([1.,0.,0.], [1.,0.,0.])
+        # visualizer.add_point([0.,1.,0.], [0.,1.,0.])
+        # visualizer.add_point([0.,0.,1.], [0.,0.,1.])
+        # visualizer.add_ray([cam_center, cam_center+direction/np.linalg.norm(direction)*0.1], np.array([1.,0.,0.]))
+        # visualizer.add_ray([cam_center, cam_center+u_direction*0.1], np.array([0.,1.,0.]))
+        # visualizer.add_ray([cam_center, cam_center+v_direction*0.1], np.array([0.,0.,1.]))
+        # visualizer.display()
+        
         intersection, depth = rasterization.camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, resolution, near_face_threshold=near_face_threshold)
         plt.imshow(depth)
         plt.show()
         plt.imshow(intersection)
         plt.show()
+
+    if args.coverage:
+        lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        print(f"There are {faces.shape[0]} faces in the mesh")
+        print(f"Sampling 10*{faces.shape[0]} rays per method")
+        for i, sampling_method in enumerate(sampling_methods):
+            visualizer = visualization.RayVisualizer(verts, lines)
+            print(method_names[i])
+            face_counts = np.zeros(faces.shape[0]).astype(float)
+            # Sample 10 rays per face (on average)
+            for _ in tqdm(range(10*faces.shape[0])):
+                # Sample a ray
+                ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=None)
+                # rotate and compute depth/occupancy
+                rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
+                occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=None)
+                face_counts[intersected_faces.astype(int)] += 1.
+            upper_limit = 20.
+            upper_color = np.array([0.,1.,0.])
+            lower_color = np.array([1.,0.,0.])
+            pick_face_color = lambda x: np.array([1.,1.,1.]) if face_counts[x] == 0. else ((min(face_counts[x]/upper_limit, 1.))) * upper_color + (1. - min(face_counts[x]/upper_limit, 1.)) * lower_color
+            mesh_verts = np.vstack(verts[faces[i]] for i in range(faces.shape[0]))
+            mesh_faces = np.arange(mesh_verts.shape[0]).reshape((-1,3))
+            mesh_vert_colors = np.vstack([np.vstack([pick_face_color(x)[np.newaxis, :]]*3) for x in range(faces.shape[0])])
+            visualizer.add_colored_mesh(mesh_verts, mesh_faces, mesh_vert_colors)
+            visualizer.display()
 
 

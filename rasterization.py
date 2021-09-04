@@ -5,6 +5,7 @@ and skinning weights data.
 
 import numpy as np
 import utils
+from tqdm import tqdm
 
 # np.random.seed(20210804)
 
@@ -79,10 +80,9 @@ def prune_mesh(verts, faces, radius):
 
     near_faces = new_vert_indices[faces[near_faces_i]]
     near_verts = verts[near_verts_i]
-    # if skn_wgts is not None:
-    #     skn_wgts = skn_wgts[near_verts_i, :]
+    original_faces = np.arange(faces.shape[0])[near_faces_i]
 
-    return near_verts, near_faces, new_vert_indices
+    return near_verts, near_faces, new_vert_indices, original_faces
 
 def get_weights(faces, verts):
     '''
@@ -142,12 +142,10 @@ def ray_occ_depth(faces, verts, ray_start_depth=1., near_face_threshold=0.08, v=
         depth, the depth to the first intersection, or np.inf if there are no intersections
     
     v can be passed if the the ray endpoint is a mesh vertex. This prevents each face with vertex v from being counted as a separate intersection
-    TODO: Add skinning weights
     '''
 
      # Prune faces far from the ray
-    #  TODO: Pass skinning weights to be pruned
-    near_verts, near_faces, near_vert_indices = prune_mesh(verts, faces, near_face_threshold)
+    near_verts, near_faces, near_vert_indices,_ = prune_mesh(verts, faces, near_face_threshold)
 
     # Remove the faces that contain the ray endpoint vertex
     if v is not None:
@@ -194,7 +192,7 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
     '''
 
      # Prune faces far from the ray
-    near_verts, near_faces, near_vert_indices, _ = prune_mesh(verts, faces, near_face_threshold)
+    near_verts, near_faces, near_vert_indices, original_faces = prune_mesh(verts, faces, near_face_threshold)
 
     # Function to convert near_vert indices to vert indices
     def get_original_index(near_vert_index):
@@ -202,9 +200,11 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
 
     # Remove the faces that contain the ray endpoint vertex
     if v is not None:
-        removed_faces = near_faces[np.any(near_faces == near_vert_indices[v], axis=1)]
+        removed_faces = original_faces[np.any(near_faces == near_vert_indices[v], axis=1)]
         # change removed faces back to original vertex indices for visualization
-        removed_faces = np.array([[get_original_index(removed_faces[i][j]) for j in range(removed_faces.shape[1])] for i in range(removed_faces.shape[0])])
+        # removed_faces = np.array([[get_original_index(removed_faces[i][j]) for j in range(removed_faces.shape[1])] for i in range(removed_faces.shape[0])])
+        # TODO: get indices of removed
+        original_faces = original_faces[np.all(near_faces != near_vert_indices[v], axis=1)]
         near_faces = near_faces[np.all(near_faces != near_vert_indices[v], axis=1)]
 
     wgts = get_weights(near_faces, near_verts)
@@ -214,9 +214,10 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
 
     intersected_face_inds = np.all(halfspace_outputs, axis=1)
     intersected_faces = near_faces[intersected_face_inds]
+    original_faces = original_faces[intersected_face_inds]
     intersections = get_intersection_depths(near_verts[intersected_faces])
     # change back to original vertex indices for visualization
-    intersected_faces = np.array([[get_original_index(intersected_faces[i][j]) for j in range(intersected_faces.shape[1])] for i in range(intersected_faces.shape[0])])
+    # intersected_faces = np.array([[get_original_index(intersected_faces[i][j]) for j in range(intersected_faces.shape[1])] for i in range(intersected_faces.shape[0])])
 
     # check if the ray origin is inside the mesh
     intersections_behind_origin = (intersections - ray_start_depth) >= 0
@@ -235,13 +236,13 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
     # get ray depths
     intersections[(intersections - ray_start_depth) >= 0] = np.NINF
     ray_depth = np.max(intersections - ray_start_depth) * -1
-    intersected_faces = intersected_faces[np.argmax(intersections)][np.newaxis, :]
+    # intersected_faces = intersected_faces[np.argmax(intersections)][np.newaxis, :]
+    original_faces = original_faces[np.argmax(intersections)][np.newaxis]
     if v is not None:
         # account for the intersection at 0 that we removed
         if ray_start_depth > 0 and ray_start_depth < ray_depth:
             return occ, ray_start_depth, removed_faces 
-
-    return occ, ray_depth, intersected_faces
+    return occ, ray_depth, original_faces
 
 def camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, sensor_resolution, near_face_threshold=0.1):
     '''
@@ -254,7 +255,7 @@ def camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_s
     Returns a mask of pixels that intersected the object and an occupancy array for a specific camera view
     '''
     rays = utils.camera_view_rays(cam_center, direction, focal_length, sensor_size, sensor_resolution)
-    depth = np.array([ray_occ_depth(faces, rotate_mesh(verts, ray[0], ray[1]), ray_start_depth=np.linalg.norm(ray[1]-ray[0]), near_face_threshold=near_face_threshold)[1] for ray in rays])
+    depth = np.array([ray_occ_depth(faces, rotate_mesh(verts, ray[0], ray[1]), ray_start_depth=np.linalg.norm(ray[1]-ray[0]), near_face_threshold=near_face_threshold)[1] for ray in tqdm(rays)])
     depth = np.reshape(depth, tuple(sensor_resolution))
     intersection = (depth < np.inf).astype(np.float)
     return intersection, depth
