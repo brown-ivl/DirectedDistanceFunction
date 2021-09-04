@@ -9,6 +9,7 @@ import argparse
 import os
 from tqdm import tqdm
 import numpy as np
+from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import trimesh
 
@@ -73,11 +74,14 @@ def train_epoch(model, train_loader, optimizer, lmbda):
 
 def test(model, test_loader, lmbda):
     bce = nn.BCELoss()
-    total_batches = 0.
     total_loss = 0.
-    depth_error = 0.
-    occ_accuracy = 0.
-    int_accuracy = 0.
+    total_batches = 0.
+
+    all_depth_errors = []
+    all_occ_pred = []
+    all_occ_label = []
+    all_int_pred = []
+    all_int_label = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
@@ -95,14 +99,51 @@ def test(model, test_loader, lmbda):
             depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect)], pred_depth[torch.logical_and(not_occ,intersect)])
             loss = occ_loss + intersect_loss + depth_loss
             total_loss += loss
-            total_batches += 1
-            depth_error += torch.mean(torch.abs(depth[torch.logical_and(not_occ,intersect)] - pred_depth[torch.logical_and(not_occ,intersect)]))
-            occ_accuracy += torch.mean((occ == (pred_occ>0.5)).double())
-            int_accuracy += torch.mean((intersect[not_occ] == (pred_int[not_occ]>0.5)).double())
-    print(f"Average Test Loss: {float(total_loss/total_batches):.4f}")
-    print(f"Average Occ Accuracy: {float(occ_accuracy/total_batches*100):.2f}%")
-    print(f"Average Intersect Accuracy: {float(int_accuracy/total_batches*100):.2f}%")
-    print(f"Average Depth Error: {float(depth_error/total_batches):.2f}")
+            all_depth_errors.append(torch.abs(depth[torch.logical_and(not_occ,intersect)] - pred_depth[torch.logical_and(not_occ,intersect)]).cpu().numpy())
+            all_occ_pred.append(pred_occ.cpu().numpy())
+            all_occ_label.append(occ.cpu().numpy())
+            all_int_pred.append(pred_int[not_occ].cpu().numpy())
+            all_int_label.append(intersect[not_occ].cpu().numpy())
+            total_batches+=1.
+
+    print(f"\nAverage Test Loss: {float(total_loss/total_batches):.4f}")
+    print("Confusion Matrix Layout:")
+    print("[[TN    FP]\n [FN    TP]]")
+
+    print("\nOccupancy-")
+    occ_confusion_mat = confusion_matrix(np.hstack(all_occ_label), np.hstack(all_occ_pred)>0.5)
+    occ_tn = occ_confusion_mat[0][0]
+    occ_fp = occ_confusion_mat[0][1]
+    occ_fn = occ_confusion_mat[1][0]
+    occ_tp = occ_confusion_mat[1][1]
+    occ_precision = occ_tp/(occ_tp + occ_fp)
+    occ_recall = occ_tp/(occ_tp + occ_fn)
+    occ_accuracy = (occ_tn+occ_tp)/np.sum(occ_confusion_mat)
+    print(f"Average Occ Accuracy: {float(occ_accuracy*100):.2f}%")
+    print(f"Occ Precision: {occ_precision*100:.2f}%")
+    print(f"Occ Recall: {occ_recall*100:.2f}%")
+    print(f"Occ F1: {2*(occ_precision*occ_recall)/(occ_precision + occ_recall)}")
+    print(occ_confusion_mat)
+
+    print("\nIntersection-")
+    int_confusion_mat = confusion_matrix(np.hstack(all_int_label), np.hstack(all_int_pred)>0.5)
+    int_tn = int_confusion_mat[0][0]
+    int_fp = int_confusion_mat[0][1]
+    int_fn = int_confusion_mat[1][0]
+    int_tp = int_confusion_mat[1][1]
+    int_precision = int_tp/(int_tp + int_fp)
+    int_recall = int_tp/(int_tp + int_fn)
+    int_accuracy = (int_tn + int_tp)/np.sum(int_confusion_mat)
+    print(f"Average Intersect Accuracy: {float(int_accuracy*100):.2f}%")
+    print(f"Intersect Precision: {int_precision*100:.2f}%")
+    print(f"Intersect Recall: {int_recall*100:.2f}%")
+    print(f"Intersect F1: {2*(int_precision*occ_recall)/(int_precision + int_recall)}")
+    print(int_confusion_mat)
+
+    print("\nDepth-")
+    all_depth_errors = np.hstack(all_depth_errors)
+    print(f"Average Depth Error: {np.mean(all_depth_errors):.4f}")
+    print(f"Median Depth Error: {np.median(all_depth_errors):.4f}\n")
 
 def viz_depth(model, verts, faces):
     '''
@@ -116,11 +157,11 @@ def viz_depth(model, verts, faces):
     gt_intersection, gt_depth = rasterization.camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, resolution, near_face_threshold=rasterization.max_edge(verts, faces))
     rays = utils.camera_view_rays(cam_center, direction, focal_length, sensor_size, resolution)
     with torch.no_grad():
-        angle_rays = torch.tensor([list(ray[0]) + list(utils.vector_to_angles(ray[1]-ray[0])) for ray in rays], dtype=torch.float32).to(device)
-        print(angle_rays.shape)
+        # angle_rays = torch.tensor([list(ray[0]) + list(utils.vector_to_angles(ray[1]-ray[0])) for ray in rays], dtype=torch.float32).to(device)
+        angle_rays = torch.tensor([[x for val in list(ray[0])+list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in utils.positional_encoding(val)] for ray in rays]).to(device)
         _, intersect, depth = model(angle_rays)
         depth = np.array(torch.reshape(depth.cpu(), tuple(resolution)))
-        intersect = np.array(torch.reshape(intersect.cpu() > 0.5, tuple(resolution))).astype(np.float)
+        intersect = np.array(torch.reshape(intersect.cpu() > 0.5, tuple(resolution))).astype(float)
     _, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
     ax1.imshow(gt_intersection)
     ax1.set_title("GT Intersect")
@@ -142,6 +183,8 @@ if __name__ == "__main__":
 
     # DATA
     parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
+    parser.add_argument("--mesh_file", default="/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj", help="Source of mesh to train on")
+    # "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
 
     # MODEL
     parser.add_argument("--lmbda", type=float, default=100., help="Multiplier for depth l2 loss")
@@ -180,7 +223,6 @@ if __name__ == "__main__":
     # verts = np.array(smpl_data["smpl_mesh_v"])
     # faces = np.array(np.load(faces_path, allow_pickle=True))
 
-    mesh_path = "/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj"
     mesh = trimesh.load(mesh_path)
     faces = mesh.faces
     verts = mesh.vertices

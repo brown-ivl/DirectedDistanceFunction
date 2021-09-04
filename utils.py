@@ -129,12 +129,14 @@ def camera_view_rays(cam_center, direction, focal_length, sensor_size, sensor_re
 
     assert(np.linalg.norm(direction) != 0.)
     direction /= np.linalg.norm(direction)
-    if direction[0] == 0. and direction[1] == 0.:
+    if direction[0] == 0. and direction[2] == 0.:
         u_direction = np.array([1.,0.,0.])
-        v_direction = np.array([0.,1.,0.])
+        v_direction = np.array([0.,0.,1.])*(-1. if direction[1] > 0. else 1.)
     else:
-        v_direction = np.cross(np.array([0.,0.,1.]), direction)
-        u_direction = np.cross(v_direction, direction)
+        # v_direction = np.cross(np.array([0.,0.,1.]), direction)
+        # u_direction = np.cross(v_direction, direction)
+        u_direction = np.cross(direction, np.array([0.,1.,0.]))
+        v_direction = np.cross(direction, u_direction)
         v_direction /= np.linalg.norm(v_direction)
         u_direction /= np.linalg.norm(u_direction)
     u_steps = np.linspace(-sensor_size[0], sensor_size[0], num=sensor_resolution[0])
