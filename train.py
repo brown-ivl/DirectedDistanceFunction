@@ -12,9 +12,10 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import trimesh
+# from beacon.utils import saveLossesCurve
 
 from data import DepthData
-from model import SimpleMLP
+from model import AdaptedLFN, SimpleMLP
 import utils
 import sampling
 import rasterization
@@ -67,10 +68,15 @@ def train_epoch(model, train_loader, optimizer, lmbda):
         optimizer.step()
         total_loss += loss.detach()
         total_batches += 1
-    print(f"Average Loss: {float(total_loss/total_batches):.4f}")
-    print(f"Average Occ Loss: {float(sum_occ_loss/total_batches):.4f}")
-    print(f"Average Intersect Loss: {float(sum_int_loss/total_batches):.4f}")
-    print(f"Average Depth Loss: {float(sum_depth_loss/total_batches):.4f}")
+    avg_loss = float(total_loss/total_batches)
+    avg_occ_loss = float(sum_occ_loss/total_batches)
+    avg_int_loss = float(sum_int_loss/total_batches)
+    avg_depth_loss = float(sum_depth_loss/total_batches)
+    print(f"Average Loss: {avg_loss:.4f}")
+    print(f"Average Occ Loss: {avg_occ_loss:.4f}")
+    print(f"Average Intersect Loss: {avg_int_loss:.4f}")
+    print(f"Average Depth Loss: {avg_depth_loss:.4f}")
+    return avg_loss, avg_occ_loss, avg_int_loss, avg_depth_loss
 
 def test(model, test_loader, lmbda):
     bce = nn.BCELoss()
@@ -206,12 +212,14 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--load", action="store_true", help="Load the model from file")
     parser.add_argument("-d", "--viz_depth", action="store_true", help="Visualize the learned depth map and intersection mask versus the ground truth")
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
-    parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
-    # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
+    # parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
+    # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
+    parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
+    parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
     args = parser.parse_args()
 
     model_path = os.path.join(args.model_dir, f"{args.name}.pt")
-    model = SimpleMLP().to(device)
+    model = AdaptedLFN().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # base_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data"
@@ -231,6 +239,7 @@ if __name__ == "__main__":
 
     sampling_methods = [sampling.sample_uniform_ray_space, sampling.sample_vertex_noise, sampling.sample_vertex_all_directions, sampling.sample_vertex_tangential]
     sampling_frequency = [0.5, 0.0, 0.25, 0.25]
+    test_sampling_frequency = [1., 0., 0., 0.]
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
     test_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=int(args.samples_per_mesh*0.1))
@@ -244,9 +253,18 @@ if __name__ == "__main__":
     if args.train:
         print(f"Training for {args.epochs} epochs...")
         model=model.train()
+        total_loss = []
+        occ_loss = []
+        int_loss = []
+        depth_loss = []
         for e in range(args.epochs):
             print(f"EPOCH {e+1}")
-            train_epoch(model, train_loader, optimizer, args.lmbda)
+            tl, ol, il, dl = train_epoch(model, train_loader, optimizer, args.lmbda)
+            total_loss.append(tl)
+            occ_loss.append(ol)
+            int_loss.append(il)
+            depth_loss.append(dl)
+            utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=os.path.join(args.loss_dir, args.name), log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)

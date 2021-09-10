@@ -153,10 +153,10 @@ if __name__ == "__main__":
     near_face_threshold = rasterization.max_edge(verts, faces)
     vert_normals = utils.get_vertex_normals(verts, faces)
 
-    # sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
-    # method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
-    sampling_methods = [sample_vertex_all_directions, sample_vertex_tangential]
-    method_names = ["sample_vertex_all_directions", "sample_vertex_tangential"]
+    sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
+    method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
+    # sampling_methods = [sample_vertex_all_directions, sample_vertex_tangential]
+    # method_names = ["sample_vertex_all_directions", "sample_vertex_tangential"]
 
     if args.viz:
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
@@ -191,8 +191,8 @@ if __name__ == "__main__":
             print(f"\t{n_samples/secs :.0f} rays per second")
 
     if args.depthmap:
-        cam_center = [0.,1.5,0.]
-        direction = [0.,-1.5,0.]
+        cam_center = [0.,1.0,1.]
+        direction = [0.,-1.0,-1.]
         focal_length = 1.0
         sensor_size = [1.0,1.0]
         resolution = [100,100]

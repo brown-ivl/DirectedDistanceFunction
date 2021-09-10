@@ -4,6 +4,7 @@ General utility functions
 import math
 import numpy as np
 from scipy.stats import norm, uniform
+import matplotlib.pyplot as plt
 
 # def deepsdf_undo_preprocess(smpl_vertices, points):
 #         '''
@@ -146,4 +147,35 @@ def camera_view_rays(cam_center, direction, focal_length, sensor_size, sensor_re
     vs = vs.flatten()
     rays = [[np.array(cam_center), np.array(cam_center + focal_length * direction + us[i]*u_direction) + vs[i]*v_direction] for i in range(us.shape[0])]
     return rays
-    
+
+def saveLossesCurve(*args, **kwargs):
+    '''
+    Copied from Beacon - wanted log scale for loss
+    '''
+    plt.clf()
+    ylim = 0
+    for Ctr, arg in enumerate(args, 0):
+        if len(arg) <= 0:
+            continue
+        if Ctr >= 1: # For sublosses
+            plt.plot(arg, linestyle='--')
+        else:
+            plt.plot(arg, linestyle='-')
+        ylim = ylim + np.median(np.asarray(arg))
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    if 'xlim' in kwargs:
+        plt.xlim(kwargs['xlim'])
+    if 'legend' in kwargs:
+        if len(kwargs['legend']) > 0:
+            plt.legend(kwargs['legend'])
+    if 'title' in kwargs:
+        plt.title(kwargs['title'])
+    if 'log' in kwargs and kwargs['log']:
+        plt.yscale("log")
+    if ylim > 0:
+        plt.ylim([0.0, ylim])
+    if 'out_path' in kwargs:
+        plt.savefig(kwargs['out_path'])
+    else:
+        print('[ WARN ]: No output path (out_path) specified. beacon.utils.saveLossesCurve()')
