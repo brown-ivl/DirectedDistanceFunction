@@ -237,12 +237,8 @@ if __name__ == "__main__":
     verts = utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_ray_space, sampling.sample_vertex_noise, sampling.sample_vertex_all_directions, sampling.sample_vertex_tangential]
-<<<<<<< HEAD
     sampling_frequency = [0.5, 0.0, 0.25, 0.25]
     test_sampling_frequency = [1., 0., 0., 0.]
-=======
-    sampling_frequency = [1.0, 0.0, 0.0, 0.0]
->>>>>>> a520dc164be999f5c197d2ee7482c27e5ebd5903
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
     test_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=int(args.samples_per_mesh*0.1))
