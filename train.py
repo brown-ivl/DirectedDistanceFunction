@@ -128,7 +128,7 @@ def test(model, test_loader, lmbda):
     print(f"Average Occ Accuracy: {float(occ_accuracy*100):.2f}%")
     print(f"Occ Precision: {occ_precision*100:.2f}%")
     print(f"Occ Recall: {occ_recall*100:.2f}%")
-    print(f"Occ F1: {2*(occ_precision*occ_recall)/(occ_precision + occ_recall)}")
+    print(f"Occ F1: {2*(occ_precision*occ_recall)/(occ_precision + occ_recall):.4f}")
     print(occ_confusion_mat)
 
     print("\nIntersection-")
@@ -143,7 +143,7 @@ def test(model, test_loader, lmbda):
     print(f"Average Intersect Accuracy: {float(int_accuracy*100):.2f}%")
     print(f"Intersect Precision: {int_precision*100:.2f}%")
     print(f"Intersect Recall: {int_recall*100:.2f}%")
-    print(f"Intersect F1: {2*(int_precision*occ_recall)/(int_precision + int_recall)}")
+    print(f"Intersect F1: {2*(int_precision*occ_recall)/(int_precision + int_recall):.4f}")
     print(int_confusion_mat)
 
     print("\nDepth-")
@@ -155,7 +155,7 @@ def viz_depth(model, verts, faces):
     '''
     Visualize learned depth map and intersection mask compared to the ground truth
     '''
-    cam_center = [-1.0,0.0,-1.0]
+    cam_center = [-0.8,0.0,-0.8]
     direction = [1.0,0.0,1.0]
     focal_length = 1.5
     sensor_size = [1.0,1.0]
@@ -168,15 +168,21 @@ def viz_depth(model, verts, faces):
         _, intersect, depth = model(angle_rays)
         depth = np.array(torch.reshape(depth.cpu(), tuple(resolution)))
         intersect = np.array(torch.reshape(intersect.cpu() > 0.5, tuple(resolution))).astype(float)
-    _, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
+    depth_learned_mask = depth + np.where(intersect, 0., np.inf)
+    depth_gt_mask = depth + np.where(gt_intersection, 0., np.inf)
+    _, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
     ax1.imshow(gt_intersection)
     ax1.set_title("GT Intersect")
     ax2.imshow(intersect)
     ax2.set_title("Intersect")
     ax3.imshow(gt_depth)
     ax3.set_title("GT Depth")
-    ax4.imshow(depth)
-    ax4.set_title("Depth")
+    ax4.imshow(depth_learned_mask)
+    ax4.set_title("Depth - Learned Mask")
+    ax5.imshow(depth_gt_mask)
+    ax5.set_title("Depth - GT Mask")
+    ax6.imshow(depth)
+    ax6.set_title("Depth")
     plt.show()
 
 
@@ -213,11 +219,21 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
     # parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
     # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
-    parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
-    parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
+    # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
+    # parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
+    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/large_files/directedDF/", help="a directory where model weights, loss curves, and visualizations will be saved")
+
     args = parser.parse_args()
 
-    model_path = os.path.join(args.model_dir, f"{args.name}.pt")
+    # make sure the output directory is setup correctly
+    assert(os.path.exists(args.save_dir))
+    necessary_subdirs = ["saved_models", "loss_curves"]
+    for subdir in necessary_subdirs:
+        if not os.path.exists(os.path.join(args.save_dir, subdir)):
+            os.mkdir(os.path.join(args.save_dir, subdir))
+
+    model_path = os.path.join(args.save_dir, "saved_models", f"{args.name}.pt")
+    loss_path = os.path.join(args.save_dir, "loss_curves", args.name)
     model = AdaptedLFN().to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -263,7 +279,7 @@ if __name__ == "__main__":
             occ_loss.append(ol)
             int_loss.append(il)
             depth_loss.append(dl)
-            utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=os.path.join(args.loss_dir, args.name), log=True)
+            utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=loss_path, log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)
