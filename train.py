@@ -231,7 +231,7 @@ if __name__ == "__main__":
     # verts = np.array(smpl_data["smpl_mesh_v"])
     # faces = np.array(np.load(faces_path, allow_pickle=True))
 
-    mesh = trimesh.load(mesh_path)
+    mesh = trimesh.load(args.mesh_file)
     faces = mesh.faces
     verts = mesh.vertices
     verts = utils.mesh_normalize(verts)
