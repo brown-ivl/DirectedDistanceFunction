@@ -8,7 +8,6 @@ CHECK OTHER PAPERS for how to sample lightfields
 
 Also - add additional training examples by adding d to start point and d to depth
 '''
-import visualization
 import rasterization
 import utils
 
@@ -125,6 +124,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--speed", action="store_true", help="show speed benchmarks for randomly generated rays")
     parser.add_argument("-d", "--depthmap", action="store_true", help="show a depth map image of the mesh")
     parser.add_argument("-c", "--coverage", action="store_true", help="show the intersected vertices of the mesh")
+    parser.add_argument("--mesh_file", default="F:\\ivl-data\\sample_data\\stanford_bunny.obj", help="Source of mesh file")
     args = parser.parse_args()
 
     
@@ -138,8 +138,7 @@ if __name__ == "__main__":
     # verts = np.array(smpl_data["smpl_mesh_v"])
     # faces = np.array(np.load(faces_path, allow_pickle=True))
 
-    file_path = "C:\\Users\\Trevor\\Brown\\ivl-research\\large_files\\sample_data\\stanford_bunny.obj"
-    mesh = trimesh.load(file_path)
+    mesh = trimesh.load(args.mesh_file)
     faces = mesh.faces
     verts = mesh.vertices
     
@@ -159,6 +158,7 @@ if __name__ == "__main__":
     # method_names = ["sample_vertex_all_directions", "sample_vertex_tangential"]
 
     if args.viz:
+        import visualization
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         for i, sampling_method in enumerate(sampling_methods):
             visualizer = visualization.RayVisualizer(verts, lines)
