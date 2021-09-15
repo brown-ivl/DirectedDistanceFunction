@@ -1,7 +1,7 @@
 
 # Directed Distance Function
 
-This repository contains all the code needed to train a network to learn the directed distance to an object surface. This includes code for data generation, model creation, and training.
+This repository contains all the code needed to train a network to learn the directed distance to an object surface. This includes code for data generation, model creation, training, and visualization.
 
 ## Data Generation / Sampling Rays
 
