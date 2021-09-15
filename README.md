@@ -1,7 +1,7 @@
 
 # Directed Distance Function
 
-This repository contains all the code needed to train a network to learn the directed distance to an object surface. This includes code for data generation, model creation, and training.
+This repository contains all the code needed to train a network to learn the directed distance to an object surface. This includes code for data generation, model creation, training, and visualization.
 
 ## Data Generation / Sampling Rays
 
@@ -17,7 +17,7 @@ You can also see how fast each sampling method is by running
 
 To train, test, and save a network, run
 
-`python train.py -Tts -n mynetwork --mesh_file <path to .obj>`
+`python train.py -Tts -n mynetwork --mesh_file <path to .obj> --save_dir <dir results can be written in>`
 
 To see all flags use
 

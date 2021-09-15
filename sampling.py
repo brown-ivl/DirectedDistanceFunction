@@ -87,7 +87,7 @@ def sample_vertex_all_directions(radius, verts=None, noise = 0.01, v=None, **kwa
     start_point = bound1* position + (1.-position) * bound2
     return start_point, end_point, None
 
-def sample_vertex_tangential(radius, verts=None, noise=0.01, vert_normals=None, v=None):
+def sample_vertex_tangential(radius, verts=None, noise=0.04, vert_normals=None, v=None):
     '''
     Returns a ray that has an endpoint near a mesh vertex, and has a start point that is orthogonal to the 
     vertex normal (tangential)
@@ -116,7 +116,7 @@ def sampling_preset_noise(sampling_method, noise):
     Defines a new version of one of the sampling functions with a different noise value set
     '''
     def preset_noise(radius, verts=None, vert_normals=None, v=None, **kwargs):
-        return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, kwargs=kwargs)
+        return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, **kwargs)
     return preset_noise
 
 def uniform_ray_space_equal_intersections():

@@ -20,7 +20,7 @@ from model import AdaptedLFN, SimpleMLP
 import utils
 import sampling
 import rasterization
-from visualization import Camera, DepthMapViewer, save_video
+from camera import Camera, DepthMapViewer, save_video
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -172,7 +172,7 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
     if not os.path.exists(video_dir):
         os.mkdir(video_dir)
 
-    cam_radius = 1.15
+    cam_radius = 1.5
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [resolution,resolution]
@@ -182,7 +182,7 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
     circle_cameras = [Camera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution, verbose=False) for i in range(n_frames)]
     rendered_views = [cam.mesh_and_model_depthmap(model, verts, faces, radius) for cam in tqdm(circle_cameras)]
 
-    save_video(rendered_views, os.path.join(video_dir, f'equatorial_{name}_rad{cam_radius*100:.0f}.mp4'))
+    save_video(rendered_views, os.path.join(video_dir, f'equatorial_{name}_rad{radius*100:.0f}_cr{cam_radius*100:.0f}.mp4'))
 
 
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
     # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
     # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
     # parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
-    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/large_files/directedDF/", help="a directory where model weights, loss curves, and visualizations will be saved")
+    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files", help="a directory where model weights, loss curves, and visualizations will be saved")
 
     # VISUALIZATION
     parser.add_argument("--show_rays", action="store_true", help="Visualize the camera's rays relative to the scene when rendering depthmaps")
@@ -266,7 +266,7 @@ if __name__ == "__main__":
                         sampling.sampling_preset_noise(sampling.sample_vertex_noise, args.vert_noise),
                         sampling.sampling_preset_noise(sampling.sample_vertex_all_directions, args.vert_noise),
                         sampling.sampling_preset_noise(sampling.sample_vertex_tangential, args.tan_noise)]
-    sampling_frequency = [0.5, 0.0, 0.25, 0.25]
+    sampling_frequency = [0.5, 0.0, 0.0, 0.5]
     test_sampling_frequency = [1., 0., 0., 0.]
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
