@@ -17,7 +17,7 @@ You can also see how fast each sampling method is by running
 
 To train, test, and save a network, run
 
-`python train.py -Tts -n mynetwork --mesh_file <path to .obj>`
+`python train.py -Tts -n mynetwork --mesh_file <path to .obj> --save_dir <dir results can be written in>`
 
 To see all flags use
 
