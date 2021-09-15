@@ -79,6 +79,8 @@ def get_vertex_normals(verts, faces):
 def get_sphere_intersections(p0, v, radius):
     '''
     Returns the two points where the line p = p0 + t*v intersects the origin centered sphere with given radius
+    Returns None if there is no intersection or if the intersections lie in the negative v direction
+    The intersection closest to p0 is returned first
     This involves solving the following for t:
     radius = ||p0 + t*v||
     '''
@@ -87,10 +89,14 @@ def get_sphere_intersections(p0, v, radius):
     a = np.dot(v, v)
     b = 2 * np.dot(p0, v)
     c = np.dot(p0, p0) - radius**2
-
-    partial = np.sqrt(b**2 - 4*a*c)
-    x1 = (-b + partial) / (2*a)
-    x2 = (-b - partial) / (2*a)
+    inner_term = b**2 - 4*a*c
+    if inner_term < 0.:
+        return None
+    partial = np.sqrt(inner_term)
+    x1 = (-b - partial) / (2*a)
+    x2 = (-b + partial) / (2*a)
+    if x1 < 0. and x2 < 0.:
+        return None
     return p0 + x1*v, p0 + x2*v
 
 def vector_to_angles(vector):
@@ -111,42 +117,6 @@ def positional_encoding(val, L=10):
     '''
     return [x for i in range(L) for x in [math.sin(2**(i)*math.pi*val), math.cos(2**(i)*math.pi*val)]]
 
-
-
-def camera_view_rays(cam_center, direction, focal_length, sensor_size, sensor_resolution):
-    '''
-    Arguments:
-        cam_center        - the coordinates of the camera center (x,y,z)
-        direction         - a vector defining the direction that the camera is pointing, relative to the camera center
-        focal_length      - the focal length of the camera
-        sensor_size       - the dimensions of the sensor (u,v)
-        sensor_resolution - The number of pixels on each edge of the sensor (u,v)
-
-    Returns a list of rays ( [start point, end point] ), where each ray intersects one pixel. The start point of each ray is the camera center.
-    Rays are returned top to bottom, left to right
-
-    TODO: Fix the camera roll issue so that the same axis is up
-    '''
-
-    assert(np.linalg.norm(direction) != 0.)
-    direction /= np.linalg.norm(direction)
-    if direction[0] == 0. and direction[2] == 0.:
-        u_direction = np.array([1.,0.,0.])
-        v_direction = np.array([0.,0.,1.])*(-1. if direction[1] > 0. else 1.)
-    else:
-        # v_direction = np.cross(np.array([0.,0.,1.]), direction)
-        # u_direction = np.cross(v_direction, direction)
-        u_direction = np.cross(direction, np.array([0.,1.,0.]))
-        v_direction = np.cross(direction, u_direction)
-        v_direction /= np.linalg.norm(v_direction)
-        u_direction /= np.linalg.norm(u_direction)
-    u_steps = np.linspace(-sensor_size[0], sensor_size[0], num=sensor_resolution[0])
-    v_steps = np.linspace(-sensor_size[1], sensor_size[1], num=sensor_resolution[1])
-    us, vs = np.meshgrid(u_steps, v_steps)
-    us = us.flatten()
-    vs = vs.flatten()
-    rays = [[np.array(cam_center), np.array(cam_center + focal_length * direction + us[i]*u_direction) + vs[i]*v_direction] for i in range(us.shape[0])]
-    return rays
 
 def saveLossesCurve(*args, **kwargs):
     '''

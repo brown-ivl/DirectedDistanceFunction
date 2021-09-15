@@ -244,18 +244,30 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
             return occ, ray_start_depth, removed_faces 
     return occ, ray_depth, original_faces
 
-def camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, sensor_resolution, near_face_threshold=0.1):
+def ray_all_depths(faces, verts, near_face_threshold=0.08):
     '''
-    Arguments:
-        cam_center        - the coordinates of the camera center (x,y,z)
-        direction         - a vector defining the direction that the camera is pointing, relative to the camera center
-        focal_length      - the focal length of the camera
-        sensor_size       - the dimensions of the sensor (u,v)
-        sensor_resolution - The number of pixels on each edge of the sensor (u,v)
-    Returns a mask of pixels that intersected the object and an occupancy array for a specific camera view
+    Takes in faces and verts which define a mesh that has been rotated so that the ray end point is at the origin, and
+    the ray start point lies on the z axis at a distance of ray_start_depth
+    
+    This function returns
+        occ, a boolean indicating whether or not the start of the ray lies within the mesh
+        depth, the depth to the first intersection, or np.inf if there are no intersections
+    
+    v can be passed if the the ray endpoint is a mesh vertex. This prevents each face with vertex v from being counted as a separate intersection
     '''
-    rays = utils.camera_view_rays(cam_center, direction, focal_length, sensor_size, sensor_resolution)
-    depth = np.array([ray_occ_depth(faces, rotate_mesh(verts, ray[0], ray[1]), ray_start_depth=np.linalg.norm(ray[1]-ray[0]), near_face_threshold=near_face_threshold)[1] for ray in tqdm(rays)])
-    depth = np.reshape(depth, tuple(sensor_resolution))
-    intersection = (depth < np.inf).astype(np.float)
-    return intersection, depth
+
+     # Prune faces far from the ray
+    near_verts, near_faces, near_vert_indices,_ = prune_mesh(verts, faces, near_face_threshold)
+
+    wgts = get_weights(near_faces, near_verts)
+    wgt_verts = near_verts[near_faces].reshape((-1,3))[:,:2]
+
+    # a face is only intersected if all three of its halfspaces have positive outputs
+    halfspace_outputs = (np.sum(np.multiply(wgts, -wgt_verts[:,:2]), axis=1) >= 0.).reshape((-1,3))
+
+    intersected_faces = near_faces[np.all(halfspace_outputs, axis=1)]
+    intersections = get_intersection_depths(near_verts[intersected_faces])
+    # The ray should start on a bounding sphere
+    assert(np.all(intersections > 0.0))
+
+    return intersections

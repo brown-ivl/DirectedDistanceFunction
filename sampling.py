@@ -8,6 +8,7 @@ CHECK OTHER PAPERS for how to sample lightfields
 
 Also - add additional training examples by adding d to start point and d to depth
 '''
+from numpy import random
 import rasterization
 import utils
 
@@ -110,12 +111,28 @@ def sample_vertex_tangential(radius, verts=None, noise=0.04, vert_normals=None, 
     start_point = bound1*position + (1.-position)*bound2
     return start_point, end_point, None
 
+def sampling_preset_noise(sampling_method, noise):
+    '''
+    Defines a new version of one of the sampling functions with a different noise value set
+    '''
+    def preset_noise(radius, verts=None, vert_normals=None, v=None, **kwargs):
+        return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, kwargs=kwargs)
+    return preset_noise
+
 def uniform_ray_space_equal_intersections():
     '''
     Samples a ray uniformly at random from ray space (two points on surface of sphere). Then, all of the intersections along the ray are found,
     and one of the rays is sampled
     '''
     pass
+
+def sphere_surface_endpoints(radius, n_samples=1):
+    '''
+    Returns ray endpoints both sampled uniformly from a sphere surface
+    '''
+    start_point = utils.random_on_sphere(radius)
+    end_point = utils.random_on_sphere(radius)
+    return start_point, end_point
 
 if __name__ == "__main__":
 
@@ -197,7 +214,7 @@ if __name__ == "__main__":
         sensor_size = [1.0,1.0]
         resolution = [100,100]
 
-        # show u and v vectors
+        # uncomment to show u and v vectors
         # direction /= np.linalg.norm(direction)
         # if direction[0] == 0. and direction[2] == 0.:
         #     u_direction = np.array([1.,0.,0.])
@@ -217,8 +234,9 @@ if __name__ == "__main__":
         # visualizer.add_ray([cam_center, cam_center+u_direction*0.1], np.array([0.,1.,0.]))
         # visualizer.add_ray([cam_center, cam_center+v_direction*0.1], np.array([0.,0.,1.]))
         # visualizer.display()
-        
-        intersection, depth = rasterization.camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, resolution, near_face_threshold=near_face_threshold)
+        # TODO: use Camera object
+        cam = visualization.Camera(center=cam_center, direction=direction, focal_length=focal_length, sensor_size=sensor_size, sensor_resolution=resolution)
+        intersection, depth = cam.mesh_depthmap(cam.rays_on_sphere(cam.generate_rays(), radius), verts, faces)
         plt.imshow(depth)
         plt.show()
         plt.imshow(intersection)
