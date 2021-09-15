@@ -53,3 +53,43 @@ class DepthData(Dataset):
             # Depth at which the ray intersects the mesh (positive)
             "depth": torch.tensor(depth, dtype=torch.float32),
         }
+
+class MultiDepthDataset(Dataset):
+
+    def __init__(self,faces,verts,radius,size=1000000, intersect_limit=20):
+        '''
+        Faces and verts define a mesh object that is used to generate data
+        sampling_methods are methods from sampling.py that are used to choose rays during data generation
+        sampling_frequency are weights determining how frequently each sampling method should be used (weights should sum to 1.0)
+        size defines the number of datapoints to generate
+        '''
+        self.faces = faces
+        self.verts = verts
+        self.radius=radius
+        self.near_face_threshold = rasterization.max_edge(verts, faces)
+        self.size = size
+        self.intersect_limit = intersect_limit
+
+    def __len__(self):
+        return self.size
+
+    def __getitem__(self, index):
+        ray_start,ray_end = sampling.sphere_surface_endpoints(self.radius)
+        direction = ray_end-ray_start
+        direction /= np.linalg.norm(direction)
+        rot_verts = rasterization.rotate_mesh(self.verts, ray_start, ray_end)
+        int_depths = rasterization.ray_all_depths(self.faces, rot_verts,near_face_threshold=self.near_face_threshold)
+        intersect = np.zeros((self.intersect_limit,), dtype=float)
+        intersect[:int_depths.shape[0]] = 1.
+        depths = np.zeros((self.intersect_limit,), dtype=float)
+        depths[:int_depths.shape[0]] = int_depths
+        return {
+            # pos encoding
+            # "coordinates": torch.tensor([x for val in list(ray_start)+list(direction) for x in utils.positional_encoding(val)]),
+            # 6D coords
+            "coordinates": torch.tensor([list(ray_start)+list(direction)], dtype=torch.float32),
+            # does the ray have an nth intersection?
+            "intersect": torch.tensor(intersect, dtype=torch.float32),
+            # Depth at which the ray intersects the mesh (positive)
+            "depths": torch.tensor(depths, dtype=torch.float32),
+        }
