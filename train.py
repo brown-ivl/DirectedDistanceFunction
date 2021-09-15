@@ -162,7 +162,7 @@ def viz_depth(model, verts, faces, radius, show_rays=False):
     resolution = [100,100]
     zoom_out_cameras = [Camera(center=[0.0,0.0,-1.2-x*0.1], direction=[0.0,0.0,1.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(4)]
     data = [cam.mesh_and_model_depthmap(model, verts, faces, radius, show_rays=show_rays) for cam in zoom_out_cameras]
-    DepthMapViewer(data)
+    DepthMapViewer(data, [0.5,]*len(data), [1.5]*len(data))
 
 def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir, name):
     '''

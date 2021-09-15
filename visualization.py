@@ -237,9 +237,11 @@ class DepthMapViewer():
     Allows for sequential viewing of multiple depth maps
     '''
 
-    def __init__(self, data):
+    def __init__(self, data, vmin, vmax):
         super().__init__()
         self.data = data
+        self.vmin = vmin
+        self.vmax = vmax
         self.i = 0
         self.fig, ((self.ax1, self.ax2, self.ax3), (self.ax4, self.ax5, self.ax6)) = plt.subplots(2,3)
         self.all_axes = [self.ax1, self.ax2, self.ax3, self.ax4, self.ax5, self.ax6]
@@ -259,19 +261,7 @@ class DepthMapViewer():
 
     def show_data(self):
         gt_intersect, gt_depth, learned_intersect, learned_depth = self.data[self.i]
-        depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
-        for ax in self.all_axes:
-            ax.clear()
-        self.ax1.imshow(gt_intersect)
-        self.ax1.set_title("GT Intersect")
-        self.ax2.imshow(gt_depth)
-        self.ax2.set_title("GT Depth")
-        self.ax4.imshow(learned_intersect)
-        self.ax4.set_title("Intersect")
-        self.ax5.imshow(depth_learned_mask)
-        self.ax5.set_title("Depth (Masked)")
-        self.ax6.imshow(learned_depth)
-        self.ax6.set_title("Depth")
+        utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i])
 
     def next(self,event):
         if self.i < len(self.data)-1:

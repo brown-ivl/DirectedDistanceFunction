@@ -149,3 +149,33 @@ def saveLossesCurve(*args, **kwargs):
         plt.savefig(kwargs['out_path'])
     else:
         print('[ WARN ]: No output path (out_path) specified. beacon.utils.saveLossesCurve()')
+
+def show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax):
+    ax1,ax2,ax3,ax4,ax5,ax6=all_axes
+    depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
+    depth_difference = np.zeros(gt_intersect.shape + (3,))
+    numerical_difference = depth_learned_mask - gt_depth
+    # set colors for positive difference
+    depth_difference[:,:,1] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1), axis=-1), 0.)
+    depth_difference[:,:,0] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    depth_difference[:,:,2] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    # set colors for negative difference
+    depth_difference[:,:,2] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1), axis=-1), 0.)
+    depth_difference[:,:,0] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    depth_difference[:,:,1] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    depth_difference[np.logical_not(np.logical_or(gt_intersect, learned_intersect))] = np.array([1.,1.,1.])
+    depth_difference[np.logical_and(np.logical_or(gt_intersect, learned_intersect), np.logical_not(np.logical_and(gt_intersect, learned_intersect)))] = np.array([1.,0.4,0.4])
+    for ax in all_axes:
+        ax.clear()
+    ax1.imshow(gt_intersect)
+    ax1.set_title("GT Intersect")
+    ax2.imshow(gt_depth, vmin=vmin, vmax=vmax)
+    ax2.set_title("GT Depth")
+    ax3.imshow(depth_difference)
+    ax3.set_title("Depth Difference")
+    ax4.imshow(learned_intersect)
+    ax4.set_title("Intersect")
+    ax5.imshow(depth_learned_mask, vmin=vmin, vmax=vmax)
+    ax5.set_title("Depth (Masked)")
+    ax6.imshow(learned_depth, vmin=vmin, vmax=vmax)
+    ax6.set_title("Depth")
