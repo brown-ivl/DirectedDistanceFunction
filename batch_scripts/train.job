@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -p gpu --gres=gpu:1
+#SBATCH -p 3090-gcondo --gres=gpu:1
 #SBATCH -t 72:00:00
 #SBATCH --mem=128G
 #SBATCH -n 4
 
 module load cuda/11.1.1
 conda activate bodymodel
-python ../train.py -lTts -n uni50vert25tan25 --epochs 300 --n_workers 16
+python ../train.py -Tts -n uni40vert40tan20 --epochs 300 --n_workers 8

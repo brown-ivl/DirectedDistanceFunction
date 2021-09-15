@@ -143,7 +143,7 @@ def test(model, test_loader, lmbda):
     print(f"Average Intersect Accuracy: {float(int_accuracy*100):.2f}%")
     print(f"Intersect Precision: {int_precision*100:.2f}%")
     print(f"Intersect Recall: {int_recall*100:.2f}%")
-    print(f"Intersect F1: {2*(int_precision*occ_recall)/(int_precision + int_recall):.4f}")
+    print(f"Intersect F1: {2*(int_precision*int_recall)/(int_precision + int_recall):.4f}")
     print(int_confusion_mat)
 
     print("\nDepth-")
@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
     # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
     # parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
-    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/large_files/directedDF/", help="a directory where model weights, loss curves, and visualizations will be saved")
+    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files", help="a directory where model weights, loss curves, and visualizations will be saved")
 
     args = parser.parse_args()
 
@@ -253,11 +253,11 @@ if __name__ == "__main__":
     verts = utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_ray_space, sampling.sample_vertex_noise, sampling.sample_vertex_all_directions, sampling.sample_vertex_tangential]
-    sampling_frequency = [0.5, 0.0, 0.25, 0.25]
+    sampling_frequency = [0.4, 0.0, 0.4, 0.2]
     test_sampling_frequency = [1., 0., 0., 0.]
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
-    test_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=int(args.samples_per_mesh*0.1))
+    test_data = DepthData(faces,verts,args.radius,sampling_methods,test_sampling_frequency,size=int(args.samples_per_mesh*0.1))
 
     train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
     test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)

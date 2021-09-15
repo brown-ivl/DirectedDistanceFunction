@@ -86,7 +86,7 @@ def sample_vertex_all_directions(radius, verts=None, noise = 0.01, v=None, **kwa
     start_point = bound1* position + (1.-position) * bound2
     return start_point, end_point, None
 
-def sample_vertex_tangential(radius, verts=None, noise=0.01, vert_normals=None, v=None):
+def sample_vertex_tangential(radius, verts=None, noise=0.04, vert_normals=None, v=None):
     '''
     Returns a ray that has an endpoint near a mesh vertex, and has a start point that is orthogonal to the 
     vertex normal (tangential)
