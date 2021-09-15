@@ -173,6 +173,9 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
         os.mkdir(video_dir)
 
     cam_radius = 1.5
+    # these are the normalization bounds for coloring in the video
+    vmin = max(cam_radius-1.0, 0.)
+    vmax = vmin + 1.5
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [resolution,resolution]
@@ -182,7 +185,7 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
     circle_cameras = [Camera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution, verbose=False) for i in range(n_frames)]
     rendered_views = [cam.mesh_and_model_depthmap(model, verts, faces, radius) for cam in tqdm(circle_cameras)]
 
-    save_video(rendered_views, os.path.join(video_dir, f'equatorial_{name}_rad{radius*100:.0f}_cr{cam_radius*100:.0f}.mp4'))
+    save_video(rendered_views, os.path.join(video_dir, f'equatorial_{name}_rad{radius*100:.0f}_cr{cam_radius*100:.0f}.mp4'), vmin, vmax)
 
 
 

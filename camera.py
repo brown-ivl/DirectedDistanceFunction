@@ -179,45 +179,32 @@ class DepthMapViewer():
             self.show_data()
             plt.draw()
 
-def save_video(rendered_views, save_path):
+def save_video(rendered_views, save_path, vmin, vmax):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.animation as animation
 
     n_frames = len(rendered_views)
 
-    f, ((ax1, ax2),(ax3, ax4)) = plt.subplots(2,2)
-    all_axes = [ax1,ax2,ax3,ax4]
+    f, ((ax1, ax2, ax3),(ax4, ax5, ax6)) = plt.subplots(2,3)
+    f.set_size_inches(20.,12.)
+    all_axes = [ax1,ax2,ax3,ax4, ax5, ax6]
 
     # display first view
     gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[0]
     depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
-    ax1.imshow(gt_intersect)
-    ax1.set_title("GT Intersect")
-    ax2.imshow(gt_depth)
-    ax2.set_title("GT Depth")
-    ax3.imshow(learned_intersect)
-    ax3.set_title("Intersect")
-    ax4.imshow(depth_learned_mask)
-    ax4.set_title("Depth (Masked)")
+    utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
 
     # Set up formatting for movie files
     Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=5, metadata=dict(artist="Trevor Houchens"), bitrate=1800)
+    writer = Writer(fps=10, metadata=dict(artist="Trevor Houchens"), bitrate=1800)
 
     def update_depthmap(num, views, axes):
         for ax in axes:
             ax.clear()
         gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[num]
         depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
-        axes[0].imshow(gt_intersect)
-        axes[0].set_title("GT Intersect")
-        axes[1].imshow(gt_depth)
-        axes[1].set_title("GT Depth")
-        axes[2].imshow(learned_intersect)
-        axes[2].set_title("Intersect")
-        axes[3].imshow(depth_learned_mask)
-        axes[3].set_title("Depth (Masked)")
+        utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
 
     depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views, all_axes),
                                    interval=50)
