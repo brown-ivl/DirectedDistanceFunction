@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#SBATCH -p gpu --gres=gpu:1
+#SBATCH -t 72:00:00
+#SBATCH --mem=128G
+#SBATCH -n 4
+
+module load cuda/11.1.1
+conda activate bodymodel
+
+for name in "uni100" "uni50verttwo50" "uni40vert40tan20" "uni50vertone50" "uni50tan50" "uni50vert25tan25"
+do
+	python ../train.py -lv -n $name --n_frames 200 --video_resolution 250 --n_workers 4 --radius 1.20
+done

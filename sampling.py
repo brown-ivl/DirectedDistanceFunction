@@ -116,7 +116,7 @@ def sampling_preset_noise(sampling_method, noise):
     Defines a new version of one of the sampling functions with a different noise value set
     '''
     def preset_noise(radius, verts=None, vert_normals=None, v=None, **kwargs):
-        return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, kwargs=kwargs)
+        return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, **kwargs)
     return preset_noise
 
 def uniform_ray_space_equal_intersections():
