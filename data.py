@@ -56,7 +56,7 @@ class DepthData(Dataset):
 
 class MultiDepthDataset(Dataset):
 
-    def __init__(self,faces,verts,radius,size=1000000, intersect_limit=20):
+    def __init__(self,faces,verts,radius,size=1000000, intersect_limit=20, pos_enc=True):
         '''
         Faces and verts define a mesh object that is used to generate data
         sampling_methods are methods from sampling.py that are used to choose rays during data generation
@@ -69,6 +69,7 @@ class MultiDepthDataset(Dataset):
         self.near_face_threshold = rasterization.max_edge(verts, faces)
         self.size = size
         self.intersect_limit = intersect_limit
+        self.pos_enc = pos_enc
 
     def __len__(self):
         return self.size
@@ -79,15 +80,26 @@ class MultiDepthDataset(Dataset):
         direction /= np.linalg.norm(direction)
         rot_verts = rasterization.rotate_mesh(self.verts, ray_start, ray_end)
         int_depths = rasterization.ray_all_depths(self.faces, rot_verts,near_face_threshold=self.near_face_threshold)
+        int_depths = int_depths[:self.intersect_limit]
         intersect = np.zeros((self.intersect_limit,), dtype=float)
         intersect[:int_depths.shape[0]] = 1.
         depths = np.zeros((self.intersect_limit,), dtype=float)
         depths[:int_depths.shape[0]] = int_depths
+        if self.pos_enc:
+            coordinates_points = torch.tensor([x for val in list(ray_start)+list(ray_end) for x in utils.positional_encoding(val)], dtype=torch.float32)
+            coordinates_direction = torch.tensor([x for val in list(ray_start)+list(direction) for x in utils.positional_encoding(val)], dtype=torch.float32)
+            coordinates_pluecker = torch.tensor([x for val in list(direction)+list(np.cross(ray_start, direction)) for x in utils.positional_encoding(val)], dtype=torch.float32)
+        else:
+            coordinates_points = torch.tensor([list(ray_start)+list(ray_end)], dtype=torch.float32)
+            coordinates_direction = torch.tensor([list(ray_start)+list(direction)], dtype=torch.float32)
+            coordinates_pluecker = torch.tensor([list(direction)+list(np.cross(ray_start, direction))], dtype=torch.float32)
         return {
             # pos encoding
             # "coordinates": torch.tensor([x for val in list(ray_start)+list(direction) for x in utils.positional_encoding(val)]),
             # 6D coords
-            "coordinates": torch.tensor([list(ray_start)+list(direction)], dtype=torch.float32),
+            "coordinates_points": coordinates_points,
+            "coordinates_direction": coordinates_direction,
+            "coordinates_pluecker": coordinates_pluecker,
             # does the ray have an nth intersection?
             "intersect": torch.tensor(intersect, dtype=torch.float32),
             # Depth at which the ray intersects the mesh (positive)
