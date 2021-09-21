@@ -62,6 +62,7 @@ class Camera():
     def rays_on_sphere(self, rays, radius):
         '''
         Calls generate_rays, but then reformulates each ray so that it starts on the surface of an origin-centered sphere with the provided radius. 
+        Provides rays in the form of [start_point, end_point]
         '''
         first_elt_if_not_none = lambda x: x[0] if x is not None else None
         sphere_surface_rays = [first_elt_if_not_none(utils.get_sphere_intersections(ray[0], ray[1]-ray[0], radius)) if np.linalg.norm(ray[0]) > radius else ray[0] for ray in rays]
@@ -86,11 +87,11 @@ class Camera():
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model=model.eval()
         rays_in_scene_mask = np.array([True if ray != None else False for ray in rays])
+        # rays_in_scene = torch.tensor([list(ray[0]) + list(ray[1]-ray[0]) for ray in rays if ray != None])
         rays_in_scene = [ray for ray in rays if ray != None]
         # print(rays_in_scene)
         if len(rays_in_scene) > 0:
             with torch.no_grad():
-                # angle_rays = torch.tensor([list(ray[0]) + list(utils.vector_to_angles(ray[1]-ray[0])) for ray in rays], dtype=torch.float32).to(device)
                 encoded_rays = torch.tensor([[x for val in list(ray[0])+list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in utils.positional_encoding(val)] for ray in rays_in_scene]).to(device)
                 _, intersect, depth = model(encoded_rays)
                 intersect = intersect.cpu()
@@ -106,8 +107,34 @@ class Camera():
             intersection_mask = np.zeros(self.sensor_resolution)
             depth = np.ones(self.sensor_resolution) * np.inf
         return np.array(intersection_mask > 0.5), np.array(depth)
+
+    def model_depthmap_4D(self, rays, model):
+        '''
+        Returns an intersection map and a depthmap from a learned model from the camera's perspective
+        '''
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model=model.eval()
+        rays_in_scene_mask = np.array([True if ray != None else False for ray in rays])
+        rays_in_scene = torch.tensor([list(ray[0]) + list(ray[1]-ray[0]) for ray in rays if ray != None])
+        # print(rays_in_scene)
+        if len(rays_in_scene) > 0:
+            with torch.no_grad():
+                intersect, depth = model.query_rays(rays_in_scene[:,:3], rays_in_scene[:,3:])
+                intersect = intersect.cpu()
+                model_depths = depth.cpu()
+            intersection_mask = rays_in_scene_mask.astype(float)
+            intersection_mask[rays_in_scene_mask] = intersect
+            intersection_mask = intersection_mask.reshape(self.sensor_resolution)
+            depth = np.zeros((len(rays),))
+            depth[np.logical_not(rays_in_scene_mask)] = np.inf
+            depth[rays_in_scene_mask] = model_depths
+            depth = depth.reshape((self.sensor_resolution))
+        else:
+            intersection_mask = np.zeros(self.sensor_resolution)
+            depth = np.ones(self.sensor_resolution) * np.inf
+        return np.array(intersection_mask > 0.5), np.array(depth)
         
-    def mesh_and_model_depthmap(self, model, verts, faces, radius, show_rays=False):
+    def mesh_and_model_depthmap(self, model, verts, faces, radius, show_rays=False, fourd=False):
         '''
         Convenience function that also allows us to generate rays only once for both depthmap generations
         Returns depthmaps and intersections for the mesh and the learned model
@@ -122,7 +149,10 @@ class Camera():
                 visualizer.add_ray(ray, [0.,0.,1.])
             visualizer.display()
         mesh_int_mask, mesh_depth = self.mesh_depthmap(rays, verts, faces)
-        model_int_mask, model_depth = self.model_depthmap(rays, model)
+        if not fourd:
+            model_int_mask, model_depth = self.model_depthmap(rays, model)
+        else:
+            model_int_mask, model_depth = self.model_depthmap_4D(rays, model)
         return np.array(mesh_int_mask), np.array(mesh_depth), np.array(model_int_mask), np.array(model_depth)
 
 
@@ -131,9 +161,11 @@ class DepthMapViewer():
     Allows for sequential viewing of multiple depth maps
     '''
 
-    def __init__(self, data):
+    def __init__(self, data, vmin, vmax):
         super().__init__()
         self.data = data
+        self.vmin = vmin
+        self.vmax = vmax
         self.i = 0
         self.fig, ((self.ax1, self.ax2, self.ax3), (self.ax4, self.ax5, self.ax6)) = plt.subplots(2,3)
         self.all_axes = [self.ax1, self.ax2, self.ax3, self.ax4, self.ax5, self.ax6]
@@ -153,19 +185,7 @@ class DepthMapViewer():
 
     def show_data(self):
         gt_intersect, gt_depth, learned_intersect, learned_depth = self.data[self.i]
-        depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
-        for ax in self.all_axes:
-            ax.clear()
-        self.ax1.imshow(gt_intersect)
-        self.ax1.set_title("GT Intersect")
-        self.ax2.imshow(gt_depth)
-        self.ax2.set_title("GT Depth")
-        self.ax4.imshow(learned_intersect)
-        self.ax4.set_title("Intersect")
-        self.ax5.imshow(depth_learned_mask)
-        self.ax5.set_title("Depth (Masked)")
-        self.ax6.imshow(learned_depth)
-        self.ax6.set_title("Depth")
+        utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i])       
 
     def next(self,event):
         if self.i < len(self.data)-1:

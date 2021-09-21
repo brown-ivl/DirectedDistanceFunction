@@ -214,27 +214,27 @@ if __name__ == "__main__":
         sensor_size = [1.0,1.0]
         resolution = [100,100]
 
-        # uncomment to show u and v vectors
-        # direction /= np.linalg.norm(direction)
-        # if direction[0] == 0. and direction[2] == 0.:
-        #     u_direction = np.array([1.,0.,0.])
-        #     v_direction = np.array([0.,0.,1.])*(-1. if direction[1] > 0. else 1.)
-        # else:
-        #     u_direction = np.cross(direction, np.array([0.,1.,0.]))
-        #     v_direction = np.cross(direction, u_direction)
-        #     v_direction /= np.linalg.norm(v_direction)
-        #     u_direction /= np.linalg.norm(u_direction)
+        # Shows the camera location and orientation in the scene
+        direction /= np.linalg.norm(direction)
+        if direction[0] == 0. and direction[2] == 0.:
+            u_direction = np.array([1.,0.,0.])
+            v_direction = np.array([0.,0.,1.])*(-1. if direction[1] > 0. else 1.)
+        else:
+            u_direction = np.cross(direction, np.array([0.,1.,0.]))
+            v_direction = np.cross(direction, u_direction)
+            v_direction /= np.linalg.norm(v_direction)
+            u_direction /= np.linalg.norm(u_direction)
 
-        # lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
-        # visualizer = visualization.RayVisualizer(verts, lines)
-        # visualizer.add_point([1.,0.,0.], [1.,0.,0.])
-        # visualizer.add_point([0.,1.,0.], [0.,1.,0.])
-        # visualizer.add_point([0.,0.,1.], [0.,0.,1.])
-        # visualizer.add_ray([cam_center, cam_center+direction/np.linalg.norm(direction)*0.1], np.array([1.,0.,0.]))
-        # visualizer.add_ray([cam_center, cam_center+u_direction*0.1], np.array([0.,1.,0.]))
-        # visualizer.add_ray([cam_center, cam_center+v_direction*0.1], np.array([0.,0.,1.]))
-        # visualizer.display()
-        # TODO: use Camera object
+        lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        visualizer = visualization.RayVisualizer(verts, lines)
+        visualizer.add_point([1.,0.,0.], [1.,0.,0.])
+        visualizer.add_point([0.,1.,0.], [0.,1.,0.])
+        visualizer.add_point([0.,0.,1.], [0.,0.,1.])
+        visualizer.add_ray([cam_center, cam_center+direction/np.linalg.norm(direction)*0.1], np.array([1.,0.,0.]))
+        visualizer.add_ray([cam_center, cam_center+u_direction*0.1], np.array([0.,1.,0.]))
+        visualizer.add_ray([cam_center, cam_center+v_direction*0.1], np.array([0.,0.,1.]))
+        visualizer.display()
+
         cam = visualization.Camera(center=cam_center, direction=direction, focal_length=focal_length, sensor_size=sensor_size, sensor_resolution=resolution)
         intersection, depth = cam.mesh_depthmap(cam.rays_on_sphere(cam.generate_rays(), radius), verts, faces)
         plt.imshow(depth)

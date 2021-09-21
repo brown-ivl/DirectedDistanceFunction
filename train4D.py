@@ -12,11 +12,13 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import trimesh
+import math
 # from beacon.utils import saveLossesCurve
 
-from data import DepthData
-from model import AdaptedLFN, SimpleMLP
+from data import DepthData, MultiDepthDataset
+from model import LF4D, AdaptedLFN, SimpleMLP
 import utils
+from camera import Camera, DepthMapViewer, save_video
 import sampling
 import rasterization
 
@@ -28,22 +30,22 @@ def l2_loss(labels, predictions):
     '''
     return torch.mean(torch.square(labels - predictions))
 
-def train_epoch(model, train_loader, optimizer, lmbda):
+def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
     bce = nn.BCELoss()
     total_loss = 0.
     sum_int_loss = 0.
     sum_depth_loss = 0.
     total_batches = 0
     for batch in tqdm(train_loader):
-        coordinates = batch["coordinates"].to(device)
+        coordinates = batch[f"coordinates_{coord_type}"].to(device)
         intersect = batch["intersect"].to(device).reshape((-1,))
-        depth = batch["depth"].to(device).reshape((-1,))
+        depth = batch["depths"].to(device).reshape((-1,))
         pred_int, pred_depth = model(coordinates)
         pred_int = pred_int.reshape((-1,))
         pred_depth = pred_depth.reshape((-1,))
         intersect_loss = bce(pred_int, intersect)
         sum_int_loss += intersect_loss.detach()
-        depth_loss = lmbda * l2_loss(depth[intersect], pred_depth[intersect])
+        depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
         sum_depth_loss += depth_loss.detach()
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
@@ -59,58 +61,35 @@ def train_epoch(model, train_loader, optimizer, lmbda):
     print(f"Average Depth Loss: {avg_depth_loss:.4f}")
     return avg_loss, avg_int_loss, avg_depth_loss
 
-def test(model, test_loader, lmbda):
+def test(model, test_loader, lmbda, coord_type):
     bce = nn.BCELoss()
     total_loss = 0.
     total_batches = 0.
 
     all_depth_errors = []
-    all_occ_pred = []
-    all_occ_label = []
     all_int_pred = []
     all_int_label = []
 
     with torch.no_grad():
         for batch in tqdm(test_loader):
-            coordinates = batch["coordinates"].to(device)
-            occ = batch["occ"].to(device).reshape((-1,))
-            not_occ = torch.logical_not(occ)
+            coordinates = batch[f"coordinates_{coord_type}"].to(device)
             intersect = batch["intersect"].to(device).reshape((-1,))
-            depth = batch["depth"].to(device).reshape((-1,))
-            pred_occ, pred_int, pred_depth = model(coordinates)
-            pred_occ = pred_occ.reshape((-1,))
+            depth = batch["depths"].to(device).reshape((-1,))
+            pred_int, pred_depth = model(coordinates)
             pred_int = pred_int.reshape((-1,))
             pred_depth = pred_depth.reshape((-1,))
-            occ_loss = bce(pred_occ, occ)
-            intersect_loss = bce(pred_int[not_occ], intersect[not_occ])
-            depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect)], pred_depth[torch.logical_and(not_occ,intersect)])
-            loss = occ_loss + intersect_loss + depth_loss
+            intersect_loss = bce(pred_int, intersect)
+            depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+            loss = intersect_loss + depth_loss
             total_loss += loss
-            all_depth_errors.append(torch.abs(depth[torch.logical_and(not_occ,intersect)] - pred_depth[torch.logical_and(not_occ,intersect)]).cpu().numpy())
-            all_occ_pred.append(pred_occ.cpu().numpy())
-            all_occ_label.append(occ.cpu().numpy())
-            all_int_pred.append(pred_int[not_occ].cpu().numpy())
-            all_int_label.append(intersect[not_occ].cpu().numpy())
+            all_depth_errors.append(torch.abs(depth[intersect > 0.5] - pred_depth[intersect > 0.5]).cpu().numpy())
+            all_int_pred.append(pred_int.cpu().numpy())
+            all_int_label.append(intersect.cpu().numpy())
             total_batches+=1.
 
     print(f"\nAverage Test Loss: {float(total_loss/total_batches):.4f}")
     print("Confusion Matrix Layout:")
     print("[[TN    FP]\n [FN    TP]]")
-
-    print("\nOccupancy-")
-    occ_confusion_mat = confusion_matrix(np.hstack(all_occ_label), np.hstack(all_occ_pred)>0.5)
-    occ_tn = occ_confusion_mat[0][0]
-    occ_fp = occ_confusion_mat[0][1]
-    occ_fn = occ_confusion_mat[1][0]
-    occ_tp = occ_confusion_mat[1][1]
-    occ_precision = occ_tp/(occ_tp + occ_fp)
-    occ_recall = occ_tp/(occ_tp + occ_fn)
-    occ_accuracy = (occ_tn+occ_tp)/np.sum(occ_confusion_mat)
-    print(f"Average Occ Accuracy: {float(occ_accuracy*100):.2f}%")
-    print(f"Occ Precision: {occ_precision*100:.2f}%")
-    print(f"Occ Recall: {occ_recall*100:.2f}%")
-    print(f"Occ F1: {2*(occ_precision*occ_recall)/(occ_precision + occ_recall):.4f}")
-    print(occ_confusion_mat)
 
     print("\nIntersection-")
     int_confusion_mat = confusion_matrix(np.hstack(all_int_label), np.hstack(all_int_pred)>0.5)
@@ -124,7 +103,7 @@ def test(model, test_loader, lmbda):
     print(f"Average Intersect Accuracy: {float(int_accuracy*100):.2f}%")
     print(f"Intersect Precision: {int_precision*100:.2f}%")
     print(f"Intersect Recall: {int_recall*100:.2f}%")
-    print(f"Intersect F1: {2*(int_precision*occ_recall)/(int_precision + int_recall):.4f}")
+    print(f"Intersect F1: {2*(int_precision*int_recall)/(int_precision + int_recall):.4f}")
     print(int_confusion_mat)
 
     print("\nDepth-")
@@ -132,40 +111,38 @@ def test(model, test_loader, lmbda):
     print(f"Average Depth Error: {np.mean(all_depth_errors):.4f}")
     print(f"Median Depth Error: {np.median(all_depth_errors):.4f}\n")
 
-def viz_depth(model, verts, faces):
+def viz_depth(model, verts, faces, radius, show_rays=False):
     '''
     Visualize learned depth map and intersection mask compared to the ground truth
     '''
-    pass
-    # cam_center = [-0.8,0.0,-0.8]
-    # direction = [1.0,0.0,1.0]
-    # focal_length = 1.5
-    # sensor_size = [1.0,1.0]
-    # resolution = [100,100]
-    # gt_intersection, gt_depth = rasterization.camera_ray_depth(verts, faces, cam_center, direction, focal_length, sensor_size, resolution, near_face_threshold=rasterization.max_edge(verts, faces))
-    # rays = utils.camera_view_rays(cam_center, direction, focal_length, sensor_size, resolution)
-    # with torch.no_grad():
-    #     # angle_rays = torch.tensor([list(ray[0]) + list(utils.vector_to_angles(ray[1]-ray[0])) for ray in rays], dtype=torch.float32).to(device)
-    #     angle_rays = torch.tensor([[x for val in list(ray[0])+list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in utils.positional_encoding(val)] for ray in rays]).to(device)
-    #     _, intersect, depth = model(angle_rays)
-    #     depth = np.array(torch.reshape(depth.cpu(), tuple(resolution)))
-    #     intersect = np.array(torch.reshape(intersect.cpu() > 0.5, tuple(resolution))).astype(float)
-    # depth_learned_mask = depth + np.where(intersect, 0., np.inf)
-    # depth_gt_mask = depth + np.where(gt_intersection, 0., np.inf)
-    # _, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
-    # ax1.imshow(gt_intersection)
-    # ax1.set_title("GT Intersect")
-    # ax2.imshow(intersect)
-    # ax2.set_title("Intersect")
-    # ax3.imshow(gt_depth)
-    # ax3.set_title("GT Depth")
-    # ax4.imshow(depth_learned_mask)
-    # ax4.set_title("Depth - Learned Mask")
-    # ax5.imshow(depth_gt_mask)
-    # ax5.set_title("Depth - GT Mask")
-    # ax6.imshow(depth)
-    # ax6.set_title("Depth")
-    # plt.show()
+    fl = 1.0
+    sensor_size = [1.0,1.0]
+    resolution = [100,100]
+    zoom_out_cameras = [Camera(center=[1.25,0.0,0.0], direction=[-1.0,0.0,0.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(1)]
+    data = [cam.mesh_and_model_depthmap(model, verts, faces, radius, show_rays=show_rays, fourd=True) for cam in zoom_out_cameras]
+    DepthMapViewer(data, [0.5,]*len(data), [1.5]*len(data))
+
+def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir, name):
+    '''
+    Saves a rendered depth video from around the equator of the object
+    '''
+    video_dir = os.path.join(save_dir, "depth_videos")
+    if not os.path.exists(video_dir):
+        os.mkdir(video_dir)
+
+    # these are the normalization bounds for coloring in the video
+    vmin = 0.25
+    vmax = 2.25
+    fl = 1.0
+    sensor_size = [1.0,1.0]
+    resolution = [resolution,resolution]
+    angle_increment = 2*math.pi / n_frames
+    z_vals = [np.cos(angle_increment*i)*radius for i in range(n_frames)]
+    x_vals = [np.sin(angle_increment*i)*radius for i in range(n_frames)]
+    circle_cameras = [Camera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution, verbose=False) for i in range(n_frames)]
+    rendered_views = [cam.mesh_and_model_depthmap(model, verts, faces, radius, fourd=True) for cam in tqdm(circle_cameras)]
+
+    save_video(rendered_views, os.path.join(video_dir, f'4D_equatorial_{name}_rad{radius*100:.0f}.mp4'), vmin, vmax)
 
 
 if __name__ == "__main__":
@@ -178,10 +155,13 @@ if __name__ == "__main__":
     # DATA
     parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
     parser.add_argument("--mesh_file", default="/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj", help="Source of mesh to train on")
+    parser.add_argument("--coord_type", default="points", help="Type of coordinates to use, valid options are 'points' | 'direction' | 'pluecker' ")
+    parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
     # "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
 
     # MODEL
     parser.add_argument("--lmbda", type=float, default=100., help="Multiplier for depth l2 loss")
+    parser.add_argument("--intersect_limit", type=int, default=20, help="Max number of intersections that the network will predict per ray (should be even number)")
 
 
     # HYPERPARAMETERS
@@ -190,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_batch_size", type=int, default=1000, help="Test batch size")
     parser.add_argument("--epochs", type=int, default=3, help="Number of epochs to train (overrides --iterations)")
     parser.add_argument("--iterations", type=int, default=200000, help="Number of iterations to train (NASA says 200k)")
-    parser.add_argument("--radius", type=float, default=1.25, help="The radius within which all rays should orginiate (mesh is normalized to be in unit sphere")
+    parser.add_argument("--radius", type=float, default=1.25, help="The radius at which all rays start and end (mesh is normalized to be in unit sphere)")
 
     # ACTIONS
     parser.add_argument("-T", "--train", action="store_true", help="Train the network")
@@ -198,12 +178,18 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save", action="store_true", help="Save the trained network")
     parser.add_argument("-l", "--load", action="store_true", help="Load the model from file")
     parser.add_argument("-d", "--viz_depth", action="store_true", help="Visualize the learned depth map and intersection mask versus the ground truth")
+    parser.add_argument("-v", "--video", action="store_true", help="Render a video of the learned mask and depth map compared to the ground truth")
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
     # parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
     # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
     # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
     # parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
     parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/large_files/directedDF/", help="a directory where model weights, loss curves, and visualizations will be saved")
+
+    # VISUALIZATION
+    parser.add_argument("--show_rays", action="store_true", help="Visualize the camera's rays relative to the scene when rendering depthmaps")
+    parser.add_argument("--n_frames", type=int, default=100, help="Number of frames render if saving video")
+    parser.add_argument("--video_resolution", type=int, default=100, help="The height and width of the rendered video (in pixels)")
 
     args = parser.parse_args()
 
@@ -216,7 +202,7 @@ if __name__ == "__main__":
 
     model_path = os.path.join(args.save_dir, "saved_models", f"{args.name}.pt")
     loss_path = os.path.join(args.save_dir, "loss_curves", args.name)
-    model = SimpleMLP().to(device)
+    model = LF4D(input_size=(120 if args.pos_enc else 6), n_intersections=args.intersect_limit, radius=args.radius, coord_type=args.coord_type, pos_enc=args.pos_enc).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     mesh = trimesh.load(args.mesh_file)
@@ -224,12 +210,8 @@ if __name__ == "__main__":
     verts = mesh.vertices
     verts = utils.mesh_normalize(verts)
 
-    sampling_methods = [sampling.sample_uniform_ray_space, sampling.sample_vertex_noise, sampling.sample_vertex_all_directions, sampling.sample_vertex_tangential]
-    sampling_frequency = [0.5, 0.0, 0.25, 0.25]
-    test_sampling_frequency = [1., 0., 0., 0.]
-
-    train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
-    test_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=int(args.samples_per_mesh*0.1))
+    train_data = MultiDepthDataset(faces, verts, args.radius, size=args.samples_per_mesh, intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
+    test_data = MultiDepthDataset(faces,verts,args.radius,size=int(args.samples_per_mesh*0.1), intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
 
     train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
     test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)
@@ -241,28 +223,30 @@ if __name__ == "__main__":
         print(f"Training for {args.epochs} epochs...")
         model=model.train()
         total_loss = []
-        occ_loss = []
         int_loss = []
         depth_loss = []
         for e in range(args.epochs):
             print(f"EPOCH {e+1}")
-            tl, ol, il, dl = train_epoch(model, train_loader, optimizer, args.lmbda)
+            tl, il, dl = train_epoch(model, train_loader, optimizer, args.lmbda, args.coord_type)
             total_loss.append(tl)
-            occ_loss.append(ol)
             int_loss.append(il)
             depth_loss.append(dl)
-            utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=loss_path, log=True)
+            utils.saveLossesCurve(total_loss, int_loss, depth_loss, legend=["Total", "Intersection", "Depth"], out_path=loss_path, log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)
     if args.test:
         print("Testing model ...")
         model=model.eval()
-        test(model, test_loader, args.lmbda)
+        test(model, test_loader, args.lmbda, args.coord_type)
     if args.viz_depth:
         print("Visualizing depth map...")
         model=model.eval()
-        viz_depth(model, verts, faces)
+        viz_depth(model, verts, faces, args.radius, args.show_rays)
+    if args.video:
+        print(f"Rendering ({args.video_resolution}x{args.video_resolution}) video with {args.n_frames} frames...")
+        model=model.eval()
+        equatorial_video(model, verts, faces, args.radius, args.n_frames, args.video_resolution, args.save_dir, args.name)
 
 
 

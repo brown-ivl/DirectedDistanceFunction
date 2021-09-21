@@ -16,10 +16,9 @@ import math
 # from beacon.utils import saveLossesCurve
 
 from data import DepthData
-from model import AdaptedLFN, SimpleMLP
+from model import AdaptedLFN
 import utils
 import sampling
-import rasterization
 from camera import Camera, DepthMapViewer, save_video
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,7 +40,7 @@ def train_epoch(model, train_loader, optimizer, lmbda):
         coordinates = batch["coordinates"].to(device)
         # print(torch.max(coordinates))
         occ = batch["occ"].to(device).reshape((-1,))
-        not_occ = torch.logical_not(occ)
+        not_occ = torch.logical_not(occ > 0.5)
         intersect = batch["intersect"].to(device).reshape((-1,))
         depth = batch["depth"].to(device).reshape((-1,))
         pred_occ, pred_int, pred_depth = model(coordinates)
@@ -60,7 +59,7 @@ def train_epoch(model, train_loader, optimizer, lmbda):
         intersect_loss = bce(pred_int[not_occ], intersect[not_occ])
         sum_int_loss += intersect_loss.detach()
         # print(intersect_loss.detach())
-        depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect)], pred_depth[torch.logical_and(not_occ,intersect)])
+        depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect > 0.5)], pred_depth[torch.logical_and(not_occ,intersect > 0.5)])
         sum_depth_loss += depth_loss.detach()
         # print(depth_loss.detach())
         loss = occ_loss + intersect_loss + depth_loss
@@ -95,7 +94,7 @@ def test(model, test_loader, lmbda):
         for batch in tqdm(test_loader):
             coordinates = batch["coordinates"].to(device)
             occ = batch["occ"].to(device).reshape((-1,))
-            not_occ = torch.logical_not(occ)
+            not_occ = torch.logical_not(occ > 0.5)
             intersect = batch["intersect"].to(device).reshape((-1,))
             depth = batch["depth"].to(device).reshape((-1,))
             pred_occ, pred_int, pred_depth = model(coordinates)
@@ -104,10 +103,10 @@ def test(model, test_loader, lmbda):
             pred_depth = pred_depth.reshape((-1,))
             occ_loss = bce(pred_occ, occ)
             intersect_loss = bce(pred_int[not_occ], intersect[not_occ])
-            depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect)], pred_depth[torch.logical_and(not_occ,intersect)])
+            depth_loss = lmbda * l2_loss(depth[torch.logical_and(not_occ,intersect > 0.5)], pred_depth[torch.logical_and(not_occ,intersect > 0.5)])
             loss = occ_loss + intersect_loss + depth_loss
             total_loss += loss
-            all_depth_errors.append(torch.abs(depth[torch.logical_and(not_occ,intersect)] - pred_depth[torch.logical_and(not_occ,intersect)]).cpu().numpy())
+            all_depth_errors.append(torch.abs(depth[torch.logical_and(not_occ,intersect > 0.5)] - pred_depth[torch.logical_and(not_occ,intersect > 0.5)]).cpu().numpy())
             all_occ_pred.append(pred_occ.cpu().numpy())
             all_occ_label.append(occ.cpu().numpy())
             all_int_pred.append(pred_int[not_occ].cpu().numpy())
@@ -160,7 +159,7 @@ def viz_depth(model, verts, faces, radius, show_rays=False):
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [100,100]
-    zoom_out_cameras = [Camera(center=[0.0,0.0,-1.2-x*0.1], direction=[0.0,0.0,1.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(4)]
+    zoom_out_cameras = [Camera(center=[-0.7-x*0.1,0.0,-0.7-x*0.1], direction=[1.0,0.0,1.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(4)]
     data = [cam.mesh_and_model_depthmap(model, verts, faces, radius, show_rays=show_rays) for cam in zoom_out_cameras]
     DepthMapViewer(data, [0.5,]*len(data), [1.5]*len(data))
 
@@ -204,6 +203,7 @@ if __name__ == "__main__":
     # "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
     parser.add_argument("--vert_noise", type=float, default=0.01, help="Standard deviation of noise to add to vertex sampling methods")
     parser.add_argument("--tan_noise", type=float, default=0.01, help="Standard deviation of noise to add to tangent sampling method")
+    # parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
 
     # MODEL
     parser.add_argument("--lmbda", type=float, default=100., help="Multiplier for depth l2 loss")

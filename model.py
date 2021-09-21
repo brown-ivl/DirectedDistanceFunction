@@ -4,6 +4,38 @@ An MLP that predicts the surface depth along rays
 
 import torch
 import torch.nn as nn
+import utils
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def points(points):
+    return points
+
+def direction(points):
+    dir = points[:,3:]-points[:,:3]
+    norm = torch.linalg.norm(dir)
+    norm = torch.hstack([norm.reshape(-1,1)]*3)
+    dir /= norm
+    return torch.hstack([points[:,:3], dir])
+
+def pluecker(points):
+    dir = points[:,3:]-points[:,:3]
+    norm = torch.linalg.norm(dir)
+    norm = torch.hstack([norm.reshape(-1,1)]*3)
+    dir /= norm
+    m = torch.cross(points[:,:3], dir, dim=1)
+    return torch.hstack([dir, m])
+
+def pos_encoding(points):
+    return torch.tensor([[x for j in range(points.shape[1]) for x in utils.positional_encoding(points[i][j])] for i in range(points.shape[0])])
+
+# Having the model change the input parameterization at inference time allows us to use a consistent input format so we don't have to change the testing script.
+# For training the input will be provided with the preprocessing already applied so that it can be done in parallel in the dataloader
+preprocessing_options = {
+    "points": points,
+    "direction": direction,
+    "pluecker": pluecker,
+}
 
 class SimpleMLP(nn.Module):
 
@@ -49,6 +81,8 @@ class AdaptedLFN(nn.Module):
         self.relu = nn.ReLU()
         self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
+        # self.pos_enc = pos_enc
+
     def forward(self, x):
         for i in range(len(self.network)-1):
             x = self.network[i](x)
@@ -60,13 +94,24 @@ class AdaptedLFN(nn.Module):
         depth = self.relu(x[:,2])
         return occ, intersections, depth
 
+    # def query_rays(self, points, directions):
+    #     '''
+    #     Returns a single depth value for each point, direction pair
+    #     '''
+    #     x = torch.hstack([points, directions])
+    #     x = pos_encoding(x) if self.pos_enc else x
+    #     x = x.to(device)
+    #     _, intersect, depth = self.forward(x)
+    #     return intersect, depth
+
+
 
 class LF4D(nn.Module):
     '''
     A DDF with structure adapted from this LFN paper https://arxiv.org/pdf/2106.02634.pdf
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, n_intersections=20):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, n_intersections=20, radius=1.25, coord_type="points", pos_enc=True):
         super().__init__()
         self.n_intersections = n_intersections
         assert(n_layers > 1)
@@ -80,32 +125,49 @@ class LF4D(nn.Module):
         self.relu = nn.ReLU()
         self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
+        self.preprocessing = preprocessing_options[coord_type]
+        self.pos_enc = pos_enc
+        self.radius = radius
+
     def forward(self, x):
         for i in range(len(self.network)-1):
             x = self.network[i](x)
             x = self.relu(x)
             x = self.layernorm(x)
-
-        intersections = torch.sigmoid(x[:self.n_intersections//2])
-        depths = self.relu(x[self.n_intersections//2:])
+        x = self.network[-1](x)
+        intersections = torch.sigmoid(x[:,:self.n_intersections])
+        depths = self.relu(x[:,self.n_intersections:])
         return intersections, depths
 
-    def interior_depth(self, coordinates, interior_points):
+    def interior_depth(self, surface_points, interior_points):
         '''
         Coordinates - bounding sphere surface points and directions
         Interior_points - points within the bounding sphere that lie along the corresponding ray defined by coordinates
         Gives the positive depth to the next surface intersection from interior_points in the specified direction
+        Used for inference only
         '''
-        interior_distances = torch.sqrt(torch.sum(torch.square(coordinates[:,:3] - interior_points), dim=1))
+        coordinates = self.preprocessing(surface_points)
+        coordinates = pos_encoding(coordinates) if self.pos_enc else coordinates
+        interior_distances = torch.sqrt(torch.sum(torch.square(surface_points[:,:3] - interior_points), dim=1))
+        coordinates = coordinates.to(device)
         intersections, depths = self.forward(coordinates)
+        intersections = intersections.cpu()
+        depths = depths.cpu()
         depths -= torch.hstack([torch.reshape(interior_distances, (-1,1)),]*self.n_intersections)
         depths[depths < 0.] = float('inf')
         depths[intersections == 0.] = float('inf')
         depths = torch.min(depths, dim=1)[0]
-        return depths
+        intersections = torch.max(intersections, dim=1)[0] > 0.5
+        return intersections, depths
 
-
-
+    def query_rays(self, points, directions):
+        '''
+        Returns a single depth value for each point, direction pair
+        Used for inference only
+        '''
+        combine_tuple = lambda x: list(x[0]) + list(x[1])
+        surface_intersections = torch.tensor([combine_tuple(utils.get_sphere_intersections(points[i], directions[i], self.radius)) for i in range(points.shape[0])])
+        return self.interior_depth(surface_intersections, points)
         
         
 
