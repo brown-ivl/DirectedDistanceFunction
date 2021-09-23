@@ -30,8 +30,24 @@ def l2_loss(labels, predictions):
     '''
     return torch.mean(torch.square(labels - predictions))
 
+def chamfer_loss_1d(ground_truth, predictions):
+    '''
+    A chamfer distance measure between a set of ground truth and predicted depth points
+    '''
+    ground_truth = ground_truth.reshape((-1,1))
+    predictions = predictions.reshape((-1,1))
+    dists = torch.cdist(ground_truth, predictions)
+    gt_term = torch.mean(torch.min(dists, dim=1)[0])
+    pred_term = torch.mean(torch.min(dists, dim=0)[0])
+    return gt_term + pred_term
+
+def intersection_count_loss(ground_truth, predictions):
+    return torch.sqrt(torch.square(torch.sum(ground_truth) - torch.sum(predictions > 0.5)))
+
+
+
 def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
-    bce = nn.BCELoss()
+    # bce = nn.BCELoss()
     total_loss = 0.
     sum_int_loss = 0.
     sum_depth_loss = 0.
@@ -43,9 +59,9 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
         pred_int, pred_depth = model(coordinates)
         pred_int = pred_int.reshape((-1,))
         pred_depth = pred_depth.reshape((-1,))
-        intersect_loss = bce(pred_int, intersect)
+        intersect_loss = intersection_count_loss(pred_int, intersect)
         sum_int_loss += intersect_loss.detach()
-        depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+        depth_loss = lmbda * chamfer_loss_1d(depth[intersect > 0.5], pred_depth[pred_int > 0.5])
         sum_depth_loss += depth_loss.detach()
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
@@ -62,7 +78,7 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
     return avg_loss, avg_int_loss, avg_depth_loss
 
 def test(model, test_loader, lmbda, coord_type):
-    bce = nn.BCELoss()
+    # bce = nn.BCELoss()
     total_loss = 0.
     total_batches = 0.
 
@@ -78,7 +94,9 @@ def test(model, test_loader, lmbda, coord_type):
             pred_int, pred_depth = model(coordinates)
             pred_int = pred_int.reshape((-1,))
             pred_depth = pred_depth.reshape((-1,))
-            intersect_loss = bce(pred_int, intersect)
+            # intersect_loss = intersection_count_loss(pred_int, intersect)
+            # depth_loss = lmbda * chamfer_loss_1d(depth[intersect > 0.5], pred_depth[pred_int > 0.5])
+            intersect_loss = l2_loss(pred_int, intersect)
             depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
             loss = intersect_loss + depth_loss
             total_loss += loss
@@ -157,6 +175,11 @@ if __name__ == "__main__":
     parser.add_argument("--mesh_file", default="/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj", help="Source of mesh to train on")
     parser.add_argument("--coord_type", default="direction", help="Type of coordinates to use, valid options are 'points' | 'direction' | 'pluecker' ")
     parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
+    parser.add_argument("--vert_noise", type=float, default=0.01, help="Standard deviation of noise to add to vertex sampling methods")
+    parser.add_argument("--tan_noise", type=float, default=0.01, help="Standard deviation of noise to add to tangent sampling method")
+    parser.add_argument("--uniform", type=int, default=100, help="What percentage of the data should be uniformly sampled (0 -> 0%, 100 -> 100%)")
+    parser.add_argument("--vertex", type=int, default=0, help="What percentage of the data should use vertex sampling (0 -> 0%, 100 -> 100%)")
+    parser.add_argument("--tangent", type=int, default=0, help="What percentage of the data should use vertex tangent sampling (0 -> 0%, 100 -> 100%)")
     # "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
 
     # MODEL
@@ -210,10 +233,18 @@ if __name__ == "__main__":
     verts = mesh.vertices
     verts = utils.mesh_normalize(verts)
 
-    train_data = MultiDepthDataset(faces, verts, args.radius, size=args.samples_per_mesh, intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
-    test_data = MultiDepthDataset(faces,verts,args.radius,size=int(args.samples_per_mesh*0.1), intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
+    sampling_methods = [sampling.sample_uniform_4D, 
+                        sampling.sampling_preset_noise(sampling.sample_vertex_4D, args.vert_noise),
+                        sampling.sampling_preset_noise(sampling.sample_tangential_4D, args.tan_noise)]
+    sampling_frequency = [0.01 * args.uniform, 0.01 * args.vertex, 0.01*args.tangent]
+    assert(sum(sampling_frequency) == 1.0)
+    test_sampling_frequency = [1., 0., 0.]
 
-    train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
+    train_data = MultiDepthDataset(faces, verts, args.radius, sampling_methods, sampling_frequency, size=args.samples_per_mesh, intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
+    test_data = MultiDepthDataset(faces,verts,args.radius, sampling_methods, sampling_frequency, size=int(args.samples_per_mesh*0.1), intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
+
+    # TODO: num_workers=args.n_workers
+    train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True)
     test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)
 
     if args.load:
@@ -247,6 +278,7 @@ if __name__ == "__main__":
         print(f"Rendering ({args.video_resolution}x{args.video_resolution}) video with {args.n_frames} frames...")
         model=model.eval()
         equatorial_video(model, verts, faces, args.radius, args.n_frames, args.video_resolution, args.save_dir, args.name)
+    print(f"{args.name} finished")
 
 
 

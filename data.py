@@ -13,7 +13,7 @@ import utils
 
 class DepthData(Dataset):
 
-    def __init__(self,faces,verts,radius,sampling_methods,sampling_frequency,size=200000):
+    def __init__(self,faces,verts,radius,sampling_methods,sampling_frequency,size=1000000):
         '''
         Faces and verts define a mesh object that is used to generate data
         sampling_methods are methods from sampling.py that are used to choose rays during data generation
@@ -56,7 +56,7 @@ class DepthData(Dataset):
 
 class MultiDepthDataset(Dataset):
 
-    def __init__(self,faces,verts,radius,size=1000000, intersect_limit=20, pos_enc=True):
+    def __init__(self,faces,verts,radius,sampling_methods,sampling_frequency,size=1000000, intersect_limit=20, pos_enc=True):
         '''
         Faces and verts define a mesh object that is used to generate data
         sampling_methods are methods from sampling.py that are used to choose rays during data generation
@@ -65,17 +65,21 @@ class MultiDepthDataset(Dataset):
         '''
         self.faces = faces
         self.verts = verts
+        self.vert_normals = utils.get_vertex_normals(verts,faces)
         self.radius=radius
         self.near_face_threshold = rasterization.max_edge(verts, faces)
         self.size = size
         self.intersect_limit = intersect_limit
         self.pos_enc = pos_enc
+        self.sampling_methods = sampling_methods
+        self.sampling_frequency = sampling_frequency
 
     def __len__(self):
         return self.size
 
     def __getitem__(self, index):
-        ray_start,ray_end = sampling.sphere_surface_endpoints(self.radius)
+        sampling_method = self.sampling_methods[np.random.choice(np.arange(len(self.sampling_methods)), p=self.sampling_frequency)]
+        ray_start,ray_end,_ = sampling_method(self.radius,verts=self.verts,vert_normals=self.vert_normals)
         direction = ray_end-ray_start
         direction /= np.linalg.norm(direction)
         rot_verts = rasterization.rotate_mesh(self.verts, ray_start, ray_end)

@@ -71,7 +71,7 @@ def rotate_mesh(verts, ray_start, ray_end):
 def prune_mesh(verts, faces, radius):
     '''
     Prunes vertices and faces that are more than radius away from the z axis
-    Returns a new set of vertices and faces, and an array to convert old vert indices to pruned vert indices
+    Returns a new set of vertices and faces, and an array to convert old vert indices to pruned vert indices, and an array to convert to original face indices
     '''
     # take only faces near the ray
     near_verts_i = np.sqrt(np.sum(np.square(verts[:,:2]), axis=1)) < radius
@@ -194,10 +194,6 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
      # Prune faces far from the ray
     near_verts, near_faces, near_vert_indices, original_faces = prune_mesh(verts, faces, near_face_threshold)
 
-    # Function to convert near_vert indices to vert indices
-    def get_original_index(near_vert_index):
-        return int(np.sum(near_vert_indices < near_vert_index))
-
     # Remove the faces that contain the ray endpoint vertex
     if v is not None:
         removed_faces = original_faces[np.any(near_faces == near_vert_indices[v], axis=1)]
@@ -244,30 +240,31 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
             return occ, ray_start_depth, removed_faces 
     return occ, ray_depth, original_faces
 
-def ray_all_depths(faces, verts, near_face_threshold=0.08):
+def ray_all_depths(faces, verts, near_face_threshold=0.08, ray_start_depth=1., return_faces=False):
     '''
     Takes in faces and verts which define a mesh that has been rotated so that the ray end point is at the origin, and
     the ray start point lies on the z axis at a distance of ray_start_depth
     
     This function returns
-        occ, a boolean indicating whether or not the start of the ray lies within the mesh
-        depth, the depth to the first intersection, or np.inf if there are no intersections
-    
-    v can be passed if the the ray endpoint is a mesh vertex. This prevents each face with vertex v from being counted as a separate intersection
+        intersections, a list of depths to the nth intersection
+        original_faces, the face indices that are intersected (only returned if return_faces is True)
     '''
-
      # Prune faces far from the ray
-    near_verts, near_faces, near_vert_indices,_ = prune_mesh(verts, faces, near_face_threshold)
+    near_verts, near_faces, _, original_faces = prune_mesh(verts, faces, near_face_threshold)
 
+    # weights for face halfspaces
     wgts = get_weights(near_faces, near_verts)
     wgt_verts = near_verts[near_faces].reshape((-1,3))[:,:2]
 
     # a face is only intersected if all three of its halfspaces have positive outputs
     halfspace_outputs = (np.sum(np.multiply(wgts, -wgt_verts[:,:2]), axis=1) >= 0.).reshape((-1,3))
-
-    intersected_faces = near_faces[np.all(halfspace_outputs, axis=1)]
+    
+    intersected_faces_i = np.all(halfspace_outputs, axis=1)
+    intersected_faces = near_faces[intersected_faces_i]
     intersections = get_intersection_depths(near_verts[intersected_faces])
-    # The ray should start on a bounding sphere
-    assert(np.all(intersections > 0.0))
+    intersections = ray_start_depth - intersections
 
-    return intersections
+    if return_faces:
+        return intersections, original_faces[intersected_faces_i]
+    else:
+        return intersections

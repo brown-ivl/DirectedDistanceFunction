@@ -214,7 +214,6 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=1000, help="Train batch size")
     parser.add_argument("--test_batch_size", type=int, default=1000, help="Test batch size")
     parser.add_argument("--epochs", type=int, default=3, help="Number of epochs to train (overrides --iterations)")
-    parser.add_argument("--iterations", type=int, default=200000, help="Number of iterations to train (NASA says 200k)")
     parser.add_argument("--radius", type=float, default=1.25, help="The radius within which all rays should orginiate (mesh is normalized to be in unit sphere")
 
     # ACTIONS
@@ -311,6 +310,7 @@ if __name__ == "__main__":
         print(f"Rendering ({args.video_resolution}x{args.video_resolution}) video with {args.n_frames} frames...")
         model=model.eval()
         equatorial_video(model, verts, faces, args.radius, args.n_frames, args.video_resolution, args.save_dir, args.name)
+    print(f"{args.name} finished")
 
 
 

@@ -111,32 +111,70 @@ class LF4D(nn.Module):
     A DDF with structure adapted from this LFN paper https://arxiv.org/pdf/2106.02634.pdf
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, n_intersections=20, radius=1.25, coord_type="points", pos_enc=True):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, n_intersections=20, radius=1.25, coord_type="direction", pos_enc=True):
         super().__init__()
+        # store args
         self.n_intersections = n_intersections
-        assert(n_layers > 1)
-        all_layers = []
-        all_layers.append(nn.Linear(input_size,hidden_size))
-        for _ in range(n_layers-2):
-            all_layers.append(nn.Linear(hidden_size, hidden_size))
-        all_layers.append(nn.Linear(hidden_size, 2*n_intersections))
-
-        self.network = nn.ModuleList(all_layers)
-        self.relu = nn.ReLU()
-        self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
-
         self.preprocessing = preprocessing_options[coord_type]
         self.pos_enc = pos_enc
         self.radius = radius
+        assert(n_layers > 1)
 
-    def forward(self, x):
-        for i in range(len(self.network)-1):
-            x = self.network[i](x)
+        # set which layers (aside from the first) should have the positional encoding passed in
+        self.pos_enc_layers = [4]
+
+        # Define the main network body
+        main_layers = []
+        main_layers.append(nn.Linear(input_size,hidden_size))
+        for l in range(n_layers-1):
+            if l+2 in self.pos_enc_layers:
+                main_layers.append(nn.Linear(hidden_size+input_size, hidden_size))
+            else:
+                main_layers.append(nn.Linear(hidden_size, hidden_size))
+        self.network = nn.ModuleList(main_layers)
+        
+        # Define the intersection head
+        intersection_layers = [
+            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(hidden_size, n_intersections)
+        ]
+        self.intersection_head = nn.ModuleList(intersection_layers)
+
+        # Define the depth head
+        depth_layers = [
+            nn.Linear(hidden_size, hidden_size),
+            nn.Linear(hidden_size, n_intersections)
+        ]
+        self.depth_head = nn.ModuleList(depth_layers)
+
+        # all_layers.append(nn.Linear(hidden_size, 2*n_intersections))
+        # self.network = nn.ModuleList(all_layers)
+        # other layers
+        self.relu = nn.ReLU()
+        self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+
+    def forward(self, input):
+        x = input
+        for i in range(len(self.network)):
+            if i+1 in self.pos_enc_layers:
+                x = self.network[i](torch.cat([input, x], dim=1))
+            else:
+                x = self.network[i](x)
             x = self.relu(x)
             x = self.layernorm(x)
-        x = self.network[-1](x)
-        intersections = torch.sigmoid(x[:,:self.n_intersections])
-        depths = self.relu(x[:,self.n_intersections:])
+        
+        # intersection head
+        intersections = self.intersection_head[0](x)
+        intersections = self.relu(intersections)
+        intersections = self.layernorm(intersections)
+        intersections = self.intersection_head[1](intersections)
+
+        # depth head
+        depths = self.depth_head[0](x)
+        depths = self.relu(depths)
+        depths = self.layernorm(depths)
+        depths = self.depth_head[1](x)
+
         return intersections, depths
 
     def interior_depth(self, surface_points, interior_points):
@@ -168,6 +206,4 @@ class LF4D(nn.Module):
         combine_tuple = lambda x: list(x[0]) + list(x[1])
         surface_intersections = torch.tensor([combine_tuple(utils.get_sphere_intersections(points[i], directions[i], self.radius)) for i in range(points.shape[0])])
         return self.interior_depth(surface_intersections, points)
-        
-        
 

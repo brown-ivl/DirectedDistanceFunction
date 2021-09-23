@@ -77,29 +77,37 @@ class RayVisualizer():
         self.colored_meshes.append(make_mesh(verts, faces, color=colors))
 
 
-    def add_sample(self, ray_start, ray_end, occ, depth, intersected_faces):
+    def add_sample(self, ray_start, ray_end, occ, depths, intersected_faces):
         '''
         Adds all components of a newly sampled ray
         '''
         vec_mag = np.linalg.norm(ray_end-ray_start)
         self.add_point(ray_start, [1.,0.8,0.])
         self.add_point(ray_end, [1.,0.,0.])
-        intersection_point = ray_start + (ray_end - ray_start)*depth / vec_mag            
-        if np.linalg.norm(intersection_point) < np.inf:
-            self.add_point(intersection_point, [0., 1., 0.])
-            
+
+        max_depth = vec_mag
+
+        for depth in depths:
+            intersection_point = ray_start + (ray_end - ray_start)*depth / vec_mag            
+            if np.linalg.norm(intersection_point) < np.inf:
+                self.add_point(intersection_point, [0., 1., 0.])
+                max_depth = max(max_depth, depth)
+        if len(depths) == 0 or min(depths) == np.inf:
+            self.add_ray([ray_start, ray_end], [0.,1.,1.])
+        else:
             # draw all the way to intersection if it is past ray end
-            if np.linalg.norm(intersection_point-ray_start) > vec_mag:
-                ray_end = intersection_point
+            ray_end = ray_start + (ray_end - ray_start)*max_depth / vec_mag 
             # color the ray purple if it originates within the mesh
             if occ:
                 self.add_ray([ray_start, ray_end], [1., 0., 1.])
             else:
-                self.add_ray([ray_start, ray_end], [0., 0., 1.])
-        else:
-            self.add_ray([ray_start, ray_end], [0.,1.,1.])
-
+                self.add_ray([ray_start, ray_end], [0., 0., 1.])            
         self.add_mesh_faces(list(intersected_faces))
+
+    def show_axes(self):
+            self.add_point([1.,0.,0.], [1.,0.,0.])
+            self.add_point([0.,1.,0.], [0.,1.,0.])
+            self.add_point([0.,0.,1.], [0.,0.,1.])
 
     def display(self):
         to_show = [self.wireframe]
