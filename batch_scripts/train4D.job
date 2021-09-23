@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#SBATCH -p gpu --gres=gpu:1
+#SBATCH -t 72:00:00
+#SBATCH --mem=128G
+#SBATCH -n 4
+
+module load cuda/11.1.1
+conda activate bodymodel
+python ../train4D.py -Ttsv -n first4D_lambda10 --epochs 300 --n_workers 8 --train_batch_size 1000 --lmbda 10. --n_frames 200 --video_resolution 250

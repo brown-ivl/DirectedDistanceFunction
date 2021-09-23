@@ -7,4 +7,4 @@
 
 module load cuda/11.1.1
 conda activate bodymodel
-python ../train.py -Ttsv -n uni20vert80_noise02 --epochs 300 --n_workers 8 --train_batch_size 1000 --vert_noise 0.02 --n_frames 200 --video_resolution 250
+python ../train.py -Ttsv -n vert100_noise04 --epochs 300 --n_workers 8 --train_batch_size 1000 --vert_noise 0.04 --n_frames 200 --video_resolution 250

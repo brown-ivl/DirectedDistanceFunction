@@ -269,7 +269,7 @@ if __name__ == "__main__":
                         sampling.sampling_preset_noise(sampling.sample_vertex_noise, args.vert_noise),
                         sampling.sampling_preset_noise(sampling.sample_vertex_all_directions, args.vert_noise),
                         sampling.sampling_preset_noise(sampling.sample_vertex_tangential, args.tan_noise)]
-    sampling_frequency = [0.2, 0.0, 0.8, 0.0]
+    sampling_frequency = [0.0, 0.0, 1.0, 0.0]
     test_sampling_frequency = [1., 0., 0., 0.]
 
     train_data = DepthData(faces,verts,args.radius,sampling_methods,sampling_frequency,size=args.samples_per_mesh)
