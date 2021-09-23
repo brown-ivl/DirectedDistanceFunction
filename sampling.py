@@ -21,6 +21,7 @@ import trimesh
 from scipy.stats import norm, uniform
 from tqdm import tqdm
 
+#  -------     5D SPACE SAMPLING METHODS     -------
 
 def sample_uniform_ray_space(radius, **kwargs):
     '''
@@ -87,7 +88,7 @@ def sample_vertex_all_directions(radius, verts=None, noise = 0.01, v=None, **kwa
     start_point = bound1* position + (1.-position) * bound2
     return start_point, end_point, None
 
-def sample_vertex_tangential(radius, verts=None, noise=0.04, vert_normals=None, v=None):
+def sample_vertex_tangential(radius, verts=None, noise=0.01, vert_normals=None, v=None):
     '''
     Returns a ray that has an endpoint near a mesh vertex, and has a start point that is orthogonal to the 
     vertex normal (tangential)
@@ -111,6 +112,66 @@ def sample_vertex_tangential(radius, verts=None, noise=0.04, vert_normals=None, 
     start_point = bound1*position + (1.-position)*bound2
     return start_point, end_point, None
 
+def uniform_ray_space_equal_intersections():
+    '''
+    Samples a ray uniformly at random from ray space (two points on surface of sphere). Then, all of the intersections along the ray are found,
+    and one of the rays is sampled
+    '''
+    pass
+
+
+# -------     4D SPACE SAMPLING METHODS     -------
+
+def sample_uniform_4D(radius, **kwargs):
+    '''
+    Sampling Procedure:
+        1) Choose start point uniformly from bounding sphere
+        2) Choose end point uniformly from bounding sphere
+    '''
+    start_point = utils.random_on_sphere(radius)
+    end_point = utils.random_on_sphere(radius)
+    return start_point, end_point, None
+
+def sample_vertex_4D(radius, verts=None, noise = 0.01, v=None, **kwargs):
+    '''
+    Sampling Procedure:
+        1) Choose a vertex uniformly at random as the endpoint
+        2) Modify the endpoint by adding gaussian noise with sigma defined by the noise parameter
+        3) Choose a direction on the unit sphere
+        4) Find the ray that goes in the chosen direction from the endpoint, and return where it intersects the bounding sphere
+    v can be passed to fix the end vertex for visualization purposes
+    '''
+    assert(verts is not None)
+    if v is None:
+        v = np.random.randint(0, high=verts.shape[0])
+    end_point = verts[v] + norm.rvs(scale=noise, size=3)
+    direction = utils.random_on_sphere(1.0)
+    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    return bound1, bound2, None
+
+def sample_tangential_4D(radius, verts=None, noise=0.01, vert_normals=None, v=None, **kwargs):
+    '''
+    Returns a ray that has an endpoint near a mesh vertex, and has a start point that is orthogonal to the 
+    vertex normal (tangential)
+    Sampling Procedure:
+        1) Choose a vertex uniformly at random as the endpoint
+        2) Modify the endpoint by adding gaussian noise with sigma defined by the noise parameter
+        3) Choose a direction on the unit sphere
+        4) Cross the direction with the vertex normal to get a direction tangential to the vertex normal
+        5) Find the ray that goes in the chosen tangent direction from the endpoint, and return the points where it intersects the bouding sphere
+    v can be passed to fix the end vertex for visualization purposes
+    '''
+    assert(vert_normals is not None and verts is not None)
+    if v is None:
+        v = np.random.randint(0, high=verts.shape[0])
+    end_point = verts[v] + norm.rvs(scale=noise, size=3)
+    v_normal = vert_normals[v]
+    direction = np.cross(v_normal, utils.random_on_sphere(1.0))
+    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    return bound1, bound2, None
+
+# -------     SAMPLING HELPER     -------
+
 def sampling_preset_noise(sampling_method, noise):
     '''
     Defines a new version of one of the sampling functions with a different noise value set
@@ -119,20 +180,6 @@ def sampling_preset_noise(sampling_method, noise):
         return sampling_method(radius, verts=verts, noise=noise, vert_normals=vert_normals, v=None, **kwargs)
     return preset_noise
 
-def uniform_ray_space_equal_intersections():
-    '''
-    Samples a ray uniformly at random from ray space (two points on surface of sphere). Then, all of the intersections along the ray are found,
-    and one of the rays is sampled
-    '''
-    pass
-
-def sphere_surface_endpoints(radius, n_samples=1):
-    '''
-    Returns ray endpoints both sampled uniformly from a sphere surface
-    '''
-    start_point = utils.random_on_sphere(radius)
-    end_point = utils.random_on_sphere(radius)
-    return start_point, end_point
 
 if __name__ == "__main__":
 
@@ -141,6 +188,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--speed", action="store_true", help="show speed benchmarks for randomly generated rays")
     parser.add_argument("-d", "--depthmap", action="store_true", help="show a depth map image of the mesh")
     parser.add_argument("-c", "--coverage", action="store_true", help="show the intersected vertices of the mesh")
+    parser.add_argument("--use_4d", action="store_true", help="show results for the 4D sampling strategies")
     parser.add_argument("--mesh_file", default="F:\\ivl-data\\sample_data\\stanford_bunny.obj", help="Source of mesh file")
     args = parser.parse_args()
 
@@ -169,10 +217,12 @@ if __name__ == "__main__":
     near_face_threshold = rasterization.max_edge(verts, faces)
     vert_normals = utils.get_vertex_normals(verts, faces)
 
-    sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
-    method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
-    # sampling_methods = [sample_vertex_all_directions, sample_vertex_tangential]
-    # method_names = ["sample_vertex_all_directions", "sample_vertex_tangential"]
+    if not args.use_4d:
+        sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
+        method_names = ["sample_uniform_ray_space", "sample_vertex_noise", "sample_vertex_all_directions", "sample_vertex_tangential"]
+    else:
+        sampling_methods = [sample_uniform_4D, sample_vertex_4D, sample_tangential_4D]
+        method_names = ["sample_uniform_4D", "sample_vertex_4D", "sample_tangential_4D"]
 
     if args.viz:
         import visualization
@@ -185,12 +235,15 @@ if __name__ == "__main__":
                 ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=fixed_endpoint)
                 # rotate and compute depth/occupancy
                 rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
-                occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
+                occ=False
+                if args.use_4d:
+                    depths, intersected_faces = rasterization.ray_all_depths(faces, rot_verts, near_face_threshold=near_face_threshold, ray_start_depth=np.linalg.norm(ray_end-ray_start), return_faces=True)
+                else:
+                    occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
+                    depths = [depth]
                 # update visualizer
-                visualizer.add_sample(ray_start, ray_end, occ, depth, faces[intersected_faces] if intersected_faces.shape[0] > 0 else [])
-            visualizer.add_point([1.,0.,0.], [1.,0.,0.])
-            visualizer.add_point([0.,1.,0.], [0.,1.,0.])
-            visualizer.add_point([0.,0.,1.], [0.,0.,1.])
+                visualizer.add_sample(ray_start, ray_end, occ, depths, faces[intersected_faces] if intersected_faces.shape[0] > 0 else [])
+            visualizer.show_axes()
             visualizer.display()
         
     if args.speed:
@@ -202,12 +255,17 @@ if __name__ == "__main__":
             for _ in range(n_samples):
                 ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=None)
                 rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
-                occ, depth = rasterization.ray_occ_depth(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
+                if args.use_4d:
+                    depths = rasterization.ray_all_depths(faces, rot_verts, near_face_threshold=near_face_threshold, return_faces=False)
+                else:
+                    occ, depth = rasterization.ray_occ_depth(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=v)
             end = datetime.datetime.now()
             secs = (end-start).total_seconds()
             print(f"\t{n_samples/secs :.0f} rays per second")
 
     if args.depthmap:
+        import visualization
+        from camera import Camera
         cam_center = [0.,1.0,1.]
         direction = [0.,-1.0,-1.]
         focal_length = 1.0
@@ -235,7 +293,7 @@ if __name__ == "__main__":
         visualizer.add_ray([cam_center, cam_center+v_direction*0.1], np.array([0.,0.,1.]))
         visualizer.display()
 
-        cam = visualization.Camera(center=cam_center, direction=direction, focal_length=focal_length, sensor_size=sensor_size, sensor_resolution=resolution)
+        cam = Camera(center=cam_center, direction=direction, focal_length=focal_length, sensor_size=sensor_size, sensor_resolution=resolution)
         intersection, depth = cam.mesh_depthmap(cam.rays_on_sphere(cam.generate_rays(), radius), verts, faces)
         plt.imshow(depth)
         plt.show()
@@ -256,7 +314,10 @@ if __name__ == "__main__":
                 ray_start, ray_end, v = sampling_method(radius, verts=verts, vert_normals=vert_normals, v=None)
                 # rotate and compute depth/occupancy
                 rot_verts = rasterization.rotate_mesh(verts, ray_start, ray_end)
-                occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=None)
+                if args.use_4d:
+                    depths, intersected_faces = rasterization.ray_all_depths(faces, rot_verts, near_face_threshold=near_face_threshold, ray_start_depth=np.linalg.norm(ray_end-ray_start), return_faces=True)
+                else:
+                    occ, depth, intersected_faces = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end-ray_start), near_face_threshold=near_face_threshold, v=None)
                 face_counts[intersected_faces.astype(int)] += 1.
             upper_limit = 20.
             upper_color = np.array([0.,1.,0.])
