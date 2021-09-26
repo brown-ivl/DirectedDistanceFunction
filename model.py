@@ -151,7 +151,8 @@ class LF4D(nn.Module):
         # self.network = nn.ModuleList(all_layers)
         # other layers
         self.relu = nn.ReLU()
-        self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+        # No layernorm for now
+        # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
     def forward(self, input):
         x = input
@@ -161,18 +162,19 @@ class LF4D(nn.Module):
             else:
                 x = self.network[i](x)
             x = self.relu(x)
-            x = self.layernorm(x)
+            # x = self.layernorm(x)
         
         # intersection head
         intersections = self.intersection_head[0](x)
         intersections = self.relu(intersections)
-        intersections = self.layernorm(intersections)
+        # intersections = self.layernorm(intersections)
         intersections = self.intersection_head[1](intersections)
+        intersections = torch.sigmoid(intersections)
 
         # depth head
         depths = self.depth_head[0](x)
         depths = self.relu(depths)
-        depths = self.layernorm(depths)
+        # depths = self.layernorm(depths)
         depths = self.depth_head[1](x)
 
         return intersections, depths
@@ -193,7 +195,7 @@ class LF4D(nn.Module):
         depths = depths.cpu()
         depths -= torch.hstack([torch.reshape(interior_distances, (-1,1)),]*self.n_intersections)
         depths[depths < 0.] = float('inf')
-        depths[intersections == 0.] = float('inf')
+        depths[intersections < 0.5] = float('inf')
         depths = torch.min(depths, dim=1)[0]
         intersections = torch.max(intersections, dim=1)[0] > 0.5
         return intersections, depths

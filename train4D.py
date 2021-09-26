@@ -23,6 +23,7 @@ import sampling
 import rasterization
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+torch.autograd.set_detect_anomaly(True)
 
 def l2_loss(labels, predictions):
     '''
@@ -30,45 +31,104 @@ def l2_loss(labels, predictions):
     '''
     return torch.mean(torch.square(labels - predictions))
 
-def chamfer_loss_1d(ground_truth, predictions):
+def chamfer_loss_1d(ground_truth, predictions, gt_mask, pred_mask):
     '''
     A chamfer distance measure between a set of ground truth and predicted depth points
     '''
-    ground_truth = ground_truth.reshape((-1,1))
-    predictions = predictions.reshape((-1,1))
+    ground_truth = ground_truth.unsqueeze(2)
+    predictions = predictions.unsqueeze(2)
+
+    # we need to mask out the elements that aren't labeled as true intersections
+    extended_gt_mask = gt_mask.unsqueeze(2)
+    extended_gt_mask = extended_gt_mask.tile((1,1,pred_mask.shape[1]))
+    extended_pred_mask = pred_mask.unsqueeze(1)
+    extended_pred_mask = extended_pred_mask.tile((1,gt_mask.shape[1],1))
+    joint_mask = torch.logical_and(extended_pred_mask, extended_gt_mask)
+
     dists = torch.cdist(ground_truth, predictions)
-    gt_term = torch.mean(torch.min(dists, dim=1)[0])
-    pred_term = torch.mean(torch.min(dists, dim=0)[0])
-    return gt_term + pred_term
+    # this step is solely to allow us to mask out certain values in a differentiable manner
+    # dists = 1. / (dists + 0.01)
+    # dists[torch.logical_not(joint_mask)] *= -1
+    # gt_term = torch.mean(1. / torch.max(dists, dim=2)[0] - 0.01) 
+    # pred_term = torch.mean(1. / torch.max(dists, dim=1)[0] - 0.01) 
+
+    masked_dists = torch.where(joint_mask, dists, torch.tensor(np.inf).to(device))
+
+    # find the nearest point in the opposing set (mask out inf values in current set)
+    gt_term = torch.min(masked_dists, dim=2)[0]
+    gt_term = torch.where(gt_mask, gt_term, torch.tensor(0.).to(device))
+    gt_term = torch.sum(gt_term, dim=1) / torch.sum(gt_mask, dim=1)
+    gt_term = torch.mean(gt_term)
+    # print("GT TERM")
+    # print(torch.min(masked_dists, dim=2)[0][gt_mask])
+
+    # pred_term = torch.mean(torch.min(masked_dists, dim=1)[0][pred_mask])
+    pred_term = torch.min(masked_dists, dim=1)[0]
+    pred_term = torch.where(pred_mask, pred_term, torch.tensor(0.).to(device))
+    pred_term = torch.sum(pred_term, dim=1) / torch.sum(pred_mask, dim=1)
+    pred_term = torch.mean(pred_term)
+    # print("PRED TERM")
+    # print(torch.min(masked_dists, dim=1)[0][pred_mask])
+    return 0.5 * (gt_term + pred_term)
 
 def intersection_count_loss(ground_truth, predictions):
-    return torch.sqrt(torch.square(torch.sum(ground_truth) - torch.sum(predictions > 0.5)))
+    # print(torch.sum(ground_truth > 0.5, dim=1) - torch.sum(predictions > 0.5, dim=1))
+    return torch.mean(torch.sqrt(torch.square(torch.sum(ground_truth > 0.5, dim=1) - torch.sum(predictions > 0.5, dim=1))))
+
+def push_int_loss(gt, pred):
+    # print(gt)
+    # print(pred)
+    diff = torch.sum(gt > 0.5, dim=1) - torch.sum(pred > 0.5, dim=1)
+    # diff = diff.detach()
+
+    # masking the ones with errors
+    nonzeros = diff != 0
+    diff = diff[nonzeros]
+    diff = torch.where(diff > 0., torch.tensor(1.).to(device), torch.tensor(0.).to(device))
+    diff = diff.unsqueeze(1)
+    diff = diff.tile((1,pred.shape[1]))
+    pred = pred[nonzeros]
+
+    bce = nn.BCELoss()
+    return bce(pred, diff)
 
 
 
-def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
-    # bce = nn.BCELoss()
+
+def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=False):
+    bce = nn.BCELoss()
     total_loss = 0.
     sum_int_loss = 0.
     sum_depth_loss = 0.
     total_batches = 0
     for batch in tqdm(train_loader):
         coordinates = batch[f"coordinates_{coord_type}"].to(device)
-        intersect = batch["intersect"].to(device).reshape((-1,))
-        depth = batch["depths"].to(device).reshape((-1,))
+        intersect = batch["intersect"].to(device)
+        depth = batch["depths"].to(device)
         pred_int, pred_depth = model(coordinates)
-        pred_int = pred_int.reshape((-1,))
-        pred_depth = pred_depth.reshape((-1,))
-        intersect_loss = intersection_count_loss(pred_int, intersect)
-        sum_int_loss += intersect_loss.detach()
-        depth_loss = lmbda * chamfer_loss_1d(depth[intersect > 0.5], pred_depth[pred_int > 0.5])
-        sum_depth_loss += depth_loss.detach()
+        if unordered:
+            # mask of rays that have any intersections (gt & predicted)
+            gt_any_int_mask = torch.any(intersect > 0.5, dim=1)
+            pred_any_int_mask = torch.any(pred_int > 0.5, dim=1)
+            combined_int_mask = torch.logical_and(gt_any_int_mask, pred_any_int_mask)
+            depth_loss = lmbda * chamfer_loss_1d(depth[combined_int_mask], pred_depth[combined_int_mask], (intersect > 0.5)[combined_int_mask], (pred_int > 0.5)[combined_int_mask])
+            # intersect_loss = intersection_count_loss(intersect, pred_int)
+            intersect_loss = push_int_loss(intersect, pred_int)
+        else:
+            intersect = intersect.reshape((-1,))
+            depth = depth.reshape((-1,))
+            pred_int = pred_int.reshape((-1,))
+            pred_depth = pred_depth.reshape((-1,))
+            depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+            intersect_loss = bce(pred_int, intersect)        
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        sum_int_loss += intersect_loss.detach()
+        sum_depth_loss += depth_loss.detach()
         total_loss += loss.detach()
-        total_batches += 1
+        total_batches += 1.
     avg_loss = float(total_loss/total_batches)
     avg_int_loss = float(sum_int_loss/total_batches)
     avg_depth_loss = float(sum_depth_loss/total_batches)
@@ -77,10 +137,11 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type):
     print(f"Average Depth Loss: {avg_depth_loss:.4f}")
     return avg_loss, avg_int_loss, avg_depth_loss
 
-def test(model, test_loader, lmbda, coord_type):
-    # bce = nn.BCELoss()
+def test(model, test_loader, lmbda, coord_type, unordered=False):
+    bce = nn.BCELoss()
     total_loss = 0.
     total_batches = 0.
+    total_chamfer = 0.
 
     all_depth_errors = []
     all_int_pred = []
@@ -89,23 +150,35 @@ def test(model, test_loader, lmbda, coord_type):
     with torch.no_grad():
         for batch in tqdm(test_loader):
             coordinates = batch[f"coordinates_{coord_type}"].to(device)
-            intersect = batch["intersect"].to(device).reshape((-1,))
-            depth = batch["depths"].to(device).reshape((-1,))
+            intersect = batch["intersect"].to(device)
+            depth = batch["depths"].to(device)
             pred_int, pred_depth = model(coordinates)
-            pred_int = pred_int.reshape((-1,))
-            pred_depth = pred_depth.reshape((-1,))
-            # intersect_loss = intersection_count_loss(pred_int, intersect)
-            # depth_loss = lmbda * chamfer_loss_1d(depth[intersect > 0.5], pred_depth[pred_int > 0.5])
-            intersect_loss = l2_loss(pred_int, intersect)
-            depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+            if unordered:
+                # mask of rays that have any intersections (gt & predicted)
+                gt_any_int_mask = torch.any(intersect > 0.5, dim=1)
+                pred_any_int_mask = torch.any(pred_int > 0.5, dim=1)
+                combined_int_mask = torch.logical_and(gt_any_int_mask, pred_any_int_mask)
+                depth_loss = lmbda * chamfer_loss_1d(depth[combined_int_mask], pred_depth[combined_int_mask], (intersect > 0.5)[combined_int_mask], (pred_int > 0.5)[combined_int_mask])
+                intersect_loss = intersection_count_loss(intersect, pred_int)
+            else:
+                intersect = intersect.reshape((-1,))
+                depth = depth.reshape((-1,))
+                pred_int = pred_int.reshape((-1,))
+                pred_depth = pred_depth.reshape((-1,))
+                depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+                intersect_loss = bce(intersect, pred_int)        
             loss = intersect_loss + depth_loss
-            total_loss += loss
             all_depth_errors.append(torch.abs(depth[intersect > 0.5] - pred_depth[intersect > 0.5]).cpu().numpy())
-            all_int_pred.append(pred_int.cpu().numpy())
-            all_int_label.append(intersect.cpu().numpy())
-            total_batches+=1.
+            all_int_pred.append(pred_int.cpu().numpy().flatten())
+            all_int_label.append(intersect.cpu().numpy().flatten())
+            if unordered:
+                total_chamfer += depth_loss / lmbda
+            total_loss += loss.detach()
+            total_batches += 1.
 
     print(f"\nAverage Test Loss: {float(total_loss/total_batches):.4f}")
+    if unordered:
+        print(f"Average Chamfer Loss: {(total_chamfer / total_batches):.4f}")
     print("Confusion Matrix Layout:")
     print("[[TN    FP]\n [FN    TP]]")
 
@@ -185,6 +258,7 @@ if __name__ == "__main__":
     # MODEL
     parser.add_argument("--lmbda", type=float, default=100., help="Multiplier for depth l2 loss")
     parser.add_argument("--intersect_limit", type=int, default=20, help="Max number of intersections that the network will predict per ray (should be even number)")
+    parser.add_argument("--unordered", action="store_true", help="The intersection outputs will have no ordering constraint if this argument is passed")
 
 
     # HYPERPARAMETERS
@@ -192,7 +266,6 @@ if __name__ == "__main__":
     parser.add_argument("--train_batch_size", type=int, default=1000, help="Train batch size")
     parser.add_argument("--test_batch_size", type=int, default=1000, help="Test batch size")
     parser.add_argument("--epochs", type=int, default=3, help="Number of epochs to train (overrides --iterations)")
-    parser.add_argument("--iterations", type=int, default=200000, help="Number of iterations to train (NASA says 200k)")
     parser.add_argument("--radius", type=float, default=1.25, help="The radius at which all rays start and end (mesh is normalized to be in unit sphere)")
 
     # ACTIONS
@@ -244,8 +317,8 @@ if __name__ == "__main__":
     test_data = MultiDepthDataset(faces,verts,args.radius, sampling_methods, sampling_frequency, size=int(args.samples_per_mesh*0.1), intersect_limit=args.intersect_limit, pos_enc=args.pos_enc)
 
     # TODO: num_workers=args.n_workers
-    train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)
+    train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
+    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
 
     if args.load:
         print("Loading saved model...")
@@ -258,7 +331,7 @@ if __name__ == "__main__":
         depth_loss = []
         for e in range(args.epochs):
             print(f"EPOCH {e+1}")
-            tl, il, dl = train_epoch(model, train_loader, optimizer, args.lmbda, args.coord_type)
+            tl, il, dl = train_epoch(model, train_loader, optimizer, args.lmbda, args.coord_type, unordered=args.unordered)
             total_loss.append(tl)
             int_loss.append(il)
             depth_loss.append(dl)
@@ -269,7 +342,7 @@ if __name__ == "__main__":
     if args.test:
         print("Testing model ...")
         model=model.eval()
-        test(model, test_loader, args.lmbda, args.coord_type)
+        test(model, test_loader, args.lmbda, args.coord_type, unordered=args.unordered)
     if args.viz_depth:
         print("Visualizing depth map...")
         model=model.eval()

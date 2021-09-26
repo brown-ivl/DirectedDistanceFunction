@@ -119,6 +119,7 @@ class Camera():
         # print(rays_in_scene)
         if len(rays_in_scene) > 0:
             with torch.no_grad():
+                # pass in surface point, direction
                 intersect, depth = model.query_rays(rays_in_scene[:,:3], rays_in_scene[:,3:])
                 intersect = intersect.cpu()
                 model_depths = depth.cpu()
