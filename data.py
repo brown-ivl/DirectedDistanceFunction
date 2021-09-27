@@ -83,7 +83,7 @@ class MultiDepthDataset(Dataset):
         direction = ray_end-ray_start
         direction /= np.linalg.norm(direction)
         rot_verts = rasterization.rotate_mesh(self.verts, ray_start, ray_end)
-        int_depths = rasterization.ray_all_depths(self.faces, rot_verts,near_face_threshold=self.near_face_threshold)
+        int_depths = rasterization.ray_all_depths(self.faces, rot_verts,near_face_threshold=self.near_face_threshold, ray_start_depth=np.linalg.norm(ray_end - ray_start))
         int_depths = int_depths[:self.intersect_limit]
         intersect = np.zeros((self.intersect_limit,), dtype=float)
         intersect[:int_depths.shape[0]] = 1.

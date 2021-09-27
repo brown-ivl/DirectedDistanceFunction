@@ -29,6 +29,9 @@ def l2_loss(labels, predictions):
     '''
     L2 loss
     '''
+    # print("L2 Loss")
+    # print(labels[-10:])
+    # print(predictions[-10:])
     return torch.mean(torch.square(labels - predictions))
 
 def chamfer_loss_1d(ground_truth, predictions, gt_mask, pred_mask):
@@ -206,12 +209,16 @@ def viz_depth(model, verts, faces, radius, show_rays=False):
     '''
     Visualize learned depth map and intersection mask compared to the ground truth
     '''
+    # these are the normalization bounds for coloring in the video
+    vmin = 0.25
+    vmax = 2.25
+
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [100,100]
     zoom_out_cameras = [Camera(center=[1.25,0.0,0.0], direction=[-1.0,0.0,0.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(1)]
     data = [cam.mesh_and_model_depthmap(model, verts, faces, radius, show_rays=show_rays, fourd=True) for cam in zoom_out_cameras]
-    DepthMapViewer(data, [0.5,]*len(data), [1.5]*len(data))
+    DepthMapViewer(data, [vmin,]*len(data), [vmax]*len(data))
 
 def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir, name):
     '''
@@ -224,6 +231,7 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
     # these are the normalization bounds for coloring in the video
     vmin = 0.25
     vmax = 2.25
+
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [resolution,resolution]
@@ -318,7 +326,7 @@ if __name__ == "__main__":
 
     # TODO: num_workers=args.n_workers
     train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
-    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
+    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)
 
     if args.load:
         print("Loading saved model...")

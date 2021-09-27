@@ -89,7 +89,6 @@ class Camera():
         rays_in_scene_mask = np.array([True if ray != None else False for ray in rays])
         # rays_in_scene = torch.tensor([list(ray[0]) + list(ray[1]-ray[0]) for ray in rays if ray != None])
         rays_in_scene = [ray for ray in rays if ray != None]
-        # print(rays_in_scene)
         if len(rays_in_scene) > 0:
             with torch.no_grad():
                 encoded_rays = torch.tensor([[x for val in list(ray[0])+list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in utils.positional_encoding(val)] for ray in rays_in_scene]).to(device)
@@ -224,7 +223,6 @@ def save_video(rendered_views, save_path, vmin, vmax):
         for ax in axes:
             ax.clear()
         gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[num]
-        depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
         utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
 
     depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views, all_axes),

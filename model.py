@@ -13,14 +13,14 @@ def points(points):
 
 def direction(points):
     dir = points[:,3:]-points[:,:3]
-    norm = torch.linalg.norm(dir)
+    norm = torch.linalg.norm(dir, dim=1)
     norm = torch.hstack([norm.reshape(-1,1)]*3)
     dir /= norm
     return torch.hstack([points[:,:3], dir])
 
 def pluecker(points):
     dir = points[:,3:]-points[:,:3]
-    norm = torch.linalg.norm(dir)
+    norm = torch.linalg.norm(dir, dim=1)
     norm = torch.hstack([norm.reshape(-1,1)]*3)
     dir /= norm
     m = torch.cross(points[:,:3], dir, dim=1)
@@ -176,7 +176,6 @@ class LF4D(nn.Module):
         depths = self.relu(depths)
         # depths = self.layernorm(depths)
         depths = self.depth_head[1](x)
-
         return intersections, depths
 
     def interior_depth(self, surface_points, interior_points):
@@ -194,8 +193,8 @@ class LF4D(nn.Module):
         intersections = intersections.cpu()
         depths = depths.cpu()
         depths -= torch.hstack([torch.reshape(interior_distances, (-1,1)),]*self.n_intersections)
-        depths[depths < 0.] = float('inf')
-        depths[intersections < 0.5] = float('inf')
+        # depths[depths < 0.] = float('inf')
+        # depths[intersections < 0.5] = float('inf')
         depths = torch.min(depths, dim=1)[0]
         intersections = torch.max(intersections, dim=1)[0] > 0.5
         return intersections, depths
