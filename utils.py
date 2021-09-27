@@ -160,9 +160,9 @@ def show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, al
     depth_difference[:,:,0] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
     depth_difference[:,:,2] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
     # set colors for negative difference
-    depth_difference[:,:,2] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1), axis=-1), 0.)
-    depth_difference[:,:,0] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
-    depth_difference[:,:,1] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    depth_difference[:,:,2] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1), axis=-1), depth_difference[:,:,2])
+    depth_difference[:,:,0] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,0])
+    depth_difference[:,:,1] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,1])
     depth_difference[np.logical_not(np.logical_or(gt_intersect, learned_intersect))] = np.array([1.,1.,1.])
     depth_difference[np.logical_and(np.logical_or(gt_intersect, learned_intersect), np.logical_not(np.logical_and(gt_intersect, learned_intersect)))] = np.array([1.,0.4,0.4])
     for ax in all_axes:

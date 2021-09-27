@@ -95,7 +95,17 @@ def push_int_loss(gt, pred):
     bce = nn.BCELoss()
     return bce(pred, diff)
 
-
+def push_top_n(gt_int, pred_int):
+    '''
+    If there are n intersections, labels the top n intersection outputs as the largest
+    '''
+    n_ints = torch.sum(gt_int, dim=1)
+    pred_sorted = torch.sort(pred_int, dim=1)
+    sorted_labels = torch.zeros(pred_sorted.shape)
+    for i in sorted_labels.shape[0]:
+        sorted_labels[i, :n_ints[i]] = 1.
+    bce = nn.BCELoss()
+    return bce(pred_sorted, sorted_labels)
 
 
 def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=False):
@@ -116,7 +126,7 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
             combined_int_mask = torch.logical_and(gt_any_int_mask, pred_any_int_mask)
             depth_loss = lmbda * chamfer_loss_1d(depth[combined_int_mask], pred_depth[combined_int_mask], (intersect > 0.5)[combined_int_mask], (pred_int > 0.5)[combined_int_mask])
             # intersect_loss = intersection_count_loss(intersect, pred_int)
-            intersect_loss = push_int_loss(intersect, pred_int)
+            intersect_loss = push_top_n(intersect, pred_int)
         else:
             intersect = intersect.reshape((-1,))
             depth = depth.reshape((-1,))
