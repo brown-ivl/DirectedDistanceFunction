@@ -100,12 +100,12 @@ def push_top_n(gt_int, pred_int):
     If there are n intersections, labels the top n intersection outputs as the largest
     '''
     n_ints = torch.sum(gt_int, dim=1)
-    pred_sorted = torch.sort(pred_int, dim=1)
+    pred_sorted = torch.sort(pred_int, dim=1)[0]
     sorted_labels = torch.zeros(pred_sorted.shape)
-    for i in sorted_labels.shape[0]:
-        sorted_labels[i, :n_ints[i]] = 1.
+    for i in range(sorted_labels.shape[0]):
+        sorted_labels[i, :int(n_ints[i])] = 1.
     bce = nn.BCELoss()
-    return bce(pred_sorted, sorted_labels)
+    return bce(pred_sorted, sorted_labels.to(device))
 
 
 def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=False):
@@ -132,7 +132,7 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
             depth = depth.reshape((-1,))
             pred_int = pred_int.reshape((-1,))
             pred_depth = pred_depth.reshape((-1,))
-            depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+            depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
             intersect_loss = bce(pred_int, intersect)        
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
@@ -178,7 +178,7 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
                 depth = depth.reshape((-1,))
                 pred_int = pred_int.reshape((-1,))
                 pred_depth = pred_depth.reshape((-1,))
-                depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+                depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
                 intersect_loss = bce(intersect, pred_int)        
             loss = intersect_loss + depth_loss
             all_depth_errors.append(torch.abs(depth[intersect > 0.5] - pred_depth[intersect > 0.5]).cpu().numpy())
