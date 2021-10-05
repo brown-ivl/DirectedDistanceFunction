@@ -111,7 +111,7 @@ class Camera():
         '''
         Returns an intersection map and a depthmap from a learned model from the camera's perspective
         '''
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model=model.eval()
         rays_in_scene_mask = np.array([True if ray != None else False for ray in rays])
         rays_in_scene = torch.tensor([list(ray[0]) + list(ray[1]-ray[0]) for ray in rays if ray != None])
@@ -162,6 +162,11 @@ class DepthMapViewer():
     '''
 
     def __init__(self, data, vmin, vmax):
+        '''
+        Data is a list of gt_intersect, gt_depth, learned_intersect, and learned_depth tuples of images
+        vmin is the lower bound for depth normalization
+        vmax is the upper bound for depth normalization
+        '''
         super().__init__()
         self.data = data
         self.vmin = vmin
@@ -172,6 +177,7 @@ class DepthMapViewer():
         self.show_data()
 
         callback = self
+        # add buttons advance to next visualization
         axprev = plt.axes([0.7, 0.05, 0.1, 0.075])
         axnext = plt.axes([0.81, 0.05, 0.1, 0.075])
         bnext = Button(axnext, 'Next')

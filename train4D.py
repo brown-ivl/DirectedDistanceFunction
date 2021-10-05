@@ -75,25 +75,8 @@ def chamfer_loss_1d(ground_truth, predictions, gt_mask, pred_mask):
     return 0.5 * (gt_term + pred_term)
 
 def intersection_count_loss(ground_truth, predictions):
-    # print(torch.sum(ground_truth > 0.5, dim=1) - torch.sum(predictions > 0.5, dim=1))
+    # seems like this might zero out the gradients
     return torch.mean(torch.sqrt(torch.square(torch.sum(ground_truth > 0.5, dim=1) - torch.sum(predictions > 0.5, dim=1))))
-
-def push_int_loss(gt, pred):
-    # print(gt)
-    # print(pred)
-    diff = torch.sum(gt > 0.5, dim=1) - torch.sum(pred > 0.5, dim=1)
-    # diff = diff.detach()
-
-    # masking the ones with errors
-    nonzeros = diff != 0
-    diff = diff[nonzeros]
-    diff = torch.where(diff > 0., torch.tensor(1.).to(device), torch.tensor(0.).to(device))
-    diff = diff.unsqueeze(1)
-    diff = diff.tile((1,pred.shape[1]))
-    pred = pred[nonzeros]
-
-    bce = nn.BCELoss()
-    return bce(pred, diff)
 
 def push_top_n(gt_int, pred_int):
     '''
@@ -125,14 +108,13 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
             pred_any_int_mask = torch.any(pred_int > 0.5, dim=1)
             combined_int_mask = torch.logical_and(gt_any_int_mask, pred_any_int_mask)
             depth_loss = lmbda * chamfer_loss_1d(depth[combined_int_mask], pred_depth[combined_int_mask], (intersect > 0.5)[combined_int_mask], (pred_int > 0.5)[combined_int_mask])
-            # intersect_loss = intersection_count_loss(intersect, pred_int)
             intersect_loss = push_top_n(intersect, pred_int)
         else:
             intersect = intersect.reshape((-1,))
             depth = depth.reshape((-1,))
             pred_int = pred_int.reshape((-1,))
             pred_depth = pred_depth.reshape((-1,))
-            depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+            depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
             intersect_loss = bce(pred_int, intersect)        
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
@@ -172,13 +154,13 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
                 pred_any_int_mask = torch.any(pred_int > 0.5, dim=1)
                 combined_int_mask = torch.logical_and(gt_any_int_mask, pred_any_int_mask)
                 depth_loss = lmbda * chamfer_loss_1d(depth[combined_int_mask], pred_depth[combined_int_mask], (intersect > 0.5)[combined_int_mask], (pred_int > 0.5)[combined_int_mask])
-                intersect_loss = intersection_count_loss(intersect, pred_int)
+                intersect_loss = push_top_n(intersect, pred_int)
             else:
                 intersect = intersect.reshape((-1,))
                 depth = depth.reshape((-1,))
                 pred_int = pred_int.reshape((-1,))
                 pred_depth = pred_depth.reshape((-1,))
-                depth_loss = l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
+                depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
                 intersect_loss = bce(intersect, pred_int)        
             loss = intersect_loss + depth_loss
             all_depth_errors.append(torch.abs(depth[intersect > 0.5] - pred_depth[intersect > 0.5]).cpu().numpy())
@@ -264,10 +246,11 @@ if __name__ == "__main__":
     # DATA
     parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
     parser.add_argument("--mesh_file", default="/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj", help="Source of mesh to train on")
+    # NOTE: Coordinate type cannot be easily changed without significant changes to the code
     parser.add_argument("--coord_type", default="direction", help="Type of coordinates to use, valid options are 'points' | 'direction' | 'pluecker' ")
     parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
-    parser.add_argument("--vert_noise", type=float, default=0.01, help="Standard deviation of noise to add to vertex sampling methods")
-    parser.add_argument("--tan_noise", type=float, default=0.01, help="Standard deviation of noise to add to tangent sampling method")
+    parser.add_argument("--vert_noise", type=float, default=0.02, help="Standard deviation of noise to add to vertex sampling methods")
+    parser.add_argument("--tan_noise", type=float, default=0.02, help="Standard deviation of noise to add to tangent sampling method")
     parser.add_argument("--uniform", type=int, default=100, help="What percentage of the data should be uniformly sampled (0 -> 0%, 100 -> 100%)")
     parser.add_argument("--vertex", type=int, default=0, help="What percentage of the data should use vertex sampling (0 -> 0%, 100 -> 100%)")
     parser.add_argument("--tangent", type=int, default=0, help="What percentage of the data should use vertex tangent sampling (0 -> 0%, 100 -> 100%)")
@@ -302,8 +285,8 @@ if __name__ == "__main__":
 
     # VISUALIZATION
     parser.add_argument("--show_rays", action="store_true", help="Visualize the camera's rays relative to the scene when rendering depthmaps")
-    parser.add_argument("--n_frames", type=int, default=100, help="Number of frames render if saving video")
-    parser.add_argument("--video_resolution", type=int, default=100, help="The height and width of the rendered video (in pixels)")
+    parser.add_argument("--n_frames", type=int, default=200, help="Number of frames to render if saving video")
+    parser.add_argument("--video_resolution", type=int, default=250, help="The height and width of the rendered video (in pixels)")
 
     args = parser.parse_args()
 
