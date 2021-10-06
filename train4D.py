@@ -83,12 +83,12 @@ def push_top_n(gt_int, pred_int):
     If there are n intersections, labels the top n intersection outputs as the largest
     '''
     n_ints = torch.sum(gt_int, dim=1)
-    pred_sorted = torch.sort(pred_int, dim=1)
+    pred_sorted = torch.sort(pred_int, dim=1)[0]
     sorted_labels = torch.zeros(pred_sorted.shape)
     for i in sorted_labels.shape[0]:
         sorted_labels[i, :n_ints[i]] = 1.
     bce = nn.BCELoss(reduction="mean")
-    return bce(pred_sorted, sorted_labels)
+    return bce(pred_sorted, sorted_labels.to(device))
 
 
 def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=False):
@@ -357,7 +357,7 @@ if __name__ == "__main__":
 
     # TODO: num_workers=args.n_workers
     train_loader = DataLoader(train_data, batch_size=args.train_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
-    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=args.test_batch_size, shuffle=True, drop_last=True, pin_memory=True, num_workers=args.n_workers)
 
     if args.load:
         print("Loading saved model...")
