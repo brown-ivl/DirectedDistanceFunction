@@ -18,7 +18,7 @@ import math
 from data import DepthData, MultiDepthDataset
 from model import LF4D, AdaptedLFN, SimpleMLP
 import utils
-from camera import Camera, DepthMapViewer, save_video
+from camera import Camera, DepthMapViewer, save_video, save_video_4D
 import sampling
 import rasterization
 
@@ -87,12 +87,13 @@ def push_top_n(gt_int, pred_int):
     sorted_labels = torch.zeros(pred_sorted.shape)
     for i in sorted_labels.shape[0]:
         sorted_labels[i, :n_ints[i]] = 1.
-    bce = nn.BCELoss()
+    bce = nn.BCELoss(reduction="mean")
     return bce(pred_sorted, sorted_labels)
 
 
 def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=False):
-    bce = nn.BCELoss()
+    ce = nn.CrossEntropyLoss(reduction="mean")
+    bce = nn.BCELoss(reduction="mean")
     total_loss = 0.
     sum_int_loss = 0.
     sum_depth_loss = 0.
@@ -100,6 +101,7 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
     for batch in tqdm(train_loader):
         coordinates = batch[f"coordinates_{coord_type}"].to(device)
         intersect = batch["intersect"].to(device)
+        n_ints = batch["n_ints"].to(device)
         depth = batch["depths"].to(device)
         pred_int, pred_depth = model(coordinates)
         if unordered:
@@ -112,10 +114,18 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
         else:
             intersect = intersect.reshape((-1,))
             depth = depth.reshape((-1,))
-            pred_int = pred_int.reshape((-1,))
             pred_depth = pred_depth.reshape((-1,))
+            n_ints = n_ints.reshape((-1))
+            
+            # create mask from intersection values
+            # depth_mask = torch.nn.functional.one_hot(intersect.to(torch.int64), pred_int.shape[1])
+            # depth_mask = torch.cumsum(depth_mask, dim=1)
+            # depth_mask = torch.logical_not(depth_mask)
+            # depth_mask = depth_mask[:,:-1]
+            # depth_mask = depth_mask.reshape((-1))
+            
             depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
-            intersect_loss = bce(pred_int, intersect)        
+            intersect_loss = ce(pred_int, n_ints.long())    
         loss = intersect_loss + depth_loss
         optimizer.zero_grad()
         loss.backward()
@@ -133,7 +143,8 @@ def train_epoch(model, train_loader, optimizer, lmbda, coord_type, unordered=Fal
     return avg_loss, avg_int_loss, avg_depth_loss
 
 def test(model, test_loader, lmbda, coord_type, unordered=False):
-    bce = nn.BCELoss()
+    ce = nn.CrossEntropyLoss(reduction="mean")
+    bce = nn.BCELoss(reduction="mean")
     total_loss = 0.
     total_batches = 0.
     total_chamfer = 0.
@@ -142,10 +153,17 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
     all_int_pred = []
     all_int_label = []
 
+    int_tn = 0.
+    int_fp = 0.
+    int_fn = 0.
+    int_tp = 0.
+
+
     with torch.no_grad():
         for batch in tqdm(test_loader):
             coordinates = batch[f"coordinates_{coord_type}"].to(device)
             intersect = batch["intersect"].to(device)
+            n_ints = batch["n_ints"].to(device)
             depth = batch["depths"].to(device)
             pred_int, pred_depth = model(coordinates)
             if unordered:
@@ -158,13 +176,26 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
             else:
                 intersect = intersect.reshape((-1,))
                 depth = depth.reshape((-1,))
-                pred_int = pred_int.reshape((-1,))
                 pred_depth = pred_depth.reshape((-1,))
+                n_ints = n_ints.reshape((-1))
+                
                 depth_loss = lmbda * l2_loss(depth[intersect > 0.5], pred_depth[intersect > 0.5])
-                intersect_loss = bce(intersect, pred_int)        
+                intersect_loss = ce(pred_int, n_ints.long())
+
+                # this is all to compute the confusion matrix 
+                pred_n_ints = torch.argmax(pred_int, dim=1)
+                # create binary labels for each intersection
+                pred_int_mask = torch.nn.functional.one_hot(pred_n_ints.to(torch.int64), pred_int.shape[1])
+                pred_int_mask = torch.cumsum(pred_int_mask, dim=1)
+                pred_int_mask = torch.logical_not(pred_int_mask)
+                pred_int_mask = pred_int_mask[:,:-1]
+                pred_int_mask = pred_int_mask.reshape((-1)).cpu().numpy()
+
+                all_int_pred.append(pred_int_mask)
+
             loss = intersect_loss + depth_loss
             all_depth_errors.append(torch.abs(depth[intersect > 0.5] - pred_depth[intersect > 0.5]).cpu().numpy())
-            all_int_pred.append(pred_int.cpu().numpy().flatten())
+            # all_int_pred.append(pred_int.cpu().numpy().flatten())
             all_int_label.append(intersect.cpu().numpy().flatten())
             if unordered:
                 total_chamfer += depth_loss / lmbda
@@ -183,6 +214,8 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
     int_fp = int_confusion_mat[0][1]
     int_fn = int_confusion_mat[1][0]
     int_tp = int_confusion_mat[1][1]
+    
+
     int_precision = int_tp/(int_tp + int_fp)
     int_recall = int_tp/(int_tp + int_fn)
     int_accuracy = (int_tn + int_tp)/np.sum(int_confusion_mat)
@@ -200,17 +233,22 @@ def test(model, test_loader, lmbda, coord_type, unordered=False):
 def viz_depth(model, verts, faces, radius, show_rays=False):
     '''
     Visualize learned depth map and intersection mask compared to the ground truth
+    TODO: add depth map legend
     '''
     # these are the normalization bounds for coloring in the video
-    vmin = 0.25
-    vmax = 2.25
+    # vmin = radius - 1.
+    # vmax = radius + 1.
 
     fl = 1.0
     sensor_size = [1.0,1.0]
     resolution = [100,100]
-    zoom_out_cameras = [Camera(center=[1.25,0.0,0.0], direction=[-1.0,0.0,0.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(1)]
+    zoom_out_cameras = [Camera(center=[1.25 + 0.2*x,0.0,0.0], direction=[-1.0,0.0,0.0], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for x in range(4)]
     data = [cam.mesh_and_model_depthmap(model, verts, faces, radius, show_rays=show_rays, fourd=True) for cam in zoom_out_cameras]
-    DepthMapViewer(data, [vmin,]*len(data), [vmax]*len(data))
+    vmin = [min(np.min(mesh_depths[mesh_n_ints > 0.5]) if np.any(mesh_n_ints > 0.5) else np.inf, np.min(model_depths[model_n_ints > 0.5]) if np.any(model_n_ints > 0.5) else np.inf) for mesh_n_ints, mesh_depths, model_n_ints, model_depths in data]
+    vmax = [max(np.max(mesh_depths[mesh_n_ints > 0.5]) if np.any(mesh_n_ints > 0.5) else -np.inf, np.max(model_depths[model_n_ints > 0.5]) if np.any(model_n_ints > 0.5) else -np.inf) for mesh_n_ints, mesh_depths, model_n_ints, model_depths in data]
+    vmin = [vmin[i] if vmin[i] < np.inf else np.min(data[i][3]) for i in range(len(vmin))]
+    vmax = [vmax[i] if vmax[i] > -np.inf else np.max(data[i][3]) for i in range(len(vmax))]
+    DepthMapViewer(data, vmin, vmax, fourd=True)
 
 def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir, name):
     '''
@@ -221,8 +259,8 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
         os.mkdir(video_dir)
 
     # these are the normalization bounds for coloring in the video
-    vmin = 0.25
-    vmax = 2.25
+    vmin = radius - 1.
+    vmax = radius + 1.
 
     fl = 1.0
     sensor_size = [1.0,1.0]
@@ -233,7 +271,7 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
     circle_cameras = [Camera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution, verbose=False) for i in range(n_frames)]
     rendered_views = [cam.mesh_and_model_depthmap(model, verts, faces, radius, fourd=True) for cam in tqdm(circle_cameras)]
 
-    save_video(rendered_views, os.path.join(video_dir, f'4D_equatorial_{name}_rad{radius*100:.0f}.mp4'), vmin, vmax)
+    save_video_4D(rendered_views, os.path.join(video_dir, f'4D_equatorial_{name}_rad{radius*100:.0f}.mp4'), vmin, vmax)
 
 
 if __name__ == "__main__":
@@ -246,7 +284,7 @@ if __name__ == "__main__":
     # DATA
     parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
     parser.add_argument("--mesh_file", default="/gpfs/data/ssrinath/human-modeling/large_files/sample_data/stanford_bunny.obj", help="Source of mesh to train on")
-    # NOTE: Coordinate type cannot be easily changed without significant changes to the code
+    # NOTE: Double check LF4D and Camera class if coord type/ pos enc change
     parser.add_argument("--coord_type", default="direction", help="Type of coordinates to use, valid options are 'points' | 'direction' | 'pluecker' ")
     parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
     parser.add_argument("--vert_noise", type=float, default=0.02, help="Standard deviation of noise to add to vertex sampling methods")
@@ -352,6 +390,7 @@ if __name__ == "__main__":
         print(f"Rendering ({args.video_resolution}x{args.video_resolution}) video with {args.n_frames} frames...")
         model=model.eval()
         equatorial_video(model, verts, faces, args.radius, args.n_frames, args.video_resolution, args.save_dir, args.name)
+    # print name again so it's at the bottom of the slurm output
     print(f"{args.name} finished")
 
 

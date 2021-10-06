@@ -84,9 +84,11 @@ class MultiDepthDataset(Dataset):
         direction /= np.linalg.norm(direction)
         rot_verts = rasterization.rotate_mesh(self.verts, ray_start, ray_end)
         int_depths = rasterization.ray_all_depths(self.faces, rot_verts,near_face_threshold=self.near_face_threshold, ray_start_depth=np.linalg.norm(ray_end - ray_start))
-        int_depths = int_depths[:self.intersect_limit]
+        int_depths = torch.tensor(int_depths[:self.intersect_limit], dtype=torch.float32)
         intersect = np.zeros((self.intersect_limit,), dtype=float)
         intersect[:int_depths.shape[0]] = 1.
+        # changed intersect to be an integer now that we're using CELoss instead of BCE
+        n_ints = int_depths.shape[0]
         depths = np.zeros((self.intersect_limit,), dtype=float)
         depths[:int_depths.shape[0]] = int_depths
         if self.pos_enc:
@@ -104,6 +106,8 @@ class MultiDepthDataset(Dataset):
             "coordinates_points": coordinates_points,
             "coordinates_direction": coordinates_direction,
             "coordinates_pluecker": coordinates_pluecker,
+            # Number of intersections the ray has (capped at self.intersect_limit)
+            "n_ints": n_ints,
             # does the ray have an nth intersection?
             "intersect": torch.tensor(intersect, dtype=torch.float32),
             # Depth at which the ray intersects the mesh (positive)

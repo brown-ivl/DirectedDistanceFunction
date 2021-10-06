@@ -150,21 +150,41 @@ def saveLossesCurve(*args, **kwargs):
     else:
         print('[ WARN ]: No output path (out_path) specified. beacon.utils.saveLossesCurve()')
 
+def color_difference(numerical_difference, gt_mask, learned_mask, scale_cap=0.15):
+    '''
+    Shows the differences between the learned and ground truth predictions.
+    numerical_difference should be (learned - gt)
+    Color scale extends between -cap and cap (by default depth disparities larger than 0.15 will appear the same)
+    '''
+    depth_difference = np.zeros(gt_mask.shape + (3,))
+    # set colors for positive difference
+    depth_difference[:,:,1] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/scale_cap, np.ones(numerical_difference.shape)], axis=-1), axis=-1), 0.)
+    depth_difference[:,:,0] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/scale_cap, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    depth_difference[:,:,2] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/scale_cap, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
+    # set colors for negative difference
+    depth_difference[:,:,2] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-scale_cap), np.ones(numerical_difference.shape)], axis=-1), axis=-1), depth_difference[:,:,2])
+    depth_difference[:,:,0] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-scale_cap), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,0])
+    depth_difference[:,:,1] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-scale_cap), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,1])
+    depth_difference[np.logical_not(np.logical_or(gt_mask, learned_mask))] = np.array([1.,1.,1.])
+    # XOR operation. Colors image red where the masks don't align
+    depth_difference[np.logical_and(np.logical_or(gt_mask, learned_mask), np.logical_not(np.logical_and(gt_mask, learned_mask)))] = np.array([1.,0.4,0.4])
+    return depth_difference
+
+
 def show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax):
+    '''
+    gt_intersect      - a ground truth intersection mask
+    gt_depth          - a ground truth depth map
+    learned_intersect - learned intersection mask
+    learned_depth     - learned depth map 
+    all_axes          - the matplotlib axes to write the data to
+    vmin, vmax        - the minimum and maximum value for depth normalization
+    '''
+    scale_cap = 0.15
     ax1,ax2,ax3,ax4,ax5,ax6=all_axes
     depth_learned_mask = np.where(learned_intersect, learned_depth, np.inf)
-    depth_difference = np.zeros(gt_intersect.shape + (3,))
     numerical_difference = depth_learned_mask - gt_depth
-    # set colors for positive difference
-    depth_difference[:,:,1] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1), axis=-1), 0.)
-    depth_difference[:,:,0] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
-    depth_difference[:,:,2] = np.where(numerical_difference > 0., np.min(np.stack([numerical_difference/0.15, np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), 0.)
-    # set colors for negative difference
-    depth_difference[:,:,2] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1), axis=-1), depth_difference[:,:,2])
-    depth_difference[:,:,0] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,0])
-    depth_difference[:,:,1] = np.where(numerical_difference < 0., np.min(np.stack([numerical_difference/(-0.15), np.ones(numerical_difference.shape)], axis=-1)*0.4, axis=-1), depth_difference[:,:,1])
-    depth_difference[np.logical_not(np.logical_or(gt_intersect, learned_intersect))] = np.array([1.,1.,1.])
-    depth_difference[np.logical_and(np.logical_or(gt_intersect, learned_intersect), np.logical_not(np.logical_and(gt_intersect, learned_intersect)))] = np.array([1.,0.4,0.4])
+    depth_difference = color_difference(numerical_difference, gt_intersect > 0.5, learned_intersect > 0.5, scale_cap=scale_cap)
     for ax in all_axes:
         ax.clear()
     ax1.imshow(gt_intersect)
@@ -179,3 +199,38 @@ def show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, al
     ax5.set_title("Depth (Masked)")
     ax6.imshow(learned_depth, vmin=vmin, vmax=vmax)
     ax6.set_title("Depth")
+
+def show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_axes, vmin, vmax, max_n_ints):
+    '''
+    gt_n_ints           - a ground truth intersection mask
+    gt_first_depth      - a ground truth depth map 
+    learned_n_ints      - learned intersection mask
+    learned_first_depth - learned depth map
+    all_axes            - the matplotlib axes to write the data to
+    vmin, vmax          - the minimum and maximum value for depth normalization
+    '''
+    scale_cap = 0.15
+    ax1, ax2, ax3, ax4, ax5, ax6, ax7 = all_axes
+    depth_learned_mask = np.where(learned_n_ints > 0.5, learned_depth, np.inf)
+    numerical_depth_difference = depth_learned_mask - gt_depth
+    depth_difference = color_difference(numerical_depth_difference, gt_n_ints > 0.5, learned_n_ints > 0.5, scale_cap=scale_cap)
+    numerical_int_difference = learned_n_ints - gt_n_ints
+    int_difference = color_difference(numerical_int_difference, gt_n_ints > 0.5, learned_n_ints > 0.5, scale_cap=max_n_ints)
+    for ax in all_axes:
+        ax.clear()
+    ax1.imshow(gt_n_ints, vmin=0, vmax=max_n_ints)
+    ax1.set_title("GT Intersection Count")
+    ax2.imshow(int_difference)
+    ax2.set_title("Intersection Difference")
+    ax3.imshow(gt_depth, vmin=vmin, vmax=vmax)
+    ax3.set_title("GT Depth")
+    ax4.imshow(learned_n_ints, vmin=0, vmax=max_n_ints)
+    ax4.set_title("Intersection Count")
+    ax5.imshow(depth_difference)
+    ax5.set_title("Depth Difference")
+    ax6.imshow(depth_learned_mask, vmin=vmin, vmax=vmax)
+    ax6.set_title("Depth (Masked)")
+    ax7.imshow(learned_depth, vmin=vmin, vmax=vmax)
+    ax7.set_title("Depth")
+    
+

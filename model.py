@@ -136,7 +136,7 @@ class LF4D(nn.Module):
         # Define the intersection head
         intersection_layers = [
             nn.Linear(hidden_size, hidden_size),
-            nn.Linear(hidden_size, n_intersections)
+            nn.Linear(hidden_size, n_intersections+1) #+1 because we also need a zero intersection category
         ]
         self.intersection_head = nn.ModuleList(intersection_layers)
 
@@ -182,8 +182,9 @@ class LF4D(nn.Module):
         '''
         Coordinates - bounding sphere surface points and directions
         Interior_points - points within the bounding sphere that lie along the corresponding ray defined by coordinates
-        Gives the positive depth to the next surface intersection from interior_points in the specified direction
+        Gives the positive depth to the next surface intersection from interior_points in the specified direction (direction implicitly defined by interior+surface point pair)
         Used for inference only
+        Returns the integer number of intersections, as well as the intersection depths
         '''
         coordinates = self.preprocessing(surface_points)
         coordinates = pos_encoding(coordinates) if self.pos_enc else coordinates
@@ -193,14 +194,22 @@ class LF4D(nn.Module):
         intersections = intersections.cpu()
         depths = depths.cpu()
         depths -= torch.hstack([torch.reshape(interior_distances, (-1,1)),]*self.n_intersections)
-        # depths[depths < 0.] = float('inf')
-        # depths[intersections < 0.5] = float('inf')
+        n_ints = torch.argmax(intersections, dim=1)
+
+        # set invalid depths to inf
+        depths[depths < 0.] = float('inf')
+        depth_mask = torch.nn.functional.one_hot(n_ints.to(torch.int64), intersections.shape[1]+1)
+        depth_mask = torch.cumsum(depth_mask, dim=1)
+        depth_mask = depth_mask[:,:-1]
+        depths[depth_mask] = float('inf')
+
         depths = torch.min(depths, dim=1)[0]
-        intersections = torch.max(intersections, dim=1)[0] > 0.5
-        return intersections, depths
+        intersect = depths < float('inf')
+        return intersect, depths, n_ints
 
     def query_rays(self, points, directions):
         '''
+        This function can be used in the same way as a 5D ODF (i.e. query ANY point in 3D space, plus a direction, and get depth)
         Returns a single depth value for each point, direction pair
         Used for inference only
         '''

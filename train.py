@@ -203,6 +203,7 @@ if __name__ == "__main__":
     # "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
     parser.add_argument("--vert_noise", type=float, default=0.01, help="Standard deviation of noise to add to vertex sampling methods")
     parser.add_argument("--tan_noise", type=float, default=0.01, help="Standard deviation of noise to add to tangent sampling method")
+    # NOTE: need to change model/camera classes if positional encoding or coordinate type change
     # parser.add_argument("--pos_enc", default=True, type=bool, help="Whether NeRF-style positional encoding should be applied to the data")
 
     # MODEL

@@ -199,7 +199,6 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
         removed_faces = original_faces[np.any(near_faces == near_vert_indices[v], axis=1)]
         # change removed faces back to original vertex indices for visualization
         # removed_faces = np.array([[get_original_index(removed_faces[i][j]) for j in range(removed_faces.shape[1])] for i in range(removed_faces.shape[0])])
-        # TODO: get indices of removed
         original_faces = original_faces[np.all(near_faces != near_vert_indices[v], axis=1)]
         near_faces = near_faces[np.all(near_faces != near_vert_indices[v], axis=1)]
 
@@ -263,6 +262,9 @@ def ray_all_depths(faces, verts, near_face_threshold=0.08, ray_start_depth=1., r
     intersected_faces = near_faces[intersected_faces_i]
     intersections = get_intersection_depths(near_verts[intersected_faces])
     intersections = ray_start_depth - intersections
+    # remove negative intersections and sort the intersections by depth
+    intersections = [i for i in intersections if i > 0.]
+    intersections.sort()
 
     if return_faces:
         return intersections, original_faces[intersected_faces_i]

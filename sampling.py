@@ -1,11 +1,6 @@
 '''
 Sampling functions
 
-TODO:
-Types of ray sampling:
-Add skinning weights along with depth/occ!
-CHECK OTHER PAPERS for how to sample lightfields
-
 Also - add additional training examples by adding d to start point and d to depth
 '''
 from numpy import random
