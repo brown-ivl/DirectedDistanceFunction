@@ -51,7 +51,7 @@ class RayVisualizer():
     def __init__(self, vertices, lines):
         super().__init__()
         self.verts = vertices
-        self.wireframe = make_line_set(vertices, lines)
+        self.wireframe = make_line_set(vertices, lines) if len(lines) > 0 else None
         self.points = []
         self.point_colors = []
         self.ray_points = []
@@ -59,11 +59,18 @@ class RayVisualizer():
         self.ray_colors = []
         self.mesh_inds = []
         self.colored_meshes = []
-        # self.mesh_colors = []
+        self.mesh_color = None
+
+    def set_mesh_color(self, color):
+        self.mesh_color = color
 
     def add_point(self, point, color):
         self.points.append(point)
         self.point_colors.append(color)
+
+    def clear_points(self):
+        self.points = []
+        self.point_colors = []
 
     def add_ray(self, ray_points, ray_color):
         self.ray_points += ray_points
@@ -109,13 +116,16 @@ class RayVisualizer():
             self.add_point([0.,1.,0.], [0.,1.,0.])
             self.add_point([0.,0.,1.], [0.,0.,1.])
 
-    def display(self):
-        to_show = [self.wireframe]
+    def display(self, show_wireframe=True):
+        to_show = [self.wireframe] if self.wireframe is not None and show_wireframe else []
         if len(self.points) > 0:
             to_show.append(make_point_cloud(np.array(self.points), np.array(self.point_colors)))
         if len(self.ray_points) > 0:
             to_show.append(make_line_set(np.array(self.ray_points), np.array(self.ray_inds), np.array(self.ray_colors)))
         if len(self.mesh_inds) > 0:
-            to_show.append(make_mesh(self.verts, self.mesh_inds, color=np.array([1.,0.,0.])))
+            if self.mesh_color is not None:
+                to_show.append(make_mesh(self.verts, self.mesh_inds, color=self.mesh_color))
+            else:
+                to_show.append(make_mesh(self.verts, self.mesh_inds))
         to_show += self.colored_meshes
         o3d.visualization.draw_geometries(to_show)

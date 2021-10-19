@@ -55,9 +55,9 @@ def get_vertex_normals(verts, faces):
     Given an array of n vertices and an array of face indices, returns an nx3 array containing the vertex normals. 
     The normals are calculated as the average of the face normal for each face containing the vertex.
     '''
-    a = verts[faces][:,0]
-    b = verts[faces][:,1]
-    c = verts[faces][:,2]
+    a = verts[faces.astype(int)][:,0]
+    b = verts[faces.astype(int)][:,1]
+    c = verts[faces.astype(int)][:,2]
 
     e1 = b-a
     e2 = c-a
@@ -65,7 +65,7 @@ def get_vertex_normals(verts, faces):
     face_normals = np.cross(e1, e2)
     face_normals_magnitude = np.linalg.norm(face_normals, axis=1)
     # print(face_normals_magnitude[0:5])
-    face_normals = (face_normals / np.hstack([face_normals_magnitude[:,np.newaxis]]*3)) * 0.1
+    face_normals = (face_normals / np.hstack([face_normals_magnitude[:,np.newaxis]]*3))
     # print(np.linalg.norm(face_normals, axis=1)[0:5])
     vert_normals = np.zeros((verts.shape[0], 3))
     vert_face_count = np.zeros((verts.shape[0]))
@@ -73,7 +73,7 @@ def get_vertex_normals(verts, faces):
         for j in range(faces.shape[1]):
             vert_face_count[faces[i][j]] += 1
             vert_normals[faces[i][j]] += face_normals[i]
-    vert_normals = vert_normals / np.hstack([vert_face_count[:,np.newaxis]]*3)
+    vert_normals = vert_normals / np.hstack([np.linalg.norm(vert_normals, axis=1)[:,np.newaxis]]*3)
     return vert_normals
 
 def get_sphere_intersections(p0, v, radius):
@@ -234,3 +234,23 @@ def show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_a
     ax7.set_title("Depth")
     
 
+if __name__ == "__main__":
+    # Show example normal computation
+
+    # load mesh
+    mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny.obj"
+
+    mesh = trimesh.load(mesh_file)
+    faces = mesh.faces
+    verts = mesh.vertices
+    
+    verts = utils.mesh_normalize(verts)
+
+    # show mesh and normals
+    vert_normals = get_vertex_normals(verts, faces)
+    import visualization
+    viewer = visualization.RayVisualizer(verts, [])
+    viewer.add_mesh_faces(list(faces))
+    for i in range(len(verts)):
+        viewer.add_ray([verts[i], verts[i]+vert_normals[i]], [0.,1.,0.])
+    viewer.display()

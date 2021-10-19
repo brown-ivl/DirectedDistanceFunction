@@ -6,6 +6,7 @@ and skinning weights data.
 import numpy as np
 import utils
 from tqdm import tqdm
+import trimesh
 
 # np.random.seed(20210804)
 
@@ -31,7 +32,11 @@ def z_align_vector(vec):
     v_mag = np.sqrt(np.sum(np.square(vec)))
     z_vec = np.array([0.,0.,1.]) * v_mag
     axis_of_rotation = np.cross(z_vec, vec)
-    axis_of_rotation /= np.linalg.norm(axis_of_rotation)
+    if np.linalg.norm(axis_of_rotation) != 0.0:
+        axis_of_rotation /= np.linalg.norm(axis_of_rotation)
+    else:
+        # In the event that vec is on the z axis, we will choose the y axis as our rotation axis
+        axis_of_rotation = np.array([0.0,1.0,0.0])
     A = get_xprod_mat(axis_of_rotation)
 
     # theta is angle between vec and z axis
@@ -114,6 +119,7 @@ def get_weights(faces, verts):
     wgts = np.hstack([wgts_a[:,np.newaxis], wgts_b[:,np.newaxis],wgts_c[:,np.newaxis]]).reshape((-1,2))
     return wgts
 
+
 def get_intersection_depths(occupied_faces):
     '''
     Computes the depths, d, of the points (0,0,d) where a ray along the z-axis intersects each of the provided faces
@@ -190,7 +196,6 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
     intersection(s) are also returned. This function is about 30% slower than the original so it should 
     only be used for visualization, not data generation.
     '''
-
      # Prune faces far from the ray
     near_verts, near_faces, near_vert_indices, original_faces = prune_mesh(verts, faces, near_face_threshold)
 
@@ -232,7 +237,7 @@ def ray_occ_depth_visual(faces, verts, ray_start_depth=1., v=None, near_face_thr
     intersections[(intersections - ray_start_depth) >= 0] = np.NINF
     ray_depth = np.max(intersections - ray_start_depth) * -1
     # intersected_faces = intersected_faces[np.argmax(intersections)][np.newaxis, :]
-    original_faces = original_faces[np.argmax(intersections)][np.newaxis]
+    original_faces = original_faces[np.argmax(intersections)][np.newaxis] if ray_depth < np.inf else np.array([])
     if v is not None:
         # account for the intersection at 0 that we removed
         if ray_start_depth > 0 and ray_start_depth < ray_depth:

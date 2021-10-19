@@ -21,6 +21,7 @@ import utils
 from camera import Camera, DepthMapViewer, save_video, save_video_4D
 import sampling
 import rasterization
+import meshing_3d
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 torch.autograd.set_detect_anomaly(True)
@@ -273,6 +274,59 @@ def equatorial_video(model, verts, faces, radius, n_frames, resolution, save_dir
 
     save_video_4D(rendered_views, os.path.join(video_dir, f'4D_equatorial_{name}_rad{radius*100:.0f}.mp4'), vmin, vmax)
 
+def generate_point_cloud(model, sphere_vertices, vertices, faces, focal_point=[0., 0., 0.], show=True):
+    '''
+    Returns the 1st, 2nd, 3rd, and 4th+ intersection point clouds produced by shooting rays from the 
+    sphere vertices towards the focal point
+    '''
+    focal_point = np.array(focal_point)
+    # pointclouds = [[],[],[],[]]
+    ray_directions = [(focal_point-v) / np.linalg.norm(focal_point-v) for v in sphere_vertices]
+    with torch.no_grad():
+        # pass in surface point, direction
+        _, depths, n_ints = model.query_rays(torch.tensor(sphere_vertices, dtype=torch.float32), torch.tensor(ray_directions, dtype=torch.float32))
+    
+    n_ints = n_ints.cpu()
+    model_depths = depths.cpu()
+    model_depths = torch.min(model_depths, dim=1)[0]
+    model_depths = model_depths.numpy()
+    new_points = [sphere_vertices[i] + ray_directions[i]*model_depths[i] if model_depths[i] < np.inf else None for i in range(len(sphere_vertices))]
+
+    if show:
+        # can't import visualization on OSCAR because it uses Open3D and OpenGL
+        import visualization
+        lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        visualizer = visualization.RayVisualizer(vertices, lines)
+        for point in new_points:
+            if point is not None:
+                visualizer.add_point(point, [52./255., 88./255., 235./255.])
+        visualizer.display()
+    # TODO: save to file
+    return new_points
+
+def generate_simple_mesh(model, sphere_vertices, sphere_faces, focal_point=[0.,0.,0.], show=True):
+    '''
+    Returns a mesh produced by shooting rays from the sphere vertices towards the focal point
+    '''
+    focal_point = np.array(focal_point)
+    ray_directions = [(focal_point-v) / np.linalg.norm(focal_point-v) for v in sphere_vertices]
+    with torch.no_grad():
+        # pass in surface point, direction
+        _, depths, n_ints = model.query_rays(torch.tensor(sphere_vertices, dtype=torch.float32), torch.tensor(ray_directions, dtype=torch.float32))
+
+    n_ints = n_ints.cpu()
+    model_depths = depths.cpu()
+    model_depths = torch.min(model_depths, dim=1)[0]
+    model_depths = model_depths.numpy()
+    new_points = [sphere_vertices[i] + ray_directions[i]*model_depths[i] if model_depths[i] < np.inf else sphere_vertices[i] for i in range(len(sphere_vertices))]
+
+    if show:
+        # can't import visualization on OSCAR because it uses Open3D and OpenGL
+        import visualization
+        import open3d as o3d
+        o3d.visualization.draw_geometries([visualization.make_mesh(np.array(new_points), sphere_faces)])
+    # TODO: save to file
+    return new_points
 
 if __name__ == "__main__":
     print(f"Using {device}")
@@ -280,6 +334,8 @@ if __name__ == "__main__":
 
     # CONFIG
     parser.add_argument("--n_workers", type=int, default=1, help="Number of workers for dataloaders. Recommended is 2*num cores")
+    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files/", help="a directory where model weights, loss curves, and visualizations will be saved")
+    parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
 
     # DATA
     parser.add_argument("--samples_per_mesh", type=int, default=1000000, help="Number of rays to sample for each mesh")
@@ -314,12 +370,9 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--load", action="store_true", help="Load the model from file")
     parser.add_argument("-d", "--viz_depth", action="store_true", help="Visualize the learned depth map and intersection mask versus the ground truth")
     parser.add_argument("-v", "--video", action="store_true", help="Render a video of the learned mask and depth map compared to the ground truth")
-    parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
-    # parser.add_argument("--model_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\models")
-    # parser.add_argument("--loss_dir", type=str, default="F:\\ivl-data\\DirectedDF\\large_files\\loss_curves")
-    # parser.add_argument("--model_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/model_weights")
-    # parser.add_argument("--loss_dir", type=str, default="/data/gpfs/ssrinath/human-modeling/large_files/directedDF/loss_curves")
-    parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files/", help="a directory where model weights, loss curves, and visualizations will be saved")
+    parser.add_argument("-p", "--pointcloud", action="store_true", help="Generate a point cloud of the object based on the learned ODF")
+    parser.add_argument("-m", "--mesh", action="store_true", help="Visualize a mesh generated from rays starting on a sphere surface looking inwards")
+
 
     # VISUALIZATION
     parser.add_argument("--show_rays", action="store_true", help="Visualize the camera's rays relative to the scene when rendering depthmaps")
@@ -386,6 +439,15 @@ if __name__ == "__main__":
         print("Visualizing depth map...")
         model=model.eval()
         viz_depth(model, verts, faces, args.radius, args.show_rays)
+    if args.pointcloud:
+        model = model.eval()
+        sphere_vertices, _ = meshing_3d.icosahedron_sphere_tessalation(args.radius, subdivisions=4)
+        generate_point_cloud(model, sphere_vertices, verts, faces)
+    if args.mesh:
+        model = model.eval()
+        meshing_3d.make_model_mesh(model, initial_tessalation_factor=3, radius=args.radius, focal_point=[0.,0.,0.])
+        # sphere_vertices, sphere_faces = meshing_3d.icosahedron_sphere_tessalation(args.radius, subdivisions=4)
+        # generate_simple_mesh(model, sphere_vertices, sphere_faces)
     if args.video:
         print(f"Rendering ({args.video_resolution}x{args.video_resolution}) video with {args.n_frames} frames...")
         model=model.eval()

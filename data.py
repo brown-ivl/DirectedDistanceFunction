@@ -113,3 +113,9 @@ class MultiDepthDataset(Dataset):
             # Depth at which the ray intersects the mesh (positive)
             "depths": torch.tensor(depths, dtype=torch.float32),
         }
+
+class DepthConsistencyDataset(Dataset):
+
+    def __init__(self,faces,verts,radius,size=1000000, intersect_limit=20, pos_enc=True):
+        pass
+        # TODO: Make consistency loss data loader

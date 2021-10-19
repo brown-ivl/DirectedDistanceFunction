@@ -169,13 +169,16 @@ class LF4D(nn.Module):
         intersections = self.relu(intersections)
         # intersections = self.layernorm(intersections)
         intersections = self.intersection_head[1](intersections)
-        intersections = torch.sigmoid(intersections)
+        # intersections = torch.sigmoid(intersections)
 
         # depth head
         depths = self.depth_head[0](x)
         depths = self.relu(depths)
         # depths = self.layernorm(depths)
-        depths = self.depth_head[1](x)
+        # enforce strictly increasing depth values
+        depths = self.depth_head[1](depths)
+        depths = self.relu(depths)
+        depths = torch.cumsum(depths, dim=1)
         return intersections, depths
 
     def interior_depth(self, surface_points, interior_points):
@@ -190,21 +193,24 @@ class LF4D(nn.Module):
         coordinates = pos_encoding(coordinates) if self.pos_enc else coordinates
         interior_distances = torch.sqrt(torch.sum(torch.square(surface_points[:,:3] - interior_points), dim=1))
         coordinates = coordinates.to(device)
+
         intersections, depths = self.forward(coordinates)
+
         intersections = intersections.cpu()
         depths = depths.cpu()
         depths -= torch.hstack([torch.reshape(interior_distances, (-1,1)),]*self.n_intersections)
         n_ints = torch.argmax(intersections, dim=1)
 
         # set invalid depths to inf
+        # invalid depths are ones that occur before the interior point, and ones past the predicted number of intersections
         depths[depths < 0.] = float('inf')
-        depth_mask = torch.nn.functional.one_hot(n_ints.to(torch.int64), intersections.shape[1]+1)
+        depth_mask = torch.nn.functional.one_hot(n_ints.to(torch.int64), intersections.shape[1])
         depth_mask = torch.cumsum(depth_mask, dim=1)
         depth_mask = depth_mask[:,:-1]
-        depths[depth_mask] = float('inf')
+        depths[depth_mask.to(bool)] = float('inf')
 
-        depths = torch.min(depths, dim=1)[0]
-        intersect = depths < float('inf')
+        # depths = torch.min(depths, dim=1)[0]
+        intersect = torch.min(depths, dim=1)[0] < float('inf')
         return intersect, depths, n_ints
 
     def query_rays(self, points, directions):
@@ -213,7 +219,11 @@ class LF4D(nn.Module):
         Returns a single depth value for each point, direction pair
         Used for inference only
         '''
+        # print("QUERY")
+        # print(points)
+        # print(directions)
         combine_tuple = lambda x: list(x[0]) + list(x[1])
+        # the sphere intersections (two surface points) will be reparameterized in interior_depth if necessary (e.g. turned into surface point + direction)
         surface_intersections = torch.tensor([combine_tuple(utils.get_sphere_intersections(points[i], directions[i], self.radius)) for i in range(points.shape[0])])
         return self.interior_depth(surface_intersections, points)
 

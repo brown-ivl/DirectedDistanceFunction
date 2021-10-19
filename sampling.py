@@ -165,6 +165,16 @@ def sample_tangential_4D(radius, verts=None, noise=0.01, vert_normals=None, v=No
     bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
     return bound1, bound2, None
 
+
+# -------     CONSISTENCY SAMPLING --------
+
+def consistency_sampler(radius, verts, max_intersections=1):
+    '''
+    TODO: Sample multiple views of the same surface point
+    '''
+    pass
+
+
 # -------     SAMPLING HELPER     -------
 
 def sampling_preset_noise(sampling_method, noise):
@@ -224,6 +234,7 @@ if __name__ == "__main__":
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         for i, sampling_method in enumerate(sampling_methods):
             visualizer = visualization.RayVisualizer(verts, lines)
+            visualizer.set_mesh_color(np.array([1.,0.,0.]))
             print(method_names[i])
             for _ in range(100):
                 # Sample a ray

@@ -135,6 +135,7 @@ class Camera():
                 _, depth, n_ints = model.query_rays(rays_in_scene[:,:3], rays_in_scene[:,3:])
                 n_ints = n_ints.cpu()
                 model_depths = depth.cpu()
+                model_depths = torch.min(model_depths, dim=1)[0]
             n_intersections = rays_in_scene_mask.astype(float)
             n_intersections[rays_in_scene_mask] = n_ints
             n_intersections = n_intersections.reshape(self.sensor_resolution)
