@@ -25,7 +25,7 @@ To see all flags use
 
 `python train4D.py --help`
 
-##Codebase Overview
+## Codebase Overview
 
 * Training/Testing - `train4D.py`
 * Data Generation - `data.py`, `sampling.py`
