@@ -3,6 +3,14 @@
 
 This repository contains all the code needed to train a network to learn the directed distance to an object surface. This includes code for data generation, model creation, training, and visualization.
 
+# Requirements
+
+- trimesh
+- tqdm
+- scikit-learn
+- matplotlib
+- pytorch
+
 ## Data Generation / Sampling Rays
 
 The data generation code offers a few methods for sampling rays with the idea that some sampling techniques produce harder to learn rays (edge cases). To visualize the different sampling methods, use
