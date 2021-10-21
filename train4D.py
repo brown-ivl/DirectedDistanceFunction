@@ -333,7 +333,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A script to train and evaluate a directed distance function network")
 
     # CONFIG
-    parser.add_argument("--n_workers", type=int, default=1, help="Number of workers for dataloaders. Recommended is 2*num cores")
+    parser.add_argument("--n_workers", type=int, default=0, help="Number of workers for dataloaders. Recommended is 2*num cores")
     parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files/", help="a directory where model weights, loss curves, and visualizations will be saved")
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
 
