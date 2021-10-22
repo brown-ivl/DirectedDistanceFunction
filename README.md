@@ -10,6 +10,7 @@ This repository contains all the code needed to train a network to learn the dir
 - scikit-learn
 - matplotlib
 - pytorch
+- open3d
 
 ## Data Generation / Sampling Rays
 
