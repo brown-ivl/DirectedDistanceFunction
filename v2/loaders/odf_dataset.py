@@ -18,7 +18,8 @@ sys.path.append(os.path.join(FileDirPath, '../'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 
 from data import MultiDepthDataset
-import utils, sampling
+import sampling
+import utils as odf_utils
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'TBD' # todo
@@ -37,7 +38,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         self.Mode = mode
         self.nSamples = n_samples
         self.PositionalEnc = usePositionalEncoding
-        print('[ INFO ]: Loading ODFDatasetLoader dataset in mode', self.Mode)
+        print('[ INFO ]: Loading ODFDatasetLoader dataset in mode:', self.Mode)
 
         self.init(root, train, download, limit, sampling_methods, sampling_frequency)
         self.loadData()
@@ -59,6 +60,9 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
                                     sampling.sampling_preset_noise(sampling.sample_tangential_4D, DEFAULT_TAN_NOISE)]
         if sampling_frequency is None:
             self.SamplingFrequency = [0.01 * DEFAULT_UNIFORM_RATIO, 0.01 * DEFAULT_VERT_RATIO, 0.01 * DEFAULT_TAN_RATIO]
+
+        self.CurrentODFCacheFile = None
+        self.CurrentODFCacheSamples = None
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -138,13 +142,20 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         OBJFileIdx = idx % len(self.OBJList)
         RayIdx = math.floor(idx / len(self.OBJList))
-        print(OBJFileIdx, RayIdx)
+        # print(OBJFileIdx, RayIdx)
 
-        ODFSamples = self.loadODFCache(self.ODFCacheList[OBJFileIdx])
-        assert len(ODFSamples) == self.nSamples
+        if self.CurrentODFCacheFile != self.ODFCacheList[OBJFileIdx]:
+            print('[ INFO ]: Swapping ODF cache to {}'.format(os.path.basename(self.ODFCacheList[OBJFileIdx])))
+            self.CurrentODFCacheFile = self.ODFCacheList[OBJFileIdx]
+            self.CurrentODFCacheSamples = self.loadODFCache(self.ODFCacheList[OBJFileIdx])
+        assert len(self.CurrentODFCacheSamples) == self.nSamples
         # print(ODFSamples[RayIdx])
 
-        return None
+        Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_direction']
+        Intersects = self.CurrentODFCacheSamples[RayIdx]['intersect']
+        Depths = self.CurrentODFCacheSamples[RayIdx]['depths']
+
+        return Coordinates, (Intersects, Depths)
 
     def visualizeRandom(self, nSamples=100):
         if nSamples >= len(self):
@@ -168,4 +179,6 @@ if __name__ == '__main__':
 
     Data = ODFDatasetLoader(root=Args.data_dir, train=True, download=True, mode=Args.mode, n_samples=Args.nsamples)
     Data[650]
+    Data[651]
+    # Data[65038]
     # Data.visualizeRandom()
