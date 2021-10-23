@@ -3,10 +3,10 @@ import torch.nn as nn
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = 0.7  # PARAM
-    Lambda = 0.9 # PARAM
+    Lambda = 0.2 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
-        self.BCEMaskLoss = nn.BCELoss(size_average=True, reduce=True)
+        self.BCEMaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
 
@@ -17,19 +17,20 @@ class SingleDepthBCELoss(nn.Module):
         intersect, depths = target
         pred_int, pred_depth = output
 
-        L2Loss = self.L2(depths[0], pred_depth[0]) # Single intersection only
-        # BCELoss = nn.BCELoss(intersect[0], pred_int[0])
-        # Loss = self.Lambda * L2Loss + (1.0 - self.Lambda) * BCELoss
+        # if intersect[0] > 0:
+        #     print(intersect)
+        #     print(pred_int[0])
+        #     print(depths)
 
+        PredIntersect = torch.argmax(pred_int[0]).to(pred_int[0].dtype)
+        PredInt_Val = pred_int[0][int(PredIntersect)]
+        BCELoss = self.BCEMaskLoss(PredIntersect, torch.squeeze(intersect[0]))
+        L2Loss = self.L2(depths[0], pred_depth[0]) # Single intersection only
+
+        # Loss = (PredInt_Val > self.Thresh) * self.Lambda * L2Loss + ((1.0 - self.Lambda) * BCELoss)
         Loss = L2Loss
 
         return Loss
 
-    def L2(labels, predictions):
-        '''
-        L2 loss
-        '''
-        # print("L2 Loss")
-        # print(labels[-10:])
-        # print(predictions[-10:])
+    def L2(self, labels, predictions):
         return torch.mean(torch.square(labels - predictions))
