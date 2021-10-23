@@ -1,10 +1,8 @@
-import numpy as np
 import torch.utils.data
 import os
 import argparse
 import zipfile
 import glob
-import cv2
 import random
 import beacon.utils as butils
 import sys
@@ -18,8 +16,8 @@ sys.path.append(os.path.join(FileDirPath, '../'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 
 from data import MultiDepthDataset
-import sampling
-import utils as odf_utils
+from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
+import odf_utils
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'TBD' # todo
@@ -55,9 +53,9 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         self.SamplingMethods = sampling_methods
         self.SamplingFrequency = sampling_frequency
         if sampling_methods is None:
-            self.SamplingMethods = [sampling.sample_uniform_4D,
-                                    sampling.sampling_preset_noise(sampling.sample_vertex_4D, DEFAULT_VERT_NOISE),
-                                    sampling.sampling_preset_noise(sampling.sample_tangential_4D, DEFAULT_TAN_NOISE)]
+            self.SamplingMethods = [sample_uniform_4D,
+                                    sampling_preset_noise(sample_vertex_4D, DEFAULT_VERT_NOISE),
+                                    sampling_preset_noise(sample_tangential_4D, DEFAULT_TAN_NOISE)]
         if sampling_frequency is None:
             self.SamplingFrequency = [0.01 * DEFAULT_UNIFORM_RATIO, 0.01 * DEFAULT_VERT_RATIO, 0.01 * DEFAULT_TAN_RATIO]
 
@@ -115,7 +113,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
             Mesh = trimesh.load(OBJFileName)
             Faces = Mesh.faces
             Verts = Mesh.vertices
-            Verts = utils.mesh_normalize(Verts)
+            Verts = odf_utils.mesh_normalize(Verts)
 
             MeshODF = MultiDepthDataset(Faces, Verts, DEFAULT_RADIUS, self.SamplingMethods, self.SamplingFrequency, size=self.nSamples, intersect_limit=DEFAULT_MAX_INTERSECT, pos_enc=self.PositionalEnc)
             ODFSamples = []

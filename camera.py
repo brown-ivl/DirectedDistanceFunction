@@ -9,7 +9,7 @@ from matplotlib.widgets import Button
 import torch
 import os
 
-import utils
+import odf_utils
 import rasterization
 
 
@@ -66,7 +66,7 @@ class Camera():
         Rays that don't intersect the sphere take the value None
         '''
         first_elt_if_not_none = lambda x: x[0] if x is not None else None
-        sphere_surface_rays = [first_elt_if_not_none(utils.get_sphere_intersections(ray[0], ray[1]-ray[0], radius)) if np.linalg.norm(ray[0]) > radius else ray[0] for ray in rays]
+        sphere_surface_rays = [first_elt_if_not_none(odf_utils.get_sphere_intersections(ray[0], ray[1] - ray[0], radius)) if np.linalg.norm(ray[0]) > radius else ray[0] for ray in rays]
         sphere_surface_rays = [[x, x+rays[i][1]-rays[i][0]] if x is not None else None for i,x in enumerate(sphere_surface_rays)]
         # intersection_mask = [1. if intersect is not None else 0. for intersect in intersections]
         return sphere_surface_rays
@@ -104,7 +104,7 @@ class Camera():
         rays_in_scene = [ray for ray in rays if ray != None]
         if len(rays_in_scene) > 0:
             with torch.no_grad():
-                encoded_rays = torch.tensor([[x for val in list(ray[0])+list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in utils.positional_encoding(val)] for ray in rays_in_scene]).to(device)
+                encoded_rays = torch.tensor([[x for val in list(ray[0]) + list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in odf_utils.positional_encoding(val)] for ray in rays_in_scene]).to(device)
                 _, intersect, depth = model(encoded_rays)
                 intersect = intersect.cpu()
                 model_depths = depth.cpu()
@@ -225,10 +225,10 @@ class DepthMapViewer():
     def show_data(self):
         if not self.fourd:
             gt_intersect, gt_depth, learned_intersect, learned_depth = self.data[self.i]
-            utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i])       
+            odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i])
         else:
             gt_n_ints, gt_depth, learned_n_ints, learned_depth = self.data[self.i]
-            utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i], self.max_n_ints)
+            odf_utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, self.all_axes, self.vmin[self.i], self.vmax[self.i], self.max_n_ints)
 
     def next(self,event):
         if self.i < len(self.data)-1:
@@ -258,7 +258,7 @@ def save_video(rendered_views, save_path, vmin, vmax):
 
     # display first view
     gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[0]
-    utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
+    odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
 
     # Set up formatting for movie files
     Writer = animation.writers['ffmpeg']
@@ -268,7 +268,7 @@ def save_video(rendered_views, save_path, vmin, vmax):
         for ax in axes:
             ax.clear()
         gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[num]
-        utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
+        odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
 
     depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views, all_axes),
                                    interval=50)
@@ -300,7 +300,7 @@ def save_video_4D(rendered_views, save_path, vmin, vmax):
 
     # display first view
     gt_n_ints, gt_depth, learned_n_ints, learned_depth = rendered_views[0]
-    utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_axes, vmin, vmax, max_n_ints)
+    odf_utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_axes, vmin, vmax, max_n_ints)
 
     # Set up formatting for movie files
     Writer = animation.writers['ffmpeg']
@@ -310,7 +310,7 @@ def save_video_4D(rendered_views, save_path, vmin, vmax):
         for ax in axes:
             ax.clear()
         gt_n_ints, gt_depth, learned_n_ints, learned_depth = rendered_views[num]
-        utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_axes, vmin, vmax, max_n_ints)
+        odf_utils.show_depth_data_4D(gt_n_ints, gt_depth, learned_n_ints, learned_depth, all_axes, vmin, vmax, max_n_ints)
 
     depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views, all_axes),
                                    interval=50)

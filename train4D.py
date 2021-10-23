@@ -17,7 +17,7 @@ import math
 
 from data import DepthData, MultiDepthDataset
 from model import LF4D, AdaptedLFN, SimpleMLP
-import utils
+import odf_utils
 from camera import Camera, DepthMapViewer, save_video, save_video_4D
 import sampling
 import rasterization
@@ -396,7 +396,7 @@ if __name__ == "__main__":
     mesh = trimesh.load(args.mesh_file)
     faces = mesh.faces
     verts = mesh.vertices
-    verts = utils.mesh_normalize(verts)
+    verts = odf_utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_4D, 
                         sampling.sampling_preset_noise(sampling.sample_vertex_4D, args.vert_noise),
@@ -427,7 +427,7 @@ if __name__ == "__main__":
             total_loss.append(tl)
             int_loss.append(il)
             depth_loss.append(dl)
-            utils.saveLossesCurve(total_loss, int_loss, depth_loss, legend=["Total", "Intersection", "Depth"], out_path=loss_path, log=True)
+            odf_utils.saveLossesCurve(total_loss, int_loss, depth_loss, legend=["Total", "Intersection", "Depth"], out_path=loss_path, log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)

@@ -5,7 +5,7 @@ import argparse
 import torch
 
 import rasterization
-import utils
+import odf_utils
 
 #Icosahedron taken from https://people.sc.fsu.edu/~jburkardt/data/obj/icosahedron.obj
 #Icosahedron sphere connectivity https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.90.6202&rep=rep1&type=pdf
@@ -68,7 +68,7 @@ class MeshODF():
         n_ints = [1] * points.shape[0]
         near_face_threshold = rasterization.max_edge(self.vertices, self.faces)
         for i in range(points.shape[0]):
-            start_point, end_point = utils.get_sphere_intersections(points[i], directions[i], self.radius)
+            start_point, end_point = odf_utils.get_sphere_intersections(points[i], directions[i], self.radius)
             ray_length = np.linalg.norm(end_point-start_point)
             rot_verts = rasterization.rotate_mesh(self.vertices, start_point, end_point)
             _, depth = rasterization.ray_occ_depth(self.faces, rot_verts, ray_start_depth=ray_length, near_face_threshold=near_face_threshold)
@@ -619,7 +619,7 @@ def sample_next_vertices(model, vertices, faces, probes, directions, radius, del
     opposing_directions = []
     opposing_vertex_depths = []
     for i in non_intersecting_vertices:
-        opposing_point = utils.get_sphere_intersections(vertices[i], directions[i], radius)[1]
+        opposing_point = odf_utils.get_sphere_intersections(vertices[i], directions[i], radius)[1]
         opposing_points.append(opposing_point)
         opposing_vertex_depths.append(np.linalg.norm(opposing_point - vertices[i]))
         opposing_directions.append(-1 * directions[i])
@@ -703,7 +703,7 @@ def make_model_mesh(model, initial_tessalation_factor=2, radius=1.25, focal_poin
     
     for i in range(iterations - 1):
         vertices, faces, probes = large_edge_subdivision(vertices, faces)
-        directions = -1 * utils.get_vertex_normals(np.array(vertices), np.array(faces))
+        directions = -1 * odf_utils.get_vertex_normals(np.array(vertices), np.array(faces))
         if show:
             show_subdivisions_and_probes(vertices, probes, directions, faces, delta)
         vertices, faces = sample_next_vertices(model, vertices, faces, probes, directions, radius, delta)
@@ -749,7 +749,7 @@ if __name__ == "__main__":
         mesh = trimesh.load(args.mesh_file)
         faces = mesh.faces
         verts = mesh.vertices
-        verts = utils.mesh_normalize(verts)
+        verts = odf_utils.mesh_normalize(verts)
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         visualizer = visualization.RayVisualizer(verts, lines)
 
@@ -773,7 +773,7 @@ if __name__ == "__main__":
         mesh = trimesh.load(args.mesh_file)
         faces = mesh.faces
         verts = mesh.vertices
-        verts = utils.mesh_normalize(verts)
+        verts = odf_utils.mesh_normalize(verts)
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
 
         # # Generate mesh

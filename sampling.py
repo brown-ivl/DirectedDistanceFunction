@@ -5,7 +5,7 @@ Also - add additional training examples by adding d to start point and d to dept
 '''
 from numpy import random
 import rasterization
-import utils
+import odf_utils
 
 import numpy as np
 import argparse
@@ -26,8 +26,8 @@ def sample_uniform_ray_space(radius, **kwargs):
         2) Choose a direction on the unit sphere
         3) The end point is the start point plus the direction
     '''
-    start_point = utils.random_within_sphere(radius)
-    end_point = start_point + utils.random_on_sphere(0.5)
+    start_point = odf_utils.random_within_sphere(radius)
+    end_point = start_point + odf_utils.random_on_sphere(0.5)
     return start_point, end_point, None
 
 def sample_vertex(radius, verts=None, **kwargs):
@@ -40,7 +40,7 @@ def sample_vertex(radius, verts=None, **kwargs):
         2) Choose a start point uniformly at random within the bounding sphere
     '''
     assert(verts is not None)
-    start_point = utils.random_within_sphere(radius)
+    start_point = odf_utils.random_within_sphere(radius)
     v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v]
     return start_point, end_point, v
@@ -56,7 +56,7 @@ def sample_vertex_noise(radius, verts=None, noise = 0.01, **kwargs):
         3) Choose a start point uniformly at random within the bounding sphere
     '''
     assert(verts is not None)
-    start_point = utils.random_within_sphere(radius)
+    start_point = odf_utils.random_within_sphere(radius)
     v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v] + norm.rvs(scale=noise, size=3)
     return start_point, end_point, None
@@ -77,8 +77,8 @@ def sample_vertex_all_directions(radius, verts=None, noise = 0.01, v=None, **kwa
     if v is None:
         v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v] + norm.rvs(scale=noise, size=3)
-    direction = utils.random_on_sphere(1.0)
-    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    direction = odf_utils.random_on_sphere(1.0)
+    bound1, bound2 = odf_utils.get_sphere_intersections(end_point, direction, radius)
     position = uniform.rvs()
     start_point = bound1* position + (1.-position) * bound2
     return start_point, end_point, None
@@ -101,8 +101,8 @@ def sample_vertex_tangential(radius, verts=None, noise=0.01, vert_normals=None, 
         v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v] + norm.rvs(scale=noise, size=3)
     v_normal = vert_normals[v]
-    direction = np.cross(v_normal, utils.random_on_sphere(1.0))
-    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    direction = np.cross(v_normal, odf_utils.random_on_sphere(1.0))
+    bound1, bound2 = odf_utils.get_sphere_intersections(end_point, direction, radius)
     position = uniform.rvs()
     start_point = bound1*position + (1.-position)*bound2
     return start_point, end_point, None
@@ -123,8 +123,8 @@ def sample_uniform_4D(radius, **kwargs):
         1) Choose start point uniformly from bounding sphere
         2) Choose end point uniformly from bounding sphere
     '''
-    start_point = utils.random_on_sphere(radius)
-    end_point = utils.random_on_sphere(radius)
+    start_point = odf_utils.random_on_sphere(radius)
+    end_point = odf_utils.random_on_sphere(radius)
     return start_point, end_point, None
 
 def sample_vertex_4D(radius, verts=None, noise = 0.01, v=None, **kwargs):
@@ -140,8 +140,8 @@ def sample_vertex_4D(radius, verts=None, noise = 0.01, v=None, **kwargs):
     if v is None:
         v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v] + norm.rvs(scale=noise, size=3)
-    direction = utils.random_on_sphere(1.0)
-    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    direction = odf_utils.random_on_sphere(1.0)
+    bound1, bound2 = odf_utils.get_sphere_intersections(end_point, direction, radius)
     return bound1, bound2, None
 
 def sample_tangential_4D(radius, verts=None, noise=0.01, vert_normals=None, v=None, **kwargs):
@@ -161,8 +161,8 @@ def sample_tangential_4D(radius, verts=None, noise=0.01, vert_normals=None, v=No
         v = np.random.randint(0, high=verts.shape[0])
     end_point = verts[v] + norm.rvs(scale=noise, size=3)
     v_normal = vert_normals[v]
-    direction = np.cross(v_normal, utils.random_on_sphere(1.0))
-    bound1, bound2 = utils.get_sphere_intersections(end_point, direction, radius)
+    direction = np.cross(v_normal, odf_utils.random_on_sphere(1.0))
+    bound1, bound2 = odf_utils.get_sphere_intersections(end_point, direction, radius)
     return bound1, bound2, None
 
 
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     faces = mesh.faces
     verts = mesh.vertices
     
-    verts = utils.mesh_normalize(verts)
+    verts = odf_utils.mesh_normalize(verts)
     radius = 1.25
     fixed_endpoint = 700
 
@@ -220,7 +220,7 @@ if __name__ == "__main__":
 
     # threshold for how far away a face can be from the ray before it gets culled in rasterization
     near_face_threshold = rasterization.max_edge(verts, faces)
-    vert_normals = utils.get_vertex_normals(verts, faces)
+    vert_normals = odf_utils.get_vertex_normals(verts, faces)
 
     if not args.use_4d:
         sampling_methods = [sample_uniform_ray_space, sample_vertex_noise, sample_vertex_all_directions, sample_vertex_tangential]
