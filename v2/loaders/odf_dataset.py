@@ -1,15 +1,27 @@
 import torch.utils.data
-import os
 import argparse
 import zipfile
 import glob
 import random
 import beacon.utils as butils
-import sys
 import trimesh
 import pickle
 import math
 from tqdm import tqdm
+import numpy as np
+
+
+from tk3dv.common import drawing
+import tk3dv.nocstools.datastructures as ds
+from PyQt5.QtWidgets import QApplication
+import PyQt5.QtCore as QtCore
+from PyQt5.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
+import numpy as np
+
+from tk3dv.pyEasel import *
+from EaselModule import EaselModule
+from Easel import Easel
+import OpenGL.GL as gl
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
@@ -30,13 +42,14 @@ DEFAULT_RADIUS = 1.25
 DEFAULT_MAX_INTERSECT = 1
 
 class ODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, train=True, download=True, limit=None, mode='mesh', n_samples=1e5, sampling_methods=None, sampling_frequency=None, usePositionalEncoding=True):
+    def __init__(self, root, train=True, download=True, limit=None, mode='mesh', n_samples=1e5, sampling_methods=None, sampling_frequency=None, usePositionalEncoding=True, coord_type='direction'):
         self.FileName = MESH_DATASET_NAME + '.zip'
         self.DataURL = MESH_DATASET_URL
         self.Mode = mode
         self.nSamples = n_samples
         self.PositionalEnc = usePositionalEncoding
-        print('[ INFO ]: Loading ODFDatasetLoader dataset in mode:', self.Mode)
+        self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
+        print('[ INFO ]: Loading ODFDatasetLoader dataset. Mode: {}, Positional Encoding: {}, Coordinate Type: {}'.format(self.Mode, self.PositionalEnc, self.CoordType))
 
         self.init(root, train, download, limit, sampling_methods, sampling_frequency)
         self.loadData()
@@ -149,20 +162,90 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         assert len(self.CurrentODFCacheSamples) == self.nSamples
         # print(ODFSamples[RayIdx])
 
-        Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_direction']
+        if self.CoordType == 'direction':
+            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_direction']
+        elif self.CoordType == 'points':
+            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_points']
+        elif self.CoordType == 'pluecker':
+            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_pluecker']
+
         Intersects = self.CurrentODFCacheSamples[RayIdx]['intersect']
         Depths = self.CurrentODFCacheSamples[RayIdx]['depths']
 
         return Coordinates, (Intersects, Depths)
 
-    def visualizeRandom(self, nSamples=100):
-        if nSamples >= len(self):
-            RandIdx = list(range(0, len(self))) * int(nSamples/len(self))
-        else:
-            RandIdx = random.sample(range(0, len(self)), nSamples)
 
-        for Idx in range(0, nSamples):
-            Data = self[RandIdx[Idx]]
+class VizModule(EaselModule):
+    def __init__(self, Data):
+        super().__init__()
+        self.ODFData = Data
+        self.Rays = []
+        self.Depths = []
+        self.CoordType = Data.CoordType
+
+    def init(self, argv=None):
+        self.Rays = []
+        print('[ INFO ]: Loading ODF data for visualization.')
+        for ODFRay in tqdm(self.ODFData):
+            if ODFRay[1][0] > 0:
+                self.Rays.append(np.squeeze(ODFRay[0].numpy()))
+                self.Depths.append(np.squeeze(ODFRay[1][1].numpy()))
+
+        print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
+
+    def step(self):
+        pass
+
+    def draw(self):
+        if self.CoordType == 'pluecker':
+            print('[ WARN ]: Visualization of pluecker coordinates and positional encodings not yet implemented.')
+
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glPushMatrix()
+
+        ScaleFact = 200
+        gl.glScale(ScaleFact, ScaleFact, ScaleFact)
+
+        for (Ray, Depth) in zip(self.Rays, self.Depths):
+            # print(Ray[:3])
+            if self.CoordType == 'points':
+                Direction = (Ray[3:] - Ray[:3])
+                Norm = np.linalg.norm(Direction)
+                if Norm == 0.0:
+                    continue
+                Direction /= Norm
+            elif self.CoordType == 'direction':
+                Direction = Ray[3:]
+
+            gl.glBegin(gl.GL_LINES)
+            gl.glColor3f(1, 0, 0)
+            gl.glVertex(Ray[:3])
+            # gl.glVertex(Ray[3:])
+            gl.glVertex(Ray[:3] + (Direction * Depth))
+            gl.glEnd()
+
+            gl.glPushAttrib(gl.GL_POINT_BIT)
+            gl.glPointSize(10)
+            gl.glBegin(gl.GL_POINTS)
+            gl.glColor3f(0, 0, 1)
+            gl.glVertex(Ray[:3] + (Direction * Depth))
+            gl.glEnd()
+            gl.glPopAttrib()
+
+
+        gl.glPopMatrix()
+
+    def keyPressEvent(self, a0: QKeyEvent):
+        if a0.key() == QtCore.Qt.Key_Plus:  # Increase or decrease point size
+            if self.PointSize < 20:
+                self.PointSize = self.PointSize + 1
+
+        if a0.key() == QtCore.Qt.Key_Minus:  # Increase or decrease point size
+            if self.PointSize > 1:
+                self.PointSize = self.PointSize - 1
+
+        if a0.key() == QtCore.Qt.Key_T:  # Toggle objects
+            self.showObjIdx = (self.showObjIdx + 1)%(3)
 
 
 Parser = argparse.ArgumentParser()
@@ -170,13 +253,22 @@ Parser.add_argument('-d', '--data-dir', help='Specify the location of the direct
 Parser.add_argument('-m', '--mode', help='Specify the dataset mode.', required=False, choices=['mesh'], default='mesh')
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to sample.', required=False, type=int, default=100000)
+Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
+Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
+Parser.set_defaults(no_posenc=False)
+
 
 if __name__ == '__main__':
     Args = Parser.parse_args()
     butils.seedRandom(Args.seed)
 
-    Data = ODFDatasetLoader(root=Args.data_dir, train=True, download=True, mode=Args.mode, n_samples=Args.nsamples)
-    Data[650]
-    Data[651]
+    Data = ODFDatasetLoader(root=Args.data_dir, train=True, download=True, mode=Args.mode, n_samples=Args.nsamples, usePositionalEncoding=Args.no_posenc, coord_type=Args.coord_type)
+    # print(Data[650])
     # Data[65038]
     # Data.visualizeRandom()
+
+    app = QApplication(sys.argv)
+
+    mainWindow = Easel([VizModule(Data)], sys.argv[1:])
+    mainWindow.show()
+    sys.exit(app.exec_())

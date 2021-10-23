@@ -31,14 +31,13 @@ if __name__ == '__main__':
 
     butils.seedRandom(Args.seed)
 
-    usePosEnc = True
+    usePosEnc = False
     if Args.arch == 'standard':
-        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS,
-                     coord_type=Args.coord_type, pos_enc=usePosEnc)
+        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
     TrainDevice = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, n_samples=Args.rays_per_shape)
-    ValData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=False, download=True, n_samples=Args.rays_per_shape)
+    TrainData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, n_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    ValData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=False, download=True, n_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(int(len(TrainData) / Args.rays_per_shape), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(int(len(ValData) / Args.rays_per_shape), Args.rays_per_shape))
 

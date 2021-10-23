@@ -11,8 +11,13 @@ This repository contains all the code needed to train a network to learn the dir
 - matplotlib
 - pytorch
 - open3d
-- beacon (`pip install git+https://github.com/brown-ivl/beacon.git`)
 - pickle
+
+More requirements for Srinath's v2:
+
+- beacon (`pip install git+https://github.com/brown-ivl/beacon.git`)
+- tk3dv (`pip install git+https://github.com/drsrinathsridhar/tk3dv.git`)
+
 
 ## Data Generation / Sampling Rays
 
