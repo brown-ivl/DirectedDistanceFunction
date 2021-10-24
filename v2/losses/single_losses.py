@@ -31,9 +31,9 @@ class SingleDepthBCELoss(nn.Module):
         # print(PredDepth)
         # print(GTDepth)
 
-        PredMaskMaxIdx = torch.argmax(PredMaskConfSig, dim=1).to(PredMaskConf.dtype).unsqueeze(1).requires_grad_(True)
-        # print(PredMaskMaxIdx.size())
-        PredMaskMaxConfVal = torch.gather(PredMaskConfSig, dim=1, index=PredMaskMaxIdx.to(torch.long).view(-1, 1))
+        # PredMaskMaxIdx = torch.argmax(PredMaskConfSig, dim=1).to(PredMaskConf.dtype).unsqueeze(1).requires_grad_(True)
+        # PredMaskMaxConfVal = torch.gather(PredMaskConfSig, dim=1, index=PredMaskMaxIdx.to(torch.long).view(-1, 1))
+        PredMaskMaxConfVal = PredMaskConfSig
         # ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
         ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 

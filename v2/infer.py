@@ -5,12 +5,21 @@ import argparse
 import numpy as np
 import math
 
+from PyQt5.QtWidgets import QApplication
+import numpy as np
+from tk3dv.pyEasel import *
+from EaselModule import EaselModule
+from Easel import Easel
+import OpenGL.GL as gl
+import OpenGL.arrays.vbo as glvbo
+
+
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-from odf_dataset import DEFAULT_RADIUS
+from odf_dataset import DEFAULT_RADIUS, ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 from odf_dataset import ODFDatasetLoader as ODFDL
 from single_losses import SingleDepthBCELoss
 from single_models import LF4DSingle
@@ -20,14 +29,21 @@ def infer(Network, DataLoader, Objective, Device):
     ValLosses = []
     Tic = butils.getCurrentEpochTime()
     Network.to(Device)
+    Rays = []
+    Intersects = []
+    Depths = []
     # print('Val length:', len(ValDataLoader))
     for i, (Data, Targets) in enumerate(DataLoader, 0):  # Get each batch
+        Rays.append(Data)
         DataTD = butils.sendToDevice(Data, Device)
         TargetsTD = butils.sendToDevice(Targets, Device)
 
         Output = Network(DataTD)
         Loss = Objective(Output, TargetsTD)
         ValLosses.append(Loss.item())
+
+        Intersects.append(Output[0] > 0.5)
+        Depths.append(Output[1].detach().cpu())
 
         # Print stats
         Toc = butils.getCurrentEpochTime()
@@ -39,7 +55,11 @@ def infer(Network, DataLoader, Objective, Device):
         sys.stdout.flush()
     sys.stdout.write('\n')
 
-    return ValLosses
+    Rays = torch.squeeze(torch.cat(Rays), dim=1)
+    Intersects = torch.cat(Intersects)
+    Depths = torch.cat(Depths)
+
+    return ValLosses, Rays, Intersects, Depths
 
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')
@@ -73,4 +93,14 @@ if __name__ == '__main__':
 
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0) # DEBUG, TODO: More workers not working
 
-    infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
+    ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
+
+    app = QApplication(sys.argv)
+
+    # GTViz = Easel([ODFDatasetVisualizer(ValData)], sys.argv[1:])
+    # PredictionViz = Easel([ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths)], sys.argv[1:])
+    # GTViz.show()
+    # PredictionViz.show()
+    CompareViz = Easel([ODFDatasetVisualizer(ValData, Offset=[-1, 0, 0]), ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths, Offset=[1, 0, 0])], sys.argv[1:])
+    CompareViz.show()
+    sys.exit(app.exec_())

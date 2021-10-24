@@ -43,6 +43,7 @@ DEFAULT_TAN_RATIO = 0
 DEFAULT_RADIUS = 1.25
 DEFAULT_MAX_INTERSECT = 1
 
+
 class ODFDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, root, train=True, download=True, limit=None, mode='mesh', n_samples=1e5, sampling_methods=None, sampling_frequency=None, usePositionalEncoding=True, coord_type='direction'):
         self.FileName = MESH_DATASET_NAME + '.zip'
@@ -176,9 +177,8 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
 
         return Coordinates, (Intersects, Depths)
 
-
-class VizModule(EaselModule):
-    def __init__(self, Data):
+class ODFDatasetVisualizer(EaselModule):
+    def __init__(self, Data, Offset=[0, 0, 0]):
         super().__init__()
         self.ODFData = Data
         self.CoordType = Data.CoordType
@@ -189,7 +189,8 @@ class VizModule(EaselModule):
 
         self.isVBOBound = False
         self.showSphere = False
-        self.RayLength = 0.2
+        self.RayLength = 0.1
+        self.Offset = Offset
 
     def init(self, argv=None):
         self.update()
@@ -246,6 +247,7 @@ class VizModule(EaselModule):
 
         ScaleFact = 200
         gl.glScale(ScaleFact, ScaleFact, ScaleFact)
+        gl.glTranslate(self.Offset[0], self.Offset[1], self.Offset[2])
 
         if self.showSphere:
             gl.glPushMatrix()
@@ -289,6 +291,58 @@ class VizModule(EaselModule):
         if a0.key() == QtCore.Qt.Key_S:
             self.showSphere = not self.showSphere
 
+class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
+    def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0]):
+        self.CoordType = coord_type
+        self.Offset = Offset
+        if self.CoordType == 'pluecker':
+            self.nCoords = 120
+        else:
+            self.nCoords = 6
+
+        self.Rays = rays
+        self.Intersects = intersects
+        self.Depths = depths
+
+        self.isVBOBound = False
+        self.showSphere = False
+        self.RayLength = 0.2
+
+    def init(self, argv=None):
+        self.update()
+
+    def update(self):
+        self.ShapePoints = np.empty((0, 3), np.float64)
+        self.RayPoints = np.empty((0, 3), np.float64)
+        print('[ INFO ]: Updating live data for visualization.')
+        for R, I, D in tqdm(zip(self.Rays, self.Intersects, self.Depths)):
+            if I[0] > 0:
+                Ray = np.squeeze(R.numpy())
+                Depth = np.squeeze(D.numpy())
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
+                ShapePoint = np.array(Ray[:3] + (Direction * Depth))
+                self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
+
+        print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
+
+        # VBOs
+        self.nPoints = self.ShapePoints.shape[0]
+        self.nRayPoints = self.RayPoints.shape[0]
+        if self.nPoints == 0:
+            return
+        self.VBOPoints = glvbo.VBO(self.ShapePoints)
+        self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        self.isVBOBound = True
+
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store HerthaSim', required=True)
@@ -310,21 +364,20 @@ if __name__ == '__main__':
     # Data[65038]
     # Data.visualizeRandom()
 
-    Loss = SingleDepthBCELoss()
-
-    N = 0
-    for i in range(len(Data)):
-        if Data[i][1][0][0] > 0:
-            N = i
-            break
-    target = (Data[N][1][0].unsqueeze(1), Data[N][1][1].unsqueeze(1))
-    output = (torch.tensor(0.9), Data[N][1][1].unsqueeze(1))
-    print(target)
-    print(output)
-    print(Loss(output, target))
+    # Loss = SingleDepthBCELoss()
+    # N = 0
+    # for i in range(len(Data)):
+    #     if Data[i][1][0][0] > 0:
+    #         N = i
+    #         break
+    # target = (Data[N][1][0].unsqueeze(1), Data[N][1][1].unsqueeze(1))
+    # output = (torch.tensor(0.9), Data[N][1][1].unsqueeze(1))
+    # print(target)
+    # print(output)
+    # print(Loss(output, target))
 
     app = QApplication(sys.argv)
 
-    mainWindow = Easel([VizModule(Data)], sys.argv[1:])
+    mainWindow = Easel([ODFDatasetVisualizer(Data)], sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())
