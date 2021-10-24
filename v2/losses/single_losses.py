@@ -1,12 +1,15 @@
 import torch
 import torch.nn as nn
+import math
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = 0.7  # PARAM
-    Lambda = 0.2 # PARAM
+    Lambda = 0.5 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
-        self.BCEMaskLoss = nn.BCELoss(reduction='mean')
+        self.MaskLoss = nn.BCEWithLogitsLoss(reduction='mean')
+        # self.MaskLoss = nn.BCELoss(reduction='mean')
+        # self.MaskLoss = nn.CrossEntropyLoss()
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
 
@@ -14,23 +17,30 @@ class SingleDepthBCELoss(nn.Module):
         return self.computeLoss(output, target)
 
     def computeLoss(self, output, target):
-        intersect, depths = target
-        pred_int, pred_depth = output
+        GTMask, GTDepth = target
+        PredMaskConf, PredDepth = output
 
-        # if intersect[0] > 0:
-        #     print(intersect)
-        #     print(pred_int[0])
-        #     print(depths)
+        # print('GTMask size:', GTMask.size())
+        # print('GTDepth size:', GTDepth.size())
+        # print('PredMaskLikelihood', PredMaskConf)
+        # print('PredMaskLikelihood size', PredMaskConf.size())
+        # print('PredDepth', PredDepth)
+        # print('PredDepth size', PredDepth.size())
 
-        # PredIntersect = torch.argmax(pred_int[0]).to(pred_int[0].dtype)
-        # PredInt_Val = pred_int[0][int(PredIntersect)]
-        # BCELoss = self.BCEMaskLoss(PredIntersect, torch.squeeze(intersect[0]))
-        L2Loss = self.L2(depths[0], pred_depth[0]) # Single intersection only
+        PredMaskMaxIdx = torch.argmax(torch.squeeze(PredMaskConf), dim=1).to(PredMaskConf.dtype).requires_grad_(True)
+        # PredMaskMaxConfVal = torch.gather(torch.squeeze(PredMaskConf), dim=1, index=PredMaskMaxIdx.to(torch.long).view(-1, 1))
+        # ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
+        ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
-        # Loss = (PredInt_Val > self.Thresh) * self.Lambda * L2Loss + ((1.0 - self.Lambda) * BCELoss)
-        Loss = L2Loss
+        MaskLoss = self.MaskLoss(PredMaskMaxIdx.to(torch.float), torch.squeeze(GTMask).to(torch.float))
+        L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+
+        Loss = self.Lambda * L2Loss + ((1.0 - self.Lambda) * MaskLoss)
 
         return Loss
 
     def L2(self, labels, predictions):
-        return torch.mean(torch.square(labels - predictions))
+        Loss = torch.mean(torch.square(labels - predictions))
+        if math.isnan(Loss) or math.isinf(Loss):
+            return 10
+        return Loss
