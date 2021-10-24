@@ -10,7 +10,6 @@ import math
 from tqdm import tqdm
 import numpy as np
 
-
 from tk3dv.common import drawing
 import tk3dv.nocstools.datastructures as ds
 from PyQt5.QtWidgets import QApplication
@@ -22,6 +21,7 @@ from tk3dv.pyEasel import *
 from EaselModule import EaselModule
 from Easel import Easel
 import OpenGL.GL as gl
+import OpenGL.arrays.vbo as glvbo
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
@@ -179,19 +179,51 @@ class VizModule(EaselModule):
     def __init__(self, Data):
         super().__init__()
         self.ODFData = Data
-        self.Rays = []
-        self.Depths = []
         self.CoordType = Data.CoordType
+        if self.CoordType == 'pluecker':
+            self.nCoords = 120
+        else:
+            self.nCoords = 6
+        self.Rays = np.empty((0, self.nCoords), np.float64)
+        self.Depths = np.empty((0, 1), np.float64)
+
+        self.ShapePoints = np.empty((0, 3), np.float64)
+        self.RayPoints = np.empty((0, 3), np.float64)
+
+        self.isVBOBound = False
 
     def init(self, argv=None):
-        self.Rays = []
         print('[ INFO ]: Loading ODF data for visualization.')
         for ODFRay in tqdm(self.ODFData):
             if ODFRay[1][0] > 0:
-                self.Rays.append(np.squeeze(ODFRay[0].numpy()))
-                self.Depths.append(np.squeeze(ODFRay[1][1].numpy()))
+                Ray = np.squeeze(ODFRay[0].numpy())
+                Depth = np.squeeze(ODFRay[1][1].numpy())
+                self.Rays = np.vstack((self.Rays, Ray))
+                self.Depths = np.vstack((self.Depths, Depth))
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
+                ShapePoint = np.array(Ray[:3] + (Direction * Depth))
+                self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - 0.2 * Direction))
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
+        self.update()
+
+    def update(self):
+        self.nPoints = self.ShapePoints.shape[0]
+        self.nRayPoints = self.RayPoints.shape[0]
+        if self.nPoints == 0:
+            return
+        self.VBOPoints = glvbo.VBO(self.ShapePoints)
+        self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        self.isVBOBound = True
 
     def step(self):
         pass
@@ -199,6 +231,10 @@ class VizModule(EaselModule):
     def draw(self):
         if self.CoordType == 'pluecker':
             print('[ WARN ]: Visualization of pluecker coordinates and positional encodings not yet implemented.')
+            return
+        if self.isVBOBound == False:
+            print('[ WARN ]: VBOs not bound. Call update().')
+            return
 
         gl.glMatrixMode(gl.GL_MODELVIEW)
         gl.glPushMatrix()
@@ -206,32 +242,29 @@ class VizModule(EaselModule):
         ScaleFact = 200
         gl.glScale(ScaleFact, ScaleFact, ScaleFact)
 
-        for (Ray, Depth) in zip(self.Rays, self.Depths):
-            # print(Ray[:3])
-            if self.CoordType == 'points':
-                Direction = (Ray[3:] - Ray[:3])
-                Norm = np.linalg.norm(Direction)
-                if Norm == 0.0:
-                    continue
-                Direction /= Norm
-            elif self.CoordType == 'direction':
-                Direction = Ray[3:]
+        gl.glPushMatrix()
+        gl.glRotatef(90, 1, 0, 0)
+        # drawing.drawWireSphere(DEFAULT_RADIUS, 32, 32)
+        gl.glPopMatrix()
 
-            gl.glBegin(gl.GL_LINES)
-            gl.glColor3f(1, 0, 0)
-            gl.glVertex(Ray[:3])
-            # gl.glVertex(Ray[3:])
-            gl.glVertex(Ray[:3] + (Direction * Depth))
-            gl.glEnd()
+        gl.glPushAttrib(gl.GL_POINT_BIT)
 
-            gl.glPushAttrib(gl.GL_POINT_BIT)
-            gl.glPointSize(10)
-            gl.glBegin(gl.GL_POINTS)
-            gl.glColor3f(0, 0, 1)
-            gl.glVertex(Ray[:3] + (Direction * Depth))
-            gl.glEnd()
-            gl.glPopAttrib()
+        gl.glPointSize(10)
+        gl.glColor3f(0, 0, 1)
+        if self.VBOPoints is not None:
+            self.VBOPoints.bind()
+            gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+            gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBOPoints)
+        gl.glDrawArrays(gl.GL_POINTS, 0, self.nPoints)
 
+        gl.glColor3f(1, 0, 0)
+        if self.VBORayPoints is not None:
+            self.VBORayPoints.bind()
+            gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+            gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBORayPoints)
+        gl.glDrawArrays(gl.GL_LINES, 0, self.nRayPoints)
+
+        gl.glPopAttrib()
 
         gl.glPopMatrix()
 
