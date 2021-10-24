@@ -17,6 +17,7 @@ More requirements for Srinath's v2:
 
 - beacon (`pip install git+https://github.com/brown-ivl/beacon.git`)
 - tk3dv (`pip install git+https://github.com/drsrinathsridhar/tk3dv.git`)
+- [ Required on some machines to avoid an OpenMP issue ] `conda install -c conda-forge nomkl`
 
 
 ## Data Generation / Sampling Rays
