@@ -184,15 +184,19 @@ class VizModule(EaselModule):
             self.nCoords = 120
         else:
             self.nCoords = 6
-        self.Rays = np.empty((0, self.nCoords), np.float64)
-        self.Depths = np.empty((0, 1), np.float64)
-
-        self.ShapePoints = np.empty((0, 3), np.float64)
-        self.RayPoints = np.empty((0, 3), np.float64)
 
         self.isVBOBound = False
+        self.showSphere = False
+        self.RayLength = 0.2
 
     def init(self, argv=None):
+        self.update()
+
+    def update(self):
+        self.Rays = np.empty((0, self.nCoords), np.float64)
+        self.Depths = np.empty((0, 1), np.float64)
+        self.ShapePoints = np.empty((0, 3), np.float64)
+        self.RayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Loading ODF data for visualization.')
         for ODFRay in tqdm(self.ODFData):
             if ODFRay[1][0] > 0:
@@ -211,12 +215,11 @@ class VizModule(EaselModule):
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
                 self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
-                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - 0.2 * Direction))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
-        self.update()
 
-    def update(self):
+        # VBOs
         self.nPoints = self.ShapePoints.shape[0]
         self.nRayPoints = self.RayPoints.shape[0]
         if self.nPoints == 0:
@@ -242,10 +245,11 @@ class VizModule(EaselModule):
         ScaleFact = 200
         gl.glScale(ScaleFact, ScaleFact, ScaleFact)
 
-        gl.glPushMatrix()
-        gl.glRotatef(90, 1, 0, 0)
-        # drawing.drawWireSphere(DEFAULT_RADIUS, 32, 32)
-        gl.glPopMatrix()
+        if self.showSphere:
+            gl.glPushMatrix()
+            gl.glRotatef(90, 1, 0, 0)
+            drawing.drawWireSphere(DEFAULT_RADIUS, 32, 32)
+            gl.glPopMatrix()
 
         gl.glPushAttrib(gl.GL_POINT_BIT)
 
@@ -269,16 +273,19 @@ class VizModule(EaselModule):
         gl.glPopMatrix()
 
     def keyPressEvent(self, a0: QKeyEvent):
-        if a0.key() == QtCore.Qt.Key_Plus:  # Increase or decrease point size
-            if self.PointSize < 20:
-                self.PointSize = self.PointSize + 1
+        if a0.key() == QtCore.Qt.Key_Plus:
+            if self.RayLength < 0.9:
+                self.RayLength += 0.1
+                self.update()
 
-        if a0.key() == QtCore.Qt.Key_Minus:  # Increase or decrease point size
-            if self.PointSize > 1:
-                self.PointSize = self.PointSize - 1
+        if a0.key() == QtCore.Qt.Key_Minus:
+            if self.RayLength > 0.1:
+                self.RayLength -= 0.1
+                self.update()
+        # print(self.RayLength, flush=True)
 
-        if a0.key() == QtCore.Qt.Key_T:  # Toggle objects
-            self.showObjIdx = (self.showObjIdx + 1)%(3)
+        if a0.key() == QtCore.Qt.Key_S:
+            self.showSphere = not self.showSphere
 
 
 Parser = argparse.ArgumentParser()
