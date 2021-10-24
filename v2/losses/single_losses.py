@@ -22,9 +22,9 @@ class SingleDepthBCELoss(nn.Module):
         #     print(pred_int[0])
         #     print(depths)
 
-        PredIntersect = torch.argmax(pred_int[0]).to(pred_int[0].dtype)
-        PredInt_Val = pred_int[0][int(PredIntersect)]
-        BCELoss = self.BCEMaskLoss(PredIntersect, torch.squeeze(intersect[0]))
+        # PredIntersect = torch.argmax(pred_int[0]).to(pred_int[0].dtype)
+        # PredInt_Val = pred_int[0][int(PredIntersect)]
+        # BCELoss = self.BCEMaskLoss(PredIntersect, torch.squeeze(intersect[0]))
         L2Loss = self.L2(depths[0], pred_depth[0]) # Single intersection only
 
         # Loss = (PredInt_Val > self.Thresh) * self.Lambda * L2Loss + ((1.0 - self.Lambda) * BCELoss)

@@ -22,6 +22,8 @@ Parser.add_argument('--no-val', help='Choose to not perform validation during tr
 Parser.set_defaults(no_val=False)  # True for DEBUG only todo
 Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
+Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
+Parser.set_defaults(no_posenc=False)
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
@@ -31,7 +33,7 @@ if __name__ == '__main__':
 
     butils.seedRandom(Args.seed)
 
-    usePosEnc = False
+    usePosEnc = not Args.no_posenc
     if Args.arch == 'standard':
         NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 

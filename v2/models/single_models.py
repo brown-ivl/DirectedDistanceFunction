@@ -19,7 +19,10 @@ class LF4DSingle(supernet.SuperNet):
         assert (n_layers > 1)
 
         # set which layers (aside from the first) should have the positional encoding passed in
-        self.pos_enc_layers = [4]
+        if self.pos_enc:
+            self.pos_enc_layers = [4]
+        else:
+            self.pos_enc_layers = []
 
         # Define the main network body
         main_layers = []
