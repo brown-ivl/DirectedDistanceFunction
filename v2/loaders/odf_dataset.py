@@ -25,11 +25,13 @@ import OpenGL.GL as gl
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
+sys.path.append(os.path.join(FileDirPath, '../losses'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 
 from data import MultiDepthDataset
 from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
 import odf_utils
+from single_losses import SingleDepthBCELoss
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'TBD' # todo
@@ -261,11 +263,19 @@ Parser.set_defaults(no_posenc=False)
 if __name__ == '__main__':
     Args = Parser.parse_args()
     butils.seedRandom(Args.seed)
+    usePoseEnc = not Args.no_posenc
 
-    Data = ODFDatasetLoader(root=Args.data_dir, train=True, download=True, mode=Args.mode, n_samples=Args.nsamples, usePositionalEncoding=Args.no_posenc, coord_type=Args.coord_type)
+    Data = ODFDatasetLoader(root=Args.data_dir, train=True, download=True, mode=Args.mode, n_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
     # print(Data[650])
     # Data[65038]
     # Data.visualizeRandom()
+
+    Loss = SingleDepthBCELoss()
+
+    target = Data[650][1]
+    output = (torch.from_numpy(np.array([[0.7, 0.0]])), Data[650][1][1])
+
+    print(Loss(output, target))
 
     app = QApplication(sys.argv)
 
