@@ -63,7 +63,9 @@ if __name__ == '__main__':
     if Args.arch == 'standard':
         NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
+
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
     ValData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)

@@ -312,9 +312,15 @@ if __name__ == '__main__':
 
     Loss = SingleDepthBCELoss()
 
-    target = Data[650][1]
-    output = (torch.from_numpy(np.array([[0.7, 0.0]])), Data[650][1][1])
-
+    N = 0
+    for i in range(len(Data)):
+        if Data[i][1][0][0] > 0:
+            N = i
+            break
+    target = (Data[N][1][0].unsqueeze(1), Data[N][1][1].unsqueeze(1))
+    output = (torch.tensor(0.9), Data[N][1][1].unsqueeze(1))
+    print(target)
+    print(output)
     print(Loss(output, target))
 
     app = QApplication(sys.argv)

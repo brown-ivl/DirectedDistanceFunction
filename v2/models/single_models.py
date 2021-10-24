@@ -12,7 +12,7 @@ class LF4DSingle(supernet.SuperNet):
         super().__init__(Args=Args)
 
         # store args
-        n_intersections = 1
+        n_intersections = 1 # Single intersection only
         self.preprocessing = coord_type
         self.pos_enc = pos_enc
         self.radius = radius
@@ -37,7 +37,7 @@ class LF4DSingle(supernet.SuperNet):
         # Define the intersection head
         intersection_layers = [
             nn.Linear(hidden_size, hidden_size),
-            nn.Linear(hidden_size, n_intersections + 1)  # +1 because we also need a zero intersection category
+            nn.Linear(hidden_size, n_intersections)
         ]
         self.intersection_head = nn.ModuleList(intersection_layers)
 
@@ -71,6 +71,8 @@ class LF4DSingle(supernet.SuperNet):
         # intersections = self.layernorm(intersections)
         intersections = self.intersection_head[1](intersections)
         # intersections = torch.sigmoid(intersections)
+        if len(intersections.size()) == 3:
+            intersections = torch.squeeze(intersections, dim=1)
 
         # depth head
         depths = self.depth_head[0](x)
@@ -80,5 +82,8 @@ class LF4DSingle(supernet.SuperNet):
         depths = self.depth_head[1](depths)
         depths = self.relu(depths)
         depths = torch.cumsum(depths, dim=1)
+        if len(depths.size()) == 3:
+            depths = torch.squeeze(depths, dim=1)
+
         return intersections, depths
 
