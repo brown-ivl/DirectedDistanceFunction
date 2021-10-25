@@ -70,6 +70,7 @@ Parser.set_defaults(force_test_on_train=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.set_defaults(no_posenc=False)
+Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
@@ -95,7 +96,14 @@ if __name__ == '__main__':
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0) # DEBUG, TODO: More workers not working
 
     ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
-    exit()
+    if usePosEnc:
+        Rays = []
+        print('[ INFO]: Converting from positional encoding to normal...')
+        print(len(ValData))
+        for Idx in range(len(ValData)):
+            Rays.append(ValData.__getitem__(Idx, PosEnc=usePosEnc)[0])
+        print(len(Rays))
+        Rays = torch.squeeze(torch.cat(Rays), dim=1)
 
     app = QApplication(sys.argv)
 
@@ -103,6 +111,6 @@ if __name__ == '__main__':
     # PredictionViz = Easel([ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths)], sys.argv[1:])
     # GTViz.show()
     # PredictionViz.show()
-    CompareViz = Easel([ODFDatasetVisualizer(ValData, Offset=[-1, 0, 0]), ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths, Offset=[1, 0, 0])], sys.argv[1:])
+    CompareViz = Easel([ODFDatasetVisualizer(Data=ValData, Offset=[-1, 0, 0], DataLimit=Args.viz_limit), ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths, Offset=[1, 0, 0], DataLimit=Args.viz_limit)], sys.argv[1:])
     CompareViz.show()
     sys.exit(app.exec_())

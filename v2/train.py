@@ -46,9 +46,9 @@ if __name__ == '__main__':
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(int(len(TrainData) / Args.rays_per_shape), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(int(len(ValData) / Args.rays_per_shape), Args.rays_per_shape))
 
-    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0) # DEBUG, TODO: More workers not working
+    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=0) # DEBUG, TODO: More workers not working
     if Args.no_val == False:
-        ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0)
+        ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=0)
     else:
         print('[ WARN ]: Not validating during training. This should be used for debugging purposes only.')
         ValDataLoader = None

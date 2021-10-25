@@ -163,7 +163,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         # print('\nOBJFileIdx, RayIdx:', OBJFileIdx, RayIdx)
 
         if self.CurrentODFCacheFile != self.ODFCacheList[OBJFileIdx]:
-            print('[ INFO ]: Swapping ODF cache to {}'.format(os.path.basename(self.ODFCacheList[OBJFileIdx])))
+            print('[ INFO ]: Swapping ODF cache to {}. Please wait.'.format(os.path.basename(self.ODFCacheList[OBJFileIdx])))
             self.CurrentODFCacheFile = self.ODFCacheList[OBJFileIdx]
             self.CurrentODFCacheSamples = self.loadODFCache(self.ODFCacheList[OBJFileIdx])
         assert len(self.CurrentODFCacheSamples) == self.nSamples
@@ -314,9 +314,10 @@ class ODFDatasetVisualizer(EaselModule):
             self.showSphere = not self.showSphere
 
 class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
-    def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0]):
+    def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0], DataLimit=10000):
         self.CoordType = coord_type
         self.Offset = Offset
+        self.DataLimit = DataLimit  # This is number of rays
         if self.CoordType == 'pluecker':
             self.nCoords = 120
         else:
@@ -332,13 +333,19 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
     def init(self, argv=None):
         self.update()
+        self.updateVBOs()
 
     def update(self):
         self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
         nValidRays = 0
         print('[ INFO ]: Updating live data for visualization.')
-        for R, I, D in tqdm(zip(self.Rays, self.Intersects, self.Depths)):
+        Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
+        print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
+        for Idx in tqdm(range(Limit)):
+            R = self.Rays[Idx]
+            I = self.Intersects[Idx]
+            D = self.Depths[Idx]
             isIntersect = torch.sigmoid(I) > SINGLE_MASK_THRESH
             if isIntersect:
                 nValidRays += 1
@@ -359,11 +366,19 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
         print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
 
+    def updateVBOs(self):
         # VBOs
         self.nPoints = self.ShapePoints.shape[0]
         self.nRayPoints = self.RayPoints.shape[0]
         if self.nPoints == 0:
             return
+
+        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
+        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
+        # print(Norm.shape)
+        Direction /= np.repeat(Norm, 3, axis=1)
+        # print(Direction.shape)
+        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
         self.VBOPoints = glvbo.VBO(self.ShapePoints)
         self.VBORayPoints = glvbo.VBO(self.RayPoints)
         self.isVBOBound = True
