@@ -31,7 +31,7 @@ sys.path.append(os.path.join(FileDirPath, '../../'))
 from data import MultiDepthDataset
 from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
 import odf_utils
-from single_losses import SingleDepthBCELoss
+from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'TBD' # todo
@@ -117,8 +117,8 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         self.OBJList = self.OBJList[:DatasetLength]
 
     def getCachePostFixes(self):
-        PostFixes = '_' + 'samples-' + str(self.nSamples).zfill(2) + '_'
-        PostFixes += 'posenc-' + str(self.PositionalEnc)
+        PostFixes = '_' + 'samples-' + str(self.nSamples).zfill(2)
+        # PostFixes += '_' + 'posenc-' + str(self.PositionalEnc)
 
         return PostFixes
 
@@ -131,11 +131,15 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
             Verts = Mesh.vertices
             Verts = odf_utils.mesh_normalize(Verts)
 
-            MeshODF = MultiDepthDataset(Faces, Verts, DEFAULT_RADIUS, self.SamplingMethods, self.SamplingFrequency, size=self.nSamples, intersect_limit=DEFAULT_MAX_INTERSECT, pos_enc=self.PositionalEnc)
+            # Get without positional encoding and do that later
+            MeshODF = MultiDepthDataset(Faces, Verts, DEFAULT_RADIUS, self.SamplingMethods, self.SamplingFrequency, size=self.nSamples, intersect_limit=DEFAULT_MAX_INTERSECT, pos_enc=False)
             ODFSamples = []
             assert len(MeshODF) == self.nSamples
             for Idx in tqdm(range(len(MeshODF))):
-                ODFSamples.append(MeshODF[Idx])
+                DefaultDict = MeshODF[Idx]
+                for Rep in ['coordinates_points', 'coordinates_direction', 'coordinates_pluecker']:
+                    DefaultDict[Rep+'_posenc'] = torch.tensor([x for val in list(torch.squeeze(DefaultDict[Rep])) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
+                ODFSamples.append(DefaultDict)
             SerializeFName = os.path.splitext(os.path.basename(OBJFileName))[0] + self.getCachePostFixes() + '.odf'
             SerializeFPath = os.path.join(BaseDirPath, SerializeFName)
             self.ODFCacheList.append(SerializeFPath)
@@ -153,10 +157,10 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
     def __len__(self):
         return (len(self.OBJList) * self.nSamples) # Number of objects * number of samples. todo: Will this overflow?
 
-    def __getitem__(self, idx):
-        OBJFileIdx = idx % len(self.OBJList)
-        RayIdx = math.floor(idx / len(self.OBJList))
-        # print(OBJFileIdx, RayIdx)
+    def __getitem__(self, idx, PosEnc=None):
+        OBJFileIdx = math.floor(idx / self.nSamples)
+        RayIdx = idx % self.nSamples
+        # print('\nOBJFileIdx, RayIdx:', OBJFileIdx, RayIdx)
 
         if self.CurrentODFCacheFile != self.ODFCacheList[OBJFileIdx]:
             print('[ INFO ]: Swapping ODF cache to {}'.format(os.path.basename(self.ODFCacheList[OBJFileIdx])))
@@ -165,35 +169,41 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         assert len(self.CurrentODFCacheSamples) == self.nSamples
         # print(ODFSamples[RayIdx])
 
-        if self.CoordType == 'direction':
-            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_direction']
-        elif self.CoordType == 'points':
-            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_points']
-        elif self.CoordType == 'pluecker':
-            Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_pluecker']
-
+        if PosEnc is None:
+            if self.PositionalEnc:
+                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType + '_posenc']
+            else:
+                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType]
+        else:
+            if PosEnc:
+                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType + '_posenc']
+            else:
+                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType]
         Intersects = self.CurrentODFCacheSamples[RayIdx]['intersect']
         Depths = self.CurrentODFCacheSamples[RayIdx]['depths']
 
         return Coordinates, (Intersects, Depths)
 
 class ODFDatasetVisualizer(EaselModule):
-    def __init__(self, Data, Offset=[0, 0, 0]):
+    def __init__(self, Data=None, Offset=[0, 0, 0], DataLimit=10000):
         super().__init__()
+        self.isVBOBound = False
+        self.showSphere = False
+        self.RayLength = 0.1
+        self.Offset = Offset
+        self.DataLimit = DataLimit # This is number of rays
+
         self.ODFData = Data
-        self.CoordType = Data.CoordType
+        self.CoordType = self.ODFData.CoordType
         if self.CoordType == 'pluecker':
             self.nCoords = 120
         else:
             self.nCoords = 6
 
-        self.isVBOBound = False
-        self.showSphere = False
-        self.RayLength = 0.1
-        self.Offset = Offset
 
     def init(self, argv=None):
         self.update()
+        self.updateVBOs()
 
     def update(self):
         self.Rays = np.empty((0, self.nCoords), np.float64)
@@ -201,7 +211,10 @@ class ODFDatasetVisualizer(EaselModule):
         self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Loading ODF data for visualization.')
-        for ODFRay in tqdm(self.ODFData):
+        Limit = self.DataLimit if self.DataLimit < len(self.ODFData) else len(self.ODFData)
+        print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
+        for Idx in tqdm(range(Limit)):
+            ODFRay = self.ODFData.__getitem__(Idx, PosEnc=False) # Pose encoding must always be false for visualization
             if ODFRay[1][0] > 0:
                 Ray = np.squeeze(ODFRay[0].numpy())
                 Depth = np.squeeze(ODFRay[1][1].numpy())
@@ -218,15 +231,23 @@ class ODFDatasetVisualizer(EaselModule):
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
                 self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
-                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
 
+    def updateVBOs(self):
         # VBOs
         self.nPoints = self.ShapePoints.shape[0]
         self.nRayPoints = self.RayPoints.shape[0]
         if self.nPoints == 0:
             return
+
+        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
+        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
+        # print(Norm.shape)
+        Direction /= np.repeat(Norm, 3, axis=1)
+        # print(Direction.shape)
+        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
         self.VBOPoints = glvbo.VBO(self.ShapePoints)
         self.VBORayPoints = glvbo.VBO(self.RayPoints)
         self.isVBOBound = True
@@ -279,14 +300,15 @@ class ODFDatasetVisualizer(EaselModule):
     def keyPressEvent(self, a0: QKeyEvent):
         if a0.key() == QtCore.Qt.Key_Plus:
             if self.RayLength < 0.9:
-                self.RayLength += 0.1
-                self.update()
+                self.RayLength += 0.05
+                self.updateVBOs()
+            print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_Minus:
             if self.RayLength > 0.1:
-                self.RayLength -= 0.1
-                self.update()
-        # print(self.RayLength, flush=True)
+                self.RayLength -= 0.05
+                self.updateVBOs()
+            print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_S:
             self.showSphere = not self.showSphere
@@ -306,7 +328,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
         self.isVBOBound = False
         self.showSphere = False
-        self.RayLength = 0.2
+        self.RayLength = 0.1
 
     def init(self, argv=None):
         self.update()
@@ -314,9 +336,12 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
     def update(self):
         self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
+        nValidRays = 0
         print('[ INFO ]: Updating live data for visualization.')
         for R, I, D in tqdm(zip(self.Rays, self.Intersects, self.Depths)):
-            if I[0] > 0:
+            isIntersect = torch.sigmoid(I) > SINGLE_MASK_THRESH
+            if isIntersect:
+                nValidRays += 1
                 Ray = np.squeeze(R.numpy())
                 Depth = np.squeeze(D.numpy())
                 if self.CoordType == 'points':
@@ -332,7 +357,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
 
-        print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
+        print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
 
         # VBOs
         self.nPoints = self.ShapePoints.shape[0]
@@ -348,10 +373,11 @@ Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store HerthaSim', required=True)
 Parser.add_argument('-m', '--mode', help='Specify the dataset mode.', required=False, choices=['mesh'], default='mesh')
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
-Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to sample.', required=False, type=int, default=100000)
+Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to sample per shape.', required=False, type=int, default=100000)
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.set_defaults(no_posenc=False)
+Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 
 
 if __name__ == '__main__':
@@ -378,6 +404,9 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    mainWindow = Easel([ODFDatasetVisualizer(Data)], sys.argv[1:])
+    if len(Data) < Args.viz_limit:
+        Args.viz_limit = len(Data)
+    # mainWindow = Easel([ODFDatasetVisualizer(Data[:int(Args.viz_limit * Args.nsamples)])], sys.argv[1:])
+    mainWindow = Easel([ODFDatasetVisualizer(Data, DataLimit=Args.viz_limit)], sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())

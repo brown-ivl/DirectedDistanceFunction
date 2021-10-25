@@ -80,6 +80,7 @@ if __name__ == '__main__':
     butils.seedRandom(Args.seed)
 
     usePosEnc = not Args.no_posenc
+    print('[ INFO ]: Using positional encoding:', usePosEnc)
     if Args.arch == 'standard':
         NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
@@ -94,6 +95,7 @@ if __name__ == '__main__':
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0) # DEBUG, TODO: More workers not working
 
     ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
+    exit()
 
     app = QApplication(sys.argv)
 

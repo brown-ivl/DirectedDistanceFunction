@@ -2,8 +2,10 @@ import torch
 import torch.nn as nn
 import math
 
+SINGLE_MASK_THRESH = 0.7
+
 class SingleDepthBCELoss(nn.Module):
-    Thresh = 0.7  # PARAM
+    Thresh = SINGLE_MASK_THRESH  # PARAM
     Lambda = 0.5 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
@@ -34,8 +36,8 @@ class SingleDepthBCELoss(nn.Module):
         # PredMaskMaxIdx = torch.argmax(PredMaskConfSig, dim=1).to(PredMaskConf.dtype).unsqueeze(1).requires_grad_(True)
         # PredMaskMaxConfVal = torch.gather(PredMaskConfSig, dim=1, index=PredMaskMaxIdx.to(torch.long).view(-1, 1))
         PredMaskMaxConfVal = PredMaskConfSig
-        # ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
-        ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
+        ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
+        # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
         # print('\nGTMask:', GTMask.item())
         # print('PredMaskMaxIdx', PredMaskMaxIdx.item())
