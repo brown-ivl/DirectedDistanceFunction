@@ -34,7 +34,7 @@ import odf_utils
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
 
 MESH_DATASET_NAME = 'bunny_dataset'
-MESH_DATASET_URL = 'TBD' # todo
+MESH_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + MESH_DATASET_NAME + '.zip'
 DEFAULT_VERT_NOISE = 0.02
 DEFAULT_TAN_NOISE = 0.02
 DEFAULT_UNIFORM_RATIO = 100
