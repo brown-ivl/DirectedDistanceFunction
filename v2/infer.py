@@ -12,7 +12,7 @@ from EaselModule import EaselModule
 from Easel import Easel
 import OpenGL.GL as gl
 import OpenGL.arrays.vbo as glvbo
-
+from tqdm import tqdm
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
@@ -93,17 +93,15 @@ if __name__ == '__main__':
     ValData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(int(len(ValData) / Args.rays_per_shape), Args.rays_per_shape))
 
-    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=0) # DEBUG, TODO: More workers not working
+    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=0) # DEBUG, TODO: More workers not working
 
     ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
     if usePosEnc:
         Rays = []
         print('[ INFO]: Converting from positional encoding to normal...')
-        print(len(ValData))
-        for Idx in range(len(ValData)):
-            Rays.append(ValData.__getitem__(Idx, PosEnc=usePosEnc)[0])
-        print(len(Rays))
-        Rays = torch.squeeze(torch.cat(Rays), dim=1)
+        for Idx in tqdm(range(len(ValData))):
+            Rays.append(ValData.__getitem__(Idx, PosEnc=False)[0])
+        Rays = torch.cat(Rays, dim=0)
 
     app = QApplication(sys.argv)
 
