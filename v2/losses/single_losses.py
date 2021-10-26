@@ -6,7 +6,7 @@ SINGLE_MASK_THRESH = 0.7
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH  # PARAM
-    Lambda = 0.5 # PARAM
+    Lambda = 10.0 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')

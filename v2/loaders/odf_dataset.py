@@ -105,7 +105,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         if len(self.OBJList) == 0 or self.OBJList is None:
             raise RuntimeError('[ ERR ]: No files found during data loading.')
 
-        self.ODFCacheList = glob.glob(FilesPath +  '/*' + self.getCachePostFixes() + '*.odf')
+        self.ODFCacheList = glob.glob(FilesPath +  '/*' + self.getCachePostFixes() + '.odf')
         self.ODFCacheList.sort()
         if len(self.ODFCacheList) == 0 or self.ODFCacheList is None:
             print('[ INFO ]: No ODF cache found. Will compute and write out cache.')
@@ -190,6 +190,7 @@ class ODFDatasetVisualizer(EaselModule):
         self.isVBOBound = False
         self.showSphere = False
         self.RayLength = 0.1
+        self.PointSize = 5.0
         self.Offset = Offset
         self.DataLimit = DataLimit # This is number of rays
 
@@ -278,7 +279,7 @@ class ODFDatasetVisualizer(EaselModule):
 
         gl.glPushAttrib(gl.GL_POINT_BIT)
 
-        gl.glPointSize(10)
+        gl.glPointSize(self.PointSize)
         gl.glColor3f(0, 0, 1)
         if self.VBOPoints is not None:
             self.VBOPoints.bind()
@@ -310,6 +311,17 @@ class ODFDatasetVisualizer(EaselModule):
                 self.updateVBOs()
             print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
+        if a0.key() == QtCore.Qt.Key_A:
+            if self.PointSize < 20.0:
+                self.PointSize += 1.0
+            print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
+
+        if a0.key() == QtCore.Qt.Key_Z:
+            if self.PointSize > 1.0:
+                self.PointSize -= 1.0
+            print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
+
+
         if a0.key() == QtCore.Qt.Key_S:
             self.showSphere = not self.showSphere
 
@@ -330,6 +342,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
         self.isVBOBound = False
         self.showSphere = False
         self.RayLength = 0.1
+        self.PointSize = 5.0
 
     def init(self, argv=None):
         self.update()
