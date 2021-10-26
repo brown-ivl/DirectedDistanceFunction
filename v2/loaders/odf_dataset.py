@@ -8,7 +8,10 @@ import trimesh
 import pickle
 import math
 from tqdm import tqdm
-import numpy as np
+import multiprocessing as mp
+
+from itertools import repeat
+from functools import partial
 
 from tk3dv.common import drawing
 import tk3dv.nocstools.datastructures as ds
@@ -45,11 +48,11 @@ DEFAULT_MAX_INTERSECT = 1
 
 
 class ODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, train=True, download=True, limit=None, mode='mesh', n_samples=1e5, sampling_methods=None, sampling_frequency=None, usePositionalEncoding=True, coord_type='direction'):
+    def __init__(self, root, train=True, download=True, limit=None, mode='mesh', n_samples=1e3, sampling_methods=None, sampling_frequency=None, usePositionalEncoding=True, coord_type='direction'):
         self.FileName = MESH_DATASET_NAME + '.zip'
         self.DataURL = MESH_DATASET_URL
         self.Mode = mode
-        self.nSamples = n_samples
+        self.nSamplesPerOBJ = n_samples
         self.PositionalEnc = usePositionalEncoding
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
         print('[ INFO ]: Loading ODFDatasetLoader dataset. Mode: {}, Positional Encoding: {}, Coordinate Type: {}'.format(self.Mode, self.PositionalEnc, self.CoordType))
@@ -78,6 +81,15 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         self.CurrentODFCacheFile = None
         self.CurrentODFCacheSamples = None
 
+        # Cache: Numpy memory map
+        self.Cache = {}
+        self.Cache['coordinates_points'] = None
+        self.Cache['coordinates_direction'] = None
+        self.Cache['coordinates_pluecker'] = None
+        self.Cache['intersect'] = None
+        self.Cache['depths'] = None
+
+
     def loadData(self):
         # First check if unzipped directory exists
         DatasetDir = os.path.join(butils.expandTilde(self.DataDir), os.path.splitext(self.FileName)[0])
@@ -99,17 +111,21 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         if self.isTrainData:
             FilesPath = os.path.join(DatasetDir, 'train/mesh/')
 
+        self.BaseDirPath = FilesPath
+
         self.OBJList = (glob.glob(FilesPath + '*.obj')) # Only OBJ supported
         self.OBJList.sort()
 
         if len(self.OBJList) == 0 or self.OBJList is None:
             raise RuntimeError('[ ERR ]: No files found during data loading.')
 
-        self.ODFCacheList = glob.glob(FilesPath +  '/*' + self.getCachePostFixes() + '.odf')
+        self.ODFCacheList = glob.glob(self.BaseDirPath +  '/*' + self.getCachePostFixes() + '.odf')
         self.ODFCacheList.sort()
         if len(self.ODFCacheList) == 0 or self.ODFCacheList is None:
             print('[ INFO ]: No ODF cache found. Will compute and write out cache.')
-            self.createODFCache(FilesPath)
+            self.createODFCache()
+        else:
+            self.loadODFCache('r')
 
         if self.DataLimit is None:
             self.DataLimit = len(self.OBJList)
@@ -117,70 +133,68 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
         self.OBJList = self.OBJList[:DatasetLength]
 
     def getCachePostFixes(self):
-        PostFixes = '_' + 'samples-' + str(self.nSamples).zfill(2)
-        # PostFixes += '_' + 'posenc-' + str(self.PositionalEnc)
+        PostFixes = '_' + 'samples-' + str(self.nSamplesPerOBJ).zfill(8)
 
         return PostFixes
 
-    def createODFCache(self, BaseDirPath):
+    # @staticmethod
+    # def MultiProcess(self, RayIdx, OBJIdx, CurrentMeshODF, Cache):
+    #     Dict = CurrentMeshODF[RayIdx]
+    #     for key in Cache.keys():
+    #         Cache[key][OBJIdx * self.nSamplesPerOBJ + RayIdx, :] = Dict[key].numpy().squeeze()
+
+    def createODFCache(self):
         # Create ODF samples and write to cache.
         # Also write parameters info into each cache to enable loading
-        for OBJFileName in self.OBJList:
+        self.loadODFCache(loadMode='w+')
+        nCores = mp.cpu_count()
+        print('nCores', nCores)
+        for OBJIdx, OBJFileName in enumerate(self.OBJList):
             Mesh = trimesh.load(OBJFileName)
             Faces = Mesh.faces
             Verts = Mesh.vertices
             Verts = odf_utils.mesh_normalize(Verts)
 
             # Get without positional encoding and do that later
-            MeshODF = MultiDepthDataset(Faces, Verts, DEFAULT_RADIUS, self.SamplingMethods, self.SamplingFrequency, size=self.nSamples, intersect_limit=DEFAULT_MAX_INTERSECT, pos_enc=False)
-            ODFSamples = []
-            assert len(MeshODF) == self.nSamples
-            for Idx in tqdm(range(len(MeshODF))):
-                DefaultDict = MeshODF[Idx]
-                for Rep in ['coordinates_points', 'coordinates_direction', 'coordinates_pluecker']:
-                    DefaultDict[Rep+'_posenc'] = torch.tensor([x for val in list(torch.squeeze(DefaultDict[Rep])) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
-                ODFSamples.append(DefaultDict)
-            SerializeFName = os.path.splitext(os.path.basename(OBJFileName))[0] + self.getCachePostFixes() + '.odf'
-            SerializeFPath = os.path.join(BaseDirPath, SerializeFName)
-            self.ODFCacheList.append(SerializeFPath)
-            with open(SerializeFPath, 'wb') as SerializeFile:
-                pickle.dump(ODFSamples, SerializeFile)
-            print('[ INFO ]: Dumped {} ODF samples to {}'.format(len(MeshODF), SerializeFName))
+            self.CurrentMeshODF = MultiDepthDataset(Faces, Verts, DEFAULT_RADIUS, self.SamplingMethods, self.SamplingFrequency, size=self.nSamplesPerOBJ, intersect_limit=DEFAULT_MAX_INTERSECT, pos_enc=False)
+            assert len(self.CurrentMeshODF) == self.nSamplesPerOBJ
 
-    def loadODFCache(self, ODFCacheFilePath):
-        # Load ODF cache
-        with open(ODFCacheFilePath, 'rb') as DeserializeFile:
-            ODFSamples = pickle.load(DeserializeFile)
+            # with mp.Pool(processes=nCores) as p:
+            #     p.starmap(self.MultiProcess, zip([RayIdx for RayIdx in range(self.nSamplesPerOBJ)], repeat(OBJIdx), repeat(self.CurrentMeshODF)))
+            #     # p.map(partial(self.Process, OBJIdx=OBJIdx), [RayIdx for RayIdx in range(self.nSamplesPerOBJ)])
 
-        return ODFSamples
+            for RayIdx in tqdm(range(self.nSamplesPerOBJ)): # todo: speed this up
+                DefaultDict = self.CurrentMeshODF[RayIdx]
+                for key in self.Cache.keys():
+                    self.Cache[key][OBJIdx*self.nSamplesPerOBJ + RayIdx, :] = DefaultDict[key].numpy().squeeze()
+
+        for key in self.Cache.keys():
+            self.Cache[key].flush()
+        print('[ INFO ]: Dumped {} ODF samples per {} objects to cache.'.format(self.nSamplesPerOBJ, len(self.OBJList)))
+
+    def loadODFCache(self, loadMode='r'):
+        for key in self.Cache.keys():
+            FileName = os.path.join(self.BaseDirPath, key + self.getCachePostFixes() + '.odf')
+            if key == 'intersect' or key == 'depths':
+                self.Cache[key] = np.memmap(FileName, dtype=np.float64, mode=loadMode, shape=(len(self), 1))
+            else:
+                self.Cache[key] = np.memmap(FileName, dtype=np.float64, mode=loadMode, shape=(len(self), 6))
+
 
     def __len__(self):
-        return (len(self.OBJList) * self.nSamples) # Number of objects * number of samples. todo: Will this overflow?
+        return (len(self.OBJList) * self.nSamplesPerOBJ) # Number of objects * number of samples
+
 
     def __getitem__(self, idx, PosEnc=None):
-        OBJFileIdx = math.floor(idx / self.nSamples)
-        RayIdx = idx % self.nSamples
-        # print('\nOBJFileIdx, RayIdx:', OBJFileIdx, RayIdx)
-
-        if self.CurrentODFCacheFile != self.ODFCacheList[OBJFileIdx]:
-            print('[ INFO ]: Swapping ODF cache to {}. Please wait.'.format(os.path.basename(self.ODFCacheList[OBJFileIdx])))
-            self.CurrentODFCacheFile = self.ODFCacheList[OBJFileIdx]
-            self.CurrentODFCacheSamples = self.loadODFCache(self.ODFCacheList[OBJFileIdx])
-        assert len(self.CurrentODFCacheSamples) == self.nSamples
-        # print(ODFSamples[RayIdx])
-
+        Coordinates = torch.from_numpy(self.Cache['coordinates_' + self.CoordType][idx].copy())
         if PosEnc is None:
             if self.PositionalEnc:
-                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType + '_posenc']
-            else:
-                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType]
+                Coordinates = torch.tensor([x for val in list(Coordinates) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
         else:
             if PosEnc:
-                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType + '_posenc']
-            else:
-                Coordinates = self.CurrentODFCacheSamples[RayIdx]['coordinates_' + self.CoordType]
-        Intersects = self.CurrentODFCacheSamples[RayIdx]['intersect']
-        Depths = self.CurrentODFCacheSamples[RayIdx]['depths']
+                Coordinates = torch.tensor([x for val in list(Coordinates) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
+        Intersects = torch.from_numpy(self.Cache['intersect'][idx].copy())
+        Depths = torch.from_numpy(self.Cache['depths'][idx].copy())
 
         return Coordinates, (Intersects, Depths)
 
@@ -206,6 +220,25 @@ class ODFDatasetVisualizer(EaselModule):
         self.update()
         self.updateVBOs()
 
+    # def MultiProcess(self, Idx):
+    #     ODFRay = self.ODFData.__getitem__(Idx, PosEnc=False) # Pose encoding must always be false for visualization
+    #     if ODFRay[1][0] > 0:
+    #         Ray = np.squeeze(ODFRay[0].numpy())
+    #         Depth = np.squeeze(ODFRay[1][1].numpy())
+    #         self.Rays = np.vstack((self.Rays, Ray))
+    #         self.Depths = np.vstack((self.Depths, Depth))
+    #         if self.CoordType == 'points':
+    #             Direction = (Ray[3:] - Ray[:3])
+    #             Norm = np.linalg.norm(Direction)
+    #             if Norm == 0.0:
+    #                 Direction /= Norm
+    #         elif self.CoordType == 'direction':
+    #             Direction = Ray[3:]
+    #         ShapePoint = np.array(Ray[:3] + (Direction * Depth))
+    #         self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
+    #         self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
+    #         self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
+
     def update(self):
         self.Rays = np.empty((0, self.nCoords), np.float64)
         self.Depths = np.empty((0, 1), np.float64)
@@ -214,6 +247,13 @@ class ODFDatasetVisualizer(EaselModule):
         print('[ INFO ]: Loading ODF data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.ODFData) else len(self.ODFData)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
+
+        # nCores = mp.cpu_count()
+        # print('[ INFO ]: Using {}.'.format(nCores))
+        # with mp.Pool(processes=nCores) as p:
+        #     p.starmap(self.MultiProcess, zip([RayIdx for RayIdx in range(Limit)]))
+        #     # p.map(partial(self.Process, OBJIdx=OBJIdx), [RayIdx for RayIdx in range(self.nSamplesPerOBJ)])
+
         for Idx in tqdm(range(Limit)):
             ODFRay = self.ODFData.__getitem__(Idx, PosEnc=False) # Pose encoding must always be false for visualization
             if ODFRay[1][0] > 0:
