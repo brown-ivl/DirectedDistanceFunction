@@ -186,15 +186,15 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
 
 
     def __getitem__(self, idx, PosEnc=None):
-        Coordinates = torch.from_numpy(self.Cache['coordinates_' + self.CoordType][idx].copy())
+        Coordinates = torch.from_numpy(self.Cache['coordinates_' + self.CoordType][idx].copy()).to(torch.float32)
         if PosEnc is None:
             if self.PositionalEnc:
                 Coordinates = torch.tensor([x for val in list(Coordinates) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
         else:
             if PosEnc:
                 Coordinates = torch.tensor([x for val in list(Coordinates) for x in odf_utils.positional_encoding(val.item())], dtype=torch.float32)
-        Intersects = torch.from_numpy(self.Cache['intersect'][idx].copy())
-        Depths = torch.from_numpy(self.Cache['depths'][idx].copy())
+        Intersects = torch.from_numpy(self.Cache['intersect'][idx].copy()).to(torch.float32)
+        Depths = torch.from_numpy(self.Cache['depths'][idx].copy()).to(torch.float32)
 
         return Coordinates, (Intersects, Depths)
 
