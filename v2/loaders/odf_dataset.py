@@ -438,7 +438,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
 
 Parser = argparse.ArgumentParser()
-Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store HerthaSim', required=True)
+Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)
 Parser.add_argument('-m', '--mode', help='Specify the dataset mode.', required=False, choices=['mesh'], default='mesh')
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to sample per shape.', required=False, type=int, default=100000)
