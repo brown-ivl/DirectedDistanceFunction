@@ -203,7 +203,7 @@ class ODFDatasetVisualizer(EaselModule):
         super().__init__()
         self.isVBOBound = False
         self.showSphere = False
-        self.RayLength = 0.1
+        self.RayLength = 0.06
         self.PointSize = 5.0
         self.Offset = Offset
         self.DataLimit = DataLimit # This is number of rays
@@ -381,7 +381,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
         self.isVBOBound = False
         self.showSphere = False
-        self.RayLength = 0.1
+        self.RayLength = 0.06
         self.PointSize = 5.0
 
     def init(self, argv=None):

@@ -93,7 +93,6 @@ if __name__ == '__main__':
 
     if len(Sampler) < Args.viz_limit:
         Args.viz_limit = len(Sampler)
-    # mainWindow = Easel([ODFDatasetVisualizer(Data[:int(Args.viz_limit * Args.nsamples)])], sys.argv[1:])
     mainWindow = Easel([ODFDatasetLiveVisualizer(coord_type='direction', rays=Sampler.Coordinates, intersects=Sampler.Intersects, depths=Sampler.Depths)], sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())
