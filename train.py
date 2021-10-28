@@ -17,7 +17,7 @@ import math
 
 from data import DepthData
 from model import AdaptedLFN
-import utils
+import odf_utils
 import sampling
 from camera import Camera, DepthMapViewer, save_video
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     mesh = trimesh.load(args.mesh_file)
     faces = mesh.faces
     verts = mesh.vertices
-    verts = utils.mesh_normalize(verts)
+    verts = odf_utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_ray_space, 
                         sampling.sampling_preset_noise(sampling.sample_vertex_noise, args.vert_noise),
@@ -295,7 +295,7 @@ if __name__ == "__main__":
             occ_loss.append(ol)
             int_loss.append(il)
             depth_loss.append(dl)
-            utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=loss_path, log=True)
+            odf_utils.saveLossesCurve(total_loss, occ_loss, int_loss, depth_loss, legend=["Total", "Occupancy", "Intersection", "Depth"], out_path=loss_path, log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)

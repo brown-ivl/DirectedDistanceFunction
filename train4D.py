@@ -17,7 +17,7 @@ import math
 
 from data import DepthData, MultiDepthDataset
 from model import LF4D, AdaptedLFN, SimpleMLP
-import utils
+import odf_utils
 from camera import Camera, DepthMapViewer, save_video, save_video_4D
 import sampling
 import rasterization
@@ -333,7 +333,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="A script to train and evaluate a directed distance function network")
 
     # CONFIG
-    parser.add_argument("--n_workers", type=int, default=1, help="Number of workers for dataloaders. Recommended is 2*num cores")
+    parser.add_argument("--n_workers", type=int, default=0, help="Number of workers for dataloaders. Recommended is 2*num cores")
     parser.add_argument("--save_dir", type=str, default="/gpfs/data/ssrinath/human-modeling/DirectedDF/large_files/", help="a directory where model weights, loss curves, and visualizations will be saved")
     parser.add_argument("-n", "--name", type=str, required=True, help="The name of the model")
 
@@ -396,7 +396,7 @@ if __name__ == "__main__":
     mesh = trimesh.load(args.mesh_file)
     faces = mesh.faces
     verts = mesh.vertices
-    verts = utils.mesh_normalize(verts)
+    verts = odf_utils.mesh_normalize(verts)
 
     sampling_methods = [sampling.sample_uniform_4D, 
                         sampling.sampling_preset_noise(sampling.sample_vertex_4D, args.vert_noise),
@@ -427,7 +427,7 @@ if __name__ == "__main__":
             total_loss.append(tl)
             int_loss.append(il)
             depth_loss.append(dl)
-            utils.saveLossesCurve(total_loss, int_loss, depth_loss, legend=["Total", "Intersection", "Depth"], out_path=loss_path, log=True)
+            odf_utils.saveLossesCurve(total_loss, int_loss, depth_loss, legend=["Total", "Intersection", "Depth"], out_path=loss_path, log=True)
             if args.save:
                 print("Saving model...")
                 torch.save(model.state_dict(), model_path)

@@ -320,7 +320,7 @@ if __name__ == "__main__":
     faces = mesh.faces
     verts = mesh.vertices
     
-    verts = utils.mesh_normalize(verts)
+    verts = mesh_normalize(verts)
 
     # show mesh and normals
     vert_normals = get_vertex_normals(verts, faces)

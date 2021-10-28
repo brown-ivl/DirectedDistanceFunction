@@ -4,7 +4,7 @@ and skinning weights data.
 '''
 
 import numpy as np
-import utils
+import odf_utils
 from tqdm import tqdm
 import trimesh
 

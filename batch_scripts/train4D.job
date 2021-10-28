@@ -2,11 +2,9 @@
 
 #SBATCH -p 3090-gcondo --gres=gpu:1
 #SBATCH -t 72:00:00
-#SBATCH --mem=128G
+#SBATCH --mem=64G
 #SBATCH -n 4
 
 module load cuda/11.1.1
 conda activate bodymodel
-#python ../train4D.py -Ttsv -n uni50vert50_nint20_4D --epochs 300 --train_batch_size 100 --lmbda 20. --uniform 50 --vertex 50 --n_workers 8 --intersect_limit 20
-python ../train4D.py -Ttsv -n unordered_4D_uni50vert50_nint01_300 --epochs 300 --samples_per_mesh 1000000 --train_batch_size 1000 --lmbda 100. --intersect_limit 1 --uniform 50 --vertex 50 --n_workers 8 --unordered
-
+python ../train4D.py -Ttsv -n 4D_oct19_01 --epochs 100 --train_batch_size 100 --lmbda 20. --uniform 50 --vertex 50 --n_workers 8 --intersect_limit 1

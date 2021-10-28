@@ -5,7 +5,7 @@ import argparse
 import torch
 
 import rasterization
-import utils
+import odf_utils
 
 #Icosahedron taken from https://people.sc.fsu.edu/~jburkardt/data/obj/icosahedron.obj
 #Icosahedron sphere connectivity https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.90.6202&rep=rep1&type=pdf
@@ -68,12 +68,12 @@ class MeshODF():
         near_face_threshold = rasterization.max_edge(self.vertices, self.faces)
         for i in range(points.shape[0]):
             # if np.linalg.norm(points[i]) > self.radius:
-            if utils.get_sphere_intersections(points[i], directions[i], self.radius) is None:
+            if odf_utils.get_sphere_intersections(points[i], directions[i], self.radius) is None:
                 lines = np.concatenate([self.faces[:,:2], self.faces[:,1:], self.faces[:,[0,2]]], axis=0)
                 visualizer = visualization.RayVisualizer(self.vertices, lines)
                 visualizer.add_point(points[i], [1.0,0.0,0.0])
                 visualizer.display()
-            start_point, end_point = utils.get_sphere_intersections(points[i], directions[i], self.radius)
+            start_point, end_point = odf_utils.get_sphere_intersections(points[i], directions[i], self.radius)
             ray_length = np.linalg.norm(end_point-start_point)
             rot_verts = rasterization.rotate_mesh(self.vertices, start_point, end_point)
             _, depth = rasterization.ray_occ_depth(self.faces, rot_verts, ray_start_depth=ray_length, near_face_threshold=near_face_threshold)
@@ -723,7 +723,7 @@ def sample_next_vertices(model, vertices, faces, probes, directions, radius, del
     model_depths = depths.cpu()
     model_depths = torch.min(model_depths, dim=1)[0]
     model_depths = model_depths.numpy()
-    # new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i-probes_offset] + directions[i]*model_depths[i-probes_offset] if model_depths[i-probes_offset] < np.inf else utils.get_sphere_intersections(vertices[i], directions[i], radius)[1] for i in range(probes_offset, vertices.shape[0])]
+    # new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i-probes_offset] + directions[i]*model_depths[i-probes_offset] if model_depths[i-probes_offset] < np.inf else odf_utils.get_sphere_intersections(vertices[i], directions[i], radius)[1] for i in range(probes_offset, vertices.shape[0])]
     new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i-probes_offset] + directions[i-probes_offset]*model_depths[i-probes_offset] if model_depths[i-probes_offset] < np.inf else vertices[i] for i in range(probes_offset, vertices.shape[0])]
 
     old_vertices_stack = [vertices[i] for i in range(probes_offset, vertices.shape[0])]
@@ -738,7 +738,7 @@ def sample_next_vertices(model, vertices, faces, probes, directions, radius, del
     print(f"DIRECTIONS LEN: {len(directions)}")
     print(f"MODEL DEPTHS LEN: {len(model_depths)}")
     print(f"i range: {probes_offset} --> {vertices.shape} ")
-    opposing_points = [utils.get_sphere_intersections(old_vertices_stack[i], directions[i], 1.0)[1]  if model_depths[i]==np.inf else None for i in range(vertices.shape[0]-probes_offset)]
+    opposing_points = [odf_utils.get_sphere_intersections(old_vertices_stack[i], directions[i], 1.0)[1]  if model_depths[i]==np.inf else None for i in range(vertices.shape[0]-probes_offset)]
     has_inf_depths = np.any([True if x is not None else False for x in opposing_points])
     opposing_vert_depth_stack = [np.linalg.norm(opposing_points[i-probes_offset]-vertices[i]) if opposing_points[i-probes_offset] is not None else None for i in range(probes_offset, vertices.shape[0])]
     opposing_directions = [-1*directions[i] for i in range(vertices.shape[0]-probes_offset)]
@@ -792,7 +792,7 @@ def sample_next_vertices(model, vertices, faces, probes, directions, radius, del
     # opposing_directions = []
     # opposing_vertex_depths = []
     # for i in non_intersecting_vertices:
-    #     opposing_point = utils.get_sphere_intersections(vertices[i], directions[i], radius)[1]
+    #     opposing_point = odf_utils.get_sphere_intersections(vertices[i], directions[i], radius)[1]
     #     opposing_points.append(opposing_point)
     #     opposing_vertex_depths.append(np.linalg.norm(opposing_point - vertices[i]))
     #     opposing_directions.append(-1 * directions[i])
@@ -876,7 +876,7 @@ def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_poin
     
     for i in range(iterations - 1):
         vertices, faces, probes = large_edge_subdivision(vertices, faces)
-        directions = -1. * utils.get_vertex_normals(np.array(vertices), np.array(faces))
+        directions = -1 * odf_utils.get_vertex_normals(np.array(vertices), np.array(faces))
         if show:
             show_subdivisions_and_probes(vertices, probes, directions, faces, delta)
         vertices, faces = sample_next_vertices(model, vertices, faces, probes, directions, radius, delta)
@@ -922,7 +922,7 @@ if __name__ == "__main__":
         mesh = trimesh.load(args.mesh_file)
         faces = mesh.faces
         verts = mesh.vertices
-        verts = utils.mesh_normalize(verts)
+        verts = odf_utils.mesh_normalize(verts)
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
         visualizer = visualization.RayVisualizer(verts, lines)
 
@@ -946,7 +946,7 @@ if __name__ == "__main__":
         mesh = trimesh.load(args.mesh_file)
         faces = mesh.faces
         verts = mesh.vertices
-        verts = utils.mesh_normalize(verts)
+        verts = odf_utils.mesh_normalize(verts)
         lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
 
         # # Generate mesh

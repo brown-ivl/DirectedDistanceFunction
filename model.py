@@ -4,7 +4,7 @@ An MLP that predicts the surface depth along rays
 
 import torch
 import torch.nn as nn
-import utils
+import odf_utils
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -27,7 +27,7 @@ def pluecker(points):
     return torch.hstack([dir, m])
 
 def pos_encoding(points):
-    return torch.tensor([[x for j in range(points.shape[1]) for x in utils.positional_encoding(points[i][j])] for i in range(points.shape[0])])
+    return torch.tensor([[x for j in range(points.shape[1]) for x in odf_utils.positional_encoding(points[i][j])] for i in range(points.shape[0])])
 
 # Having the model change the input parameterization at inference time allows us to use a consistent input format so we don't have to change the testing script.
 # For training the input will be provided with the preprocessing already applied so that it can be done in parallel in the dataloader
@@ -224,6 +224,6 @@ class LF4D(nn.Module):
         # print(directions)
         combine_tuple = lambda x: list(x[0]) + list(x[1])
         # the sphere intersections (two surface points) will be reparameterized in interior_depth if necessary (e.g. turned into surface point + direction)
-        surface_intersections = torch.tensor([combine_tuple(utils.get_sphere_intersections(points[i], directions[i], self.radius)) for i in range(points.shape[0])])
+        surface_intersections = torch.tensor([combine_tuple(odf_utils.get_sphere_intersections(points[i], directions[i], self.radius)) for i in range(points.shape[0])])
         return self.interior_depth(surface_intersections, points)
 

@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset
 import rasterization
 import sampling
-import utils
+import odf_utils
 
 
 class DepthData(Dataset):
@@ -23,7 +23,7 @@ class DepthData(Dataset):
         assert(sum(sampling_frequency)==1.0)
         self.faces = faces
         self.verts = verts
-        self.vert_normals = utils.get_vertex_normals(verts,faces)
+        self.vert_normals = odf_utils.get_vertex_normals(verts, faces)
         self.radius=radius
         self.near_face_threshold = rasterization.max_edge(verts, faces)
         self.sampling_methods = sampling_methods
@@ -45,7 +45,7 @@ class DepthData(Dataset):
         return {
             # 5d coordinates - [x,y,z,theta,phi]
             # "coordinates": torch.tensor([ray_start[0], ray_start[1], ray_start[2], theta, phi], dtype=torch.float32),
-            "coordinates": torch.tensor([x for val in list(ray_start)+list(direction) for x in utils.positional_encoding(val)]),
+            "coordinates": torch.tensor([x for val in list(ray_start) + list(direction) for x in odf_utils.positional_encoding(val)]),
             # is the ray origin inside the mesh?
             "occ": torch.tensor(occ, dtype=torch.float32),
             # does the ray intersect the mesh?
@@ -65,7 +65,7 @@ class MultiDepthDataset(Dataset):
         '''
         self.faces = faces
         self.verts = verts
-        self.vert_normals = utils.get_vertex_normals(verts,faces)
+        self.vert_normals = odf_utils.get_vertex_normals(verts, faces)
         self.radius=radius
         self.near_face_threshold = rasterization.max_edge(verts, faces)
         self.size = size
@@ -92,9 +92,9 @@ class MultiDepthDataset(Dataset):
         depths = np.zeros((self.intersect_limit,), dtype=float)
         depths[:int_depths.shape[0]] = int_depths
         if self.pos_enc:
-            coordinates_points = torch.tensor([x for val in list(ray_start)+list(ray_end) for x in utils.positional_encoding(val)], dtype=torch.float32)
-            coordinates_direction = torch.tensor([x for val in list(ray_start)+list(direction) for x in utils.positional_encoding(val)], dtype=torch.float32)
-            coordinates_pluecker = torch.tensor([x for val in list(direction)+list(np.cross(ray_start, direction)) for x in utils.positional_encoding(val)], dtype=torch.float32)
+            coordinates_points = torch.tensor([x for val in list(ray_start) + list(ray_end) for x in odf_utils.positional_encoding(val)], dtype=torch.float32)
+            coordinates_direction = torch.tensor([x for val in list(ray_start) + list(direction) for x in odf_utils.positional_encoding(val)], dtype=torch.float32)
+            coordinates_pluecker = torch.tensor([x for val in list(direction) + list(np.cross(ray_start, direction)) for x in odf_utils.positional_encoding(val)], dtype=torch.float32)
         else:
             coordinates_points = torch.tensor([list(ray_start)+list(ray_end)], dtype=torch.float32)
             coordinates_direction = torch.tensor([list(ray_start)+list(direction)], dtype=torch.float32)
