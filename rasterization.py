@@ -145,7 +145,7 @@ def ray_occ_depth(faces, verts, ray_start_depth=1., near_face_threshold=0.08, v=
     
     This function returns
         occ, a boolean indicating whether or not the start of the ray lies within the mesh
-        depth, the depth to the first intersection, or np.inf if there are no intersections
+        depth, the depth to the first intersection, or np.inf if there are no intersections in the positive direction
     
     v can be passed if the the ray endpoint is a mesh vertex. This prevents each face with vertex v from being counted as a separate intersection
     '''
