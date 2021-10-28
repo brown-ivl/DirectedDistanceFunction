@@ -346,7 +346,7 @@ class ODFDatasetVisualizer(EaselModule):
             print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_Minus:
-            if self.RayLength > 0.1:
+            if self.RayLength > 0.06:
                 self.RayLength -= 0.05
                 self.updateVBOs()
             print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
