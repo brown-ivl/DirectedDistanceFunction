@@ -273,6 +273,31 @@ class ODFDatasetVisualizer(EaselModule):
                 self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
+            else:
+                Ray = np.squeeze(ODFRay[0].numpy())
+                Depth = np.squeeze(ODFRay[1][1].numpy())
+                self.Rays = np.vstack((self.Rays, Ray))
+                self.Depths = np.vstack((self.Depths, Depth))
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
+
+                o = Ray[:3]
+                u = Direction
+                c = np.array([0, 0, 0])
+                OminusC = o - c
+                DotP = np.sum(np.multiply(u, OminusC), axis=1)
+                Delta = DotP ** 2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS ** 2)
+                d = - DotP + np.sqrt(Delta)
+                SpherePoint = o + np.multiply(u, d[:, np.newaxis])
+
+                self.RayPoints = np.vstack((self.RayPoints, Ray[:3]))
+                self.RayPoints = np.vstack((self.RayPoints, SpherePoint)) # Unit direction point, updated in VBO update
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
 
@@ -389,11 +414,11 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
         self.updateVBOs()
 
     def update(self):
-        self.ShapePoints = np.empty((0, 3), np.float64)
-        self.RayPoints = np.empty((0, 3), np.float64)
         nValidRays = 0
         print('[ INFO ]: Updating live data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
+        self.ShapePoints = np.zeros((Limit, 3), np.float64)
+        self.RayPoints = np.zeros((2*Limit, 3), np.float64)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
         for Idx in tqdm(range(Limit)):
             R = self.Rays[Idx]
@@ -413,9 +438,32 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
-                self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
-                self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
-                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
+                self.ShapePoints[Idx] = ShapePoint
+                self.RayPoints[2*Idx+0] = ShapePoint
+                self.RayPoints[2*Idx+1] = ShapePoint - self.RayLength * Direction
+            else:
+                Ray = np.squeeze(R.numpy())
+                Depth = np.squeeze(D.numpy())
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
+
+                o = Ray[:3]
+                u = Direction
+                c = np.array([0, 0, 0])
+                OminusC = o - c
+                DotP = np.sum(np.multiply(u, OminusC), axis=1)
+                Delta = DotP ** 2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS ** 2)
+                d = - DotP + np.sqrt(Delta)
+                SpherePoint = o + np.multiply(u, d[:, np.newaxis])
+
+                self.RayPoints[2*Idx+0] = Ray[:3]
+                self.RayPoints[2*Idx+1] = SpherePoint
 
         print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
 
