@@ -203,6 +203,7 @@ class ODFDatasetVisualizer(EaselModule):
         super().__init__()
         self.isVBOBound = False
         self.showSphere = False
+        self.showNonIntersecting = False
         self.RayLength = 0.06
         self.PointSize = 5.0
         self.Offset = Offset
@@ -244,6 +245,7 @@ class ODFDatasetVisualizer(EaselModule):
         self.Depths = np.empty((0, 1), np.float64)
         self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
+        self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Loading ODF data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.ODFData) else len(self.ODFData)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
@@ -287,17 +289,18 @@ class ODFDatasetVisualizer(EaselModule):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
 
+                # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
                 o = Ray[:3]
                 u = Direction
                 c = np.array([0, 0, 0])
                 OminusC = o - c
-                DotP = np.sum(np.multiply(u, OminusC), axis=1)
-                Delta = DotP ** 2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS ** 2)
+                DotP = np.sum(np.multiply(u, OminusC))
+                Delta = DotP ** 2 - (np.linalg.norm(OminusC) - DEFAULT_RADIUS ** 2)
                 d = - DotP + np.sqrt(Delta)
-                SpherePoint = o + np.multiply(u, d[:, np.newaxis])
+                SpherePoint = o + np.multiply(u, d)
 
-                self.RayPoints = np.vstack((self.RayPoints, Ray[:3]))
-                self.RayPoints = np.vstack((self.RayPoints, SpherePoint)) # Unit direction point, updated in VBO update
+                self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
+                self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint)) # Unit direction point, updated in VBO update
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
 
@@ -305,17 +308,22 @@ class ODFDatasetVisualizer(EaselModule):
         # VBOs
         self.nPoints = self.ShapePoints.shape[0]
         self.nRayPoints = self.RayPoints.shape[0]
-        if self.nPoints == 0:
-            return
+        self.nNIRayPoints = self.NIRayPoints.shape[0]
+        if self.nPoints != 0:
+            self.VBOPoints = glvbo.VBO(self.ShapePoints)
 
-        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
-        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
-        # print(Norm.shape)
-        Direction /= np.repeat(Norm, 3, axis=1)
-        # print(Direction.shape)
-        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
-        self.VBOPoints = glvbo.VBO(self.ShapePoints)
-        self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        if self.nRayPoints != 0:
+            Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
+            Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
+            # print(Norm.shape)
+            Direction /= np.repeat(Norm, 3, axis=1)
+            # print(Direction.shape)
+            self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
+            self.VBORayPoints = glvbo.VBO(self.RayPoints)
+
+        if self.nNIRayPoints != 0:
+            self.VBONIRayPoints = glvbo.VBO(self.NIRayPoints)
+
         self.isVBOBound = True
 
     def step(self):
@@ -359,6 +367,14 @@ class ODFDatasetVisualizer(EaselModule):
             gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBORayPoints)
         gl.glDrawArrays(gl.GL_LINES, 0, self.nRayPoints)
 
+        if self.showNonIntersecting:
+            gl.glColor4f(0.8, 0.8, 0.8, 0.6)
+            if self.VBONIRayPoints is not None:
+                self.VBONIRayPoints.bind()
+                gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+                gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBONIRayPoints)
+            gl.glDrawArrays(gl.GL_LINES, 0, self.nNIRayPoints)
+
         gl.glPopAttrib()
 
         gl.glPopMatrix()
@@ -386,9 +402,10 @@ class ODFDatasetVisualizer(EaselModule):
                 self.PointSize -= 1.0
             print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
 
-
         if a0.key() == QtCore.Qt.Key_S:
             self.showSphere = not self.showSphere
+        if a0.key() == QtCore.Qt.Key_N:
+            self.showNonIntersecting = not self.showNonIntersecting
 
 class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
     def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0], DataLimit=10000):
@@ -453,14 +470,15 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
 
+                # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
                 o = Ray[:3]
                 u = Direction
                 c = np.array([0, 0, 0])
                 OminusC = o - c
-                DotP = np.sum(np.multiply(u, OminusC), axis=1)
-                Delta = DotP ** 2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS ** 2)
+                DotP = np.sum(np.multiply(u, OminusC))
+                Delta = DotP ** 2 - (np.linalg.norm(OminusC) - DEFAULT_RADIUS ** 2)
                 d = - DotP + np.sqrt(Delta)
-                SpherePoint = o + np.multiply(u, d[:, np.newaxis])
+                SpherePoint = o + np.multiply(u, d)
 
                 self.RayPoints[2*Idx+0] = Ray[:3]
                 self.RayPoints[2*Idx+1] = SpherePoint
