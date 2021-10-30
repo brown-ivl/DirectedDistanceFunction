@@ -169,9 +169,17 @@ class PointCloudSampler():
             RaysPerVertex = 1
             TargetPositiveRays = RaysPerVertex*nVertices
         print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} rays per vertex.'.format(RaysPerVertex*nVertices, TargetRays-(RaysPerVertex*nVertices), RaysPerVertex))
-        self.sample_positive(RaysPerVertex=RaysPerVertex)
-        NegRaysPerVertex = int((TargetRays-TargetPositiveRays) / nVertices)
-        self.sample_negative(RaysPerVertex=NegRaysPerVertex)
+
+        PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex)
+        # NegRaysPerVertex = int((TargetRays-TargetPositiveRays) / nVertices)
+        # NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex)
+
+        ShuffleIdx = np.random.permutation(len(PCoordinates))
+
+        self.Coordinates = torch.from_numpy(PCoordinates[ShuffleIdx]).to(torch.float32)
+        self.Intersects = torch.from_numpy(PIntersects[ShuffleIdx]).to(torch.float32)
+        self.Depths = torch.from_numpy(PDepths[ShuffleIdx])
+
 
     def sample_negative(self, RaysPerVertex):
         # Numpy version - seems faster
@@ -212,14 +220,11 @@ class PointCloudSampler():
         Coordinates = np.asarray(np.hstack((SpherePoints, - u)))
         Intersects = np.asarray(np.zeros_like(d))
         Depths = np.asarray(np.zeros_like(d))
-        ShuffleIdx = np.random.permutation(len(Coordinates))
-
-        self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
-        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
-        self.Depths = torch.from_numpy(Depths[ShuffleIdx])
 
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
+
+        return Coordinates, Intersects, Depths
 
     def sample_positive(self, RaysPerVertex):
         # # Torch version
@@ -287,14 +292,10 @@ class PointCloudSampler():
         Coordinates = np.asarray(np.hstack((SpherePoints, - u)))
         Intersects = np.asarray(np.ones_like(d))
         Depths = np.asarray(d)
-        ShuffleIdx = np.random.permutation(len(Coordinates))
-
-        self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
-        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
-        self.Depths = torch.from_numpy(Depths[ShuffleIdx])
-
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
+
+        return Coordinates, Intersects, Depths
 
 
     def __getitem__(self, item):

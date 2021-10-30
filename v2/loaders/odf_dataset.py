@@ -311,6 +311,8 @@ class ODFDatasetVisualizer(EaselModule):
         self.nNIRayPoints = self.NIRayPoints.shape[0]
         if self.nPoints != 0:
             self.VBOPoints = glvbo.VBO(self.ShapePoints)
+        else:
+            self.VBOPoints = None
 
         if self.nRayPoints != 0:
             Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
@@ -320,9 +322,13 @@ class ODFDatasetVisualizer(EaselModule):
             # print(Direction.shape)
             self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
             self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        else:
+            self.VBORayPoints = None
 
         if self.nNIRayPoints != 0:
             self.VBONIRayPoints = glvbo.VBO(self.NIRayPoints)
+        else:
+            self.VBONIRayPoints = None
 
         self.isVBOBound = True
 
@@ -423,6 +429,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
 
         self.isVBOBound = False
         self.showSphere = False
+        self.showNonIntersecting = False
         self.RayLength = 0.06
         self.PointSize = 5.0
 
@@ -435,7 +442,8 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
         print('[ INFO ]: Updating live data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
         self.ShapePoints = np.zeros((Limit, 3), np.float64)
-        self.RayPoints = np.zeros((2*Limit, 3), np.float64)
+        self.RayPoints = np.empty((0, 3), np.float64)
+        self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
         for Idx in tqdm(range(Limit)):
             R = self.Rays[Idx]
@@ -456,11 +464,10 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                     Direction = Ray[3:]
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
                 self.ShapePoints[Idx] = ShapePoint
-                self.RayPoints[2*Idx+0] = ShapePoint
-                self.RayPoints[2*Idx+1] = ShapePoint - self.RayLength * Direction
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
             else:
                 Ray = np.squeeze(R.numpy())
-                Depth = np.squeeze(D.numpy())
                 if self.CoordType == 'points':
                     Direction = (Ray[3:] - Ray[:3])
                     Norm = np.linalg.norm(Direction)
@@ -480,27 +487,10 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 d = - DotP + np.sqrt(Delta)
                 SpherePoint = o + np.multiply(u, d)
 
-                self.RayPoints[2*Idx+0] = Ray[:3]
-                self.RayPoints[2*Idx+1] = SpherePoint
+                self.NIRayPoints = np.vstack((self.RayPoints, Ray[:3]))
+                self.NIRayPoints = np.vstack((self.RayPoints, SpherePoint))
 
         print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
-
-    def updateVBOs(self):
-        # VBOs
-        self.nPoints = self.ShapePoints.shape[0]
-        self.nRayPoints = self.RayPoints.shape[0]
-        if self.nPoints == 0:
-            return
-
-        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
-        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
-        # print(Norm.shape)
-        Direction /= np.repeat(Norm, 3, axis=1)
-        # print(Direction.shape)
-        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
-        self.VBOPoints = glvbo.VBO(self.ShapePoints)
-        self.VBORayPoints = glvbo.VBO(self.RayPoints)
-        self.isVBOBound = True
 
 
 Parser = argparse.ArgumentParser()
