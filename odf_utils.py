@@ -49,6 +49,66 @@ def random_within_sphere(radius):
     magnitude = uniform.rvs() ** (1./3.)
     return initial_point * magnitude
 
+def mesh_adjacency_dictionaries(vertices, faces):
+    '''
+    Given a mesh, returns a variety of dictionaries so that neighboring structures can be accessed in O(1) time
+
+    Returns- 
+    vert2vert - a dictionary mapping vertex indices to indices of neighboring vertices
+    vert2face - a dictionary mapping vertex indices to the indices of all faces that include said vertex
+    face2vert - a dictionary mapping face indices to a list of vertices in the face
+    face2edge - a dictionary mapping face indices to edges (tuples) that share at least one vertex with the face
+    edge2face - a dictionary mapping edges to faces that contain both vertices in the edge
+    '''
+
+    faces = np.array(faces)
+    lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+    
+    # Build a list of edges. Each edge is a tuple of vertex indices, with the lower index coming first so no edges are duplicates
+    edges = set()
+    for i in range(lines.shape[0]):
+        a = np.min(lines[i])
+        b = np.max(lines[i])
+        edges.add((a,b))
+
+    # Build the vertex to vertex mapping
+    vert2vert = {i: set() for i in range(vertices.shape[0])}
+    for i in range(lines.shape[0]):
+        vert2vert[lines[i,0]].add(lines[i,1])
+        vert2vert[lines[i,1]].add(lines[i,0])
+
+    # Build the vertex to face mapping
+    vert2face = {i: set() for i in range(vertices.shape[0])}
+    for i in range(faces.shape[0]):
+        vert2face[faces[i,0]].add(i)
+        vert2face[faces[i,1]].add(i)
+        vert2face[faces[i,2]].add(i)
+
+    #Build the face to vertex mapping
+    face2vert = {i: set() for i in range(faces.shape[0])}
+    for i in range(faces.shape[0]):
+        face2vert[i].add(faces[i,0])
+        face2vert[i].add(faces[i,1])
+        face2vert[i].add(faces[i,1])
+
+    #Build the face to edge mapping
+    face2edge = {i: set() for i in range(faces.shape[0])}
+    for i in range(faces.shape[0]):
+        for j in range(3):
+            for e in edges:
+                if faces[i,j] in e:
+                    face2edge[i].add(e)
+
+    #Build the edge to face mapping
+    edge2face = {e: set() for e in edges}
+    for e in edges:
+        for i in range(faces.shape[0]):
+            f = set(faces[i])
+            if e[0] in f and e[1] in f:
+                edge2face[e].add(i)
+    
+    return vert2vert, vert2face, face2vert, face2edge, edge2face
+
 
 def get_vertex_normals(verts, faces):
     '''
@@ -63,9 +123,18 @@ def get_vertex_normals(verts, faces):
     e2 = c-a
 
     face_normals = np.cross(e1, e2)
+    print(f"FACE NORMS: {np.sum(np.isnan(face_normals))}")
     face_normals_magnitude = np.linalg.norm(face_normals, axis=1)
+    for i in range(faces.shape[0]):
+        if face_normals_magnitude[i] == 0.:
+            print(faces[i])
+    print(f"FACE NORMS: {np.sum(np.isnan(face_normals))}")
+    print(np.nonzero(face_normals_magnitude))
+    print(np.sum(face_normals_magnitude==0))
+    # print(f"FACE NORMS IS ZERO MAG: {face_normals.shape[0] - np.nonzero(np.linalg.norm(face_normals, axis=1).shape[0])}")
     # print(face_normals_magnitude[0:5])
     face_normals = (face_normals / np.hstack([face_normals_magnitude[:,np.newaxis]]*3))
+    print(f"FACE NORMS: {np.sum(np.isnan(face_normals))}")
     # print(np.linalg.norm(face_normals, axis=1)[0:5])
     vert_normals = np.zeros((verts.shape[0], 3))
     vert_face_count = np.zeros((verts.shape[0]))
@@ -73,7 +142,9 @@ def get_vertex_normals(verts, faces):
         for j in range(faces.shape[1]):
             vert_face_count[faces[i][j]] += 1
             vert_normals[faces[i][j]] += face_normals[i]
+    print(f"VERT NORMS: {np.sum(np.isnan(vert_normals))}")
     vert_normals = vert_normals / np.hstack([np.linalg.norm(vert_normals, axis=1)[:,np.newaxis]]*3)
+    print(f"VERT NORMS: {np.sum(np.isnan(vert_normals))}")
     return vert_normals
 
 def get_sphere_intersections(p0, v, radius):
@@ -91,11 +162,16 @@ def get_sphere_intersections(p0, v, radius):
     c = np.dot(p0, p0) - radius**2
     inner_term = b**2 - 4*a*c
     if inner_term < 0.:
+        print(np.linalg.norm(p0))
+        print(f"{p0},   {v},   {radius}")
         return None
     partial = np.sqrt(inner_term)
     x1 = (-b - partial) / (2*a)
     x2 = (-b + partial) / (2*a)
     if x1 < 0. and x2 < 0.:
+        print(f"{x1},{x2}")
+        print(np.linalg.norm(p0))
+        print(f"{p0},   {v},   {radius}")
         return None
     return p0 + x1*v, p0 + x2*v
 
@@ -244,7 +320,7 @@ if __name__ == "__main__":
     faces = mesh.faces
     verts = mesh.vertices
     
-    verts = utils.mesh_normalize(verts)
+    verts = mesh_normalize(verts)
 
     # show mesh and normals
     vert_normals = get_vertex_normals(verts, faces)
