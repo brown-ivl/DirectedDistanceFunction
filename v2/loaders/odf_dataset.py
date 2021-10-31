@@ -376,7 +376,7 @@ class ODFDatasetVisualizer(EaselModule):
         gl.glDrawArrays(gl.GL_LINES, 0, self.nRayPoints)
 
         if self.showNonIntersecting:
-            gl.glColor4f(0.8, 0.8, 0.8, 0.6)
+            gl.glColor4f(0.6, 0.6, 0.6, 0.9)
             if self.VBONIRayPoints is not None:
                 self.VBONIRayPoints.bind()
                 gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
@@ -401,7 +401,7 @@ class ODFDatasetVisualizer(EaselModule):
             print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_A:
-            if self.PointSize < 20.0:
+            if self.PointSize < 50.0:
                 self.PointSize += 1.0
             print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
 

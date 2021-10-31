@@ -35,9 +35,10 @@ PC_VERT_RATIO = 0
 PC_TAN_RATIO = 0
 PC_RADIUS = 1.25
 PC_MAX_INTERSECT = 1
-PC_SAMPLER_THRESH = 0.01
-PC_SAMPLER_NEG_MINOFFSET = 0.05
-PC_SAMPLER_NEG_MAXOFFSET = 0.25
+PC_SAMPLER_THRESH = 0.05
+PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
+PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH*2
+PC_SAMPLER_NEG_MAXOFFSET = 0.3
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -70,7 +71,8 @@ class PointCloudSampler():
     @staticmethod
     def sample_directions_prune_normal_numpy(nDirs, vertex, normal, points, thresh):
         Dirs = np.random.randn(nDirs, 3)
-        Dirs /= np.linalg.norm(Dirs, axis=0)
+        Norm = np.linalg.norm(Dirs, axis=1)
+        Dirs = np.divide(Dirs, Norm[:, np.newaxis])
 
         # Select only if direction is in the same half space as normal
         DotP = np.sum(np.multiply(Dirs, normal), axis=1)
@@ -101,33 +103,20 @@ class PointCloudSampler():
     @staticmethod
     def sample_directions_prune_numpy(nDirs, vertex, points, thresh):
         Dirs = np.random.randn(nDirs, 3)
-        Dirs /= np.linalg.norm(Dirs, axis=0)
+        Norm = np.linalg.norm(Dirs, axis=1)
+        Dirs = np.divide(Dirs, Norm[:, np.newaxis])
 
+        # Point-line distance, ray form: https://www.math.kit.edu/ianm2/lehre/am22016s/media/distance-harvard.pdf
         PQ = vertex - points
         P2LDistances = np.linalg.norm(np.abs(np.cross(PQ[:, None, :], Dirs[None, :, :])), axis=2)
         FailedIdx = P2LDistances < thresh  # Boolean array of all possible vertices and ray intersections that failed the threshold test
         # Find directions that failed the test
         FailedDirIdxSum = np.sum(FailedIdx, axis=0)
-        SuccessDirIdx = FailedDirIdxSum <= 1  # The vertex will be at a distance of 0 so, we look for anything more than 1
-        # print(np.sum(SuccessDirIdx))
+        SuccessDirIdx = FailedDirIdxSum == 0
 
         Dirs = Dirs[SuccessDirIdx]
 
         return Dirs
-
-    @staticmethod
-    def sample_directions_torch(nDirs, normal=None, device='cpu', ndim=3, dtype=torch.float32):
-        # Sample more than needed then prume
-        vec = torch.randn((nDirs, ndim), device=device, dtype=dtype)
-        vec /= torch.linalg.norm(vec, axis=0)
-        if normal is not None:
-            # Select only if direction is in the sae half space as normal
-            DotP = torch.sum(torch.mul(vec, normal), dim=1)
-            ValidIdx = DotP > 0.0
-            InvalidIdx = DotP <= 0.0
-            # vec = vec[ValidIdx]
-            vec[InvalidIdx] = normal # Set invalid to just be normal
-        return vec
 
     @staticmethod
     def prune_rays(Start, End, Vertices, thresh):
@@ -163,16 +152,14 @@ class PointCloudSampler():
 
     def sample(self, TargetRays, RatioPositive=0.9):
         nVertices = len(self.Vertices)
-        TargetPositiveRays = int(TargetRays*RatioPositive)
+        TargetPositiveRays = math.floor(TargetRays*RatioPositive)
+        TargetNegRays = (TargetRays-TargetPositiveRays)
         RaysPerVertex = math.ceil(TargetPositiveRays/nVertices)
-        if RaysPerVertex <= 1:
-            RaysPerVertex = 1
-            TargetPositiveRays = RaysPerVertex*nVertices
-        NegRaysPerVertex = math.ceil((TargetRays-TargetPositiveRays) / nVertices)
-        print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, TargetRays-(RaysPerVertex*nVertices), RaysPerVertex, NegRaysPerVertex))
+        NegRaysPerVertex = math.ceil(TargetNegRays / nVertices)
+        print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, NegRaysPerVertex*nVertices, RaysPerVertex, NegRaysPerVertex))
 
-        PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex)
-        NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex)
+        PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex, Target=TargetPositiveRays)
+        NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex, Target=TargetNegRays)
 
         Coordinates = np.concatenate((PCoordinates, NCoordinates), axis=0)
         Intersects = np.concatenate((PIntersects, NIntersects), axis=0)
@@ -184,35 +171,33 @@ class PointCloudSampler():
         self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
         self.Depths = torch.from_numpy(Depths[ShuffleIdx])
 
-
-    def sample_negative(self, RaysPerVertex):
+    def sample_negative(self, RaysPerVertex, Target):
         # Numpy version - seems faster
         Tic = butils.getCurrentEpochTime()
         nVertices = len(self.Vertices)
         # Randomly offset vertices
         RandomDistances = np.random.uniform(PC_SAMPLER_NEG_MINOFFSET, PC_SAMPLER_NEG_MAXOFFSET, len(self.Vertices))
         Offsets = RandomDistances[:, np.newaxis] * self.VertexNormals
-        # print(Offsets.shape)
-        # print(np.linalg.norm(Offsets, axis=1)[:10])
-        # print(RandomDistances[:10])
         OffsetVertices = self.Vertices + Offsets
         SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
         VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
         ValidDirCtr = 0
         for VCtr in tqdm(range(nVertices)):
-            ValidDirs = self.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices, points=self.Vertices, thresh=PC_SAMPLER_THRESH)
+            ValidDirs = self.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
             SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
-            VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = self.Vertices[VCtr]
+            VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[VCtr]
             ValidDirCtr += len(ValidDirs)
 
         SampledDirections = SampledDirections[:ValidDirCtr]
         VertexRepeats = VertexRepeats[:ValidDirCtr]
-        print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, RaysPerVertex * nVertices))
+        print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
 
         # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
         # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
         o = VertexRepeats
         u = SampledDirections
+        print(SampledDirections.shape)
+        print(np.linalg.norm(SampledDirections, axis=0))
         c = np.array([0, 0, 0])
         OminusC = o - c
         DotP = np.sum(np.multiply(u, OminusC), axis=1)
@@ -227,39 +212,9 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
-        return Coordinates, Intersects, Depths
+        return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
-    def sample_positive(self, RaysPerVertex):
-        # # Torch version
-        # Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        # TVertices = torch.from_numpy(Verts).to(Device)
-        # TVertexNormals = torch.from_numpy(VertNormals).to(Device)
-        #
-        # Tic = butils.getCurrentEpochTime()
-        # nVertices = len(TVertices)
-        # SampledDirections = torch.zeros((RaysPerVertex*nVertices, 3), dtype=TVertices.dtype, device=Device)
-        # for VCtr in range(nVertices):
-        #     SampledDirections[VCtr*RaysPerVertex:(VCtr+1)*RaysPerVertex] = self.sample_directions_torch(RaysPerVertex, normal=TVertexNormals[VCtr], device=Device, dtype=TVertices.dtype)
-        #
-        # Repeats = [RaysPerVertex]*nVertices
-        # o = torch.repeat_interleave(TVertices, torch.tensor(Repeats, device=Device), dim=0)
-        # # u = self.VertexNormals
-        # u = SampledDirections
-        # c = torch.zeros(1, 3).to(u.device)
-        # OminusC = o - c
-        # DotP = torch.sum(torch.mul(u, OminusC), dim=1)
-        # Delta = DotP**2 - (torch.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS**2)
-        # d = - DotP + torch.sqrt(Delta)
-        # SpherePoints = o + torch.mul(u, d[:, None])
-        #
-        # self.Coordinates = torch.hstack((SpherePoints, - u)).to(torch.float32)
-        # self.Intersects = torch.ones_like(d).to(torch.float32)
-        # self.Depths = d.to(torch.float32)
-        #
-        # Toc = butils.getCurrentEpochTime()
-        # print('[ INFO ]: pyTorch processed in {}ms.'.format((Toc-Tic)*1e-3))
-
-
+    def sample_positive(self, RaysPerVertex, Target):
         # Numpy version - seems faster
         Tic = butils.getCurrentEpochTime()
         nVertices = len(self.Vertices)
@@ -275,7 +230,7 @@ class PointCloudSampler():
 
         SampledDirections = SampledDirections[:ValidDirCtr]
         VertexRepeats = VertexRepeats[:ValidDirCtr]
-        print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, RaysPerVertex*nVertices))
+        print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, Target))
 
         # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
         # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
@@ -298,8 +253,7 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
 
-        return Coordinates, Intersects, Depths
-
+        return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
     def __getitem__(self, item):
         return self.Coordinate[item], (self.Intersects[item], self.Depths[item])
