@@ -5,16 +5,8 @@ import glob
 import random
 import beacon.utils as butils
 import trimesh
-import pickle
-import math
 from tqdm import tqdm
-import multiprocessing as mp
 
-from itertools import repeat
-from functools import partial
-
-from tk3dv.common import drawing
-import tk3dv.nocstools.datastructures as ds
 from PyQt5.QtWidgets import QApplication
 import PyQt5.QtCore as QtCore
 from PyQt5.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
@@ -31,10 +23,7 @@ sys.path.append(os.path.join(FileDirPath, '../'))
 sys.path.append(os.path.join(FileDirPath, '../losses'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 
-from data import MultiDepthDataset
-from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
 import odf_utils
-from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
 import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
 from pc_sampler import PointCloudSampler
@@ -99,7 +88,6 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         return (len(self.OBJList))
 
     def __getitem__(self, idx, PosEnc=None):
-        print(self.OBJList[idx])
         Mesh = trimesh.load(self.OBJList[idx])
         Verts = Mesh.vertices
         Verts = odf_utils.mesh_normalize(Verts)
@@ -108,7 +96,6 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         VertNormals /= Norm[:, None]
 
         Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
-        print(Sampler.Coordinates.size())
 
         return Sampler.Coordinates, (Sampler.Intersects, Sampler.Depths)
 

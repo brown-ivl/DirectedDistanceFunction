@@ -1,17 +1,12 @@
 import torch
 from beacon import utils as butils
-import sys, os
 import argparse
-import numpy as np
 import math
 
 from PyQt5.QtWidgets import QApplication
 import numpy as np
 from tk3dv.pyEasel import *
-from EaselModule import EaselModule
 from Easel import Easel
-import OpenGL.GL as gl
-import OpenGL.arrays.vbo as glvbo
 from tqdm import tqdm
 
 FileDirPath = os.path.dirname(__file__)
@@ -19,10 +14,11 @@ sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-from odf_dataset import DEFAULT_RADIUS, ODFDatasetLiveVisualizer, ODFDatasetVisualizer
-from odf_dataset import ODFDatasetLoader as ODFDL
+from odf_dataset import ODFDatasetLiveVisualizer
+from pc_sampler import PC_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss
 from single_models import LF4DSingle
+from pc_odf_dataset import PCODFDatasetLoader as PCDL
 
 def infer(Network, DataLoader, Objective, Device):
     Network.eval()  # switch to evaluation mode
@@ -55,9 +51,9 @@ def infer(Network, DataLoader, Objective, Device):
         sys.stdout.flush()
     sys.stdout.write('\n')
 
-    Rays = torch.squeeze(torch.cat(Rays), dim=1)
-    Intersects = torch.cat(Intersects)
-    Depths = torch.cat(Depths)
+    Rays = torch.squeeze(torch.cat(Rays))
+    Intersects = torch.squeeze(torch.cat(Intersects))
+    Depths = torch.squeeze(torch.cat(Depths))
 
     return ValLosses, Rays, Intersects, Depths
 
@@ -69,7 +65,7 @@ Parser.add_argument('--force-test-on-train', help='Choose to test on the trainin
 Parser.set_defaults(force_test_on_train=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
-Parser.set_defaults(no_posenc=False)
+Parser.set_defaults(no_posenc=True) # Debug, fix this
 Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 
 if __name__ == '__main__':
@@ -83,32 +79,34 @@ if __name__ == '__main__':
     usePosEnc = not Args.no_posenc
     print('[ INFO ]: Using positional encoding:', usePosEnc)
     if Args.arch == 'standard':
-        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEFAULT_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
-
+        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = ODFDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
-    print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(int(len(ValData) / Args.rays_per_shape), Args.rays_per_shape))
+    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=0) # DEBUG, TODO: More workers not working
 
     ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
-    if usePosEnc:
-        Rays = []
-        print('[ INFO]: Converting from positional encoding to normal...')
-        for Idx in tqdm(range(len(ValData))):
-            Rays.append(ValData.__getitem__(Idx, PosEnc=False)[0])
-        Rays = torch.cat(Rays, dim=0)
+    # if usePosEnc:
+    #     Rays = []
+    #     print('[ INFO]: Converting from positional encoding to normal...')
+    #     for Idx in tqdm(range(len(ValData))):
+    #         Rays.append(ValData.__getitem__(Idx, PosEnc=False)[0])
+    #     Rays = torch.cat(Rays, dim=0)
 
     app = QApplication(sys.argv)
+    LoadedData = ValData[0]
 
-    # GTViz = Easel([ODFDatasetVisualizer(ValData)], sys.argv[1:])
-    # PredictionViz = Easel([ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths)], sys.argv[1:])
-    # GTViz.show()
-    # PredictionViz.show()
-    CompareViz = Easel([ODFDatasetVisualizer(Data=ValData, Offset=[-1, 0, 0], DataLimit=Args.viz_limit), ODFDatasetLiveVisualizer(coord_type=ValData.CoordType, rays=Rays, intersects=Intersects, depths=Depths, Offset=[1, 0, 0], DataLimit=Args.viz_limit)], sys.argv[1:])
+    GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
+                             intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
+                             DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
+    PredViz =ODFDatasetLiveVisualizer(coord_type='direction', rays=Rays,
+                             intersects=Intersects, depths=Depths,
+                             DataLimit=Args.viz_limit, Offset=[1, 0, 0])
+    CompareViz = Easel([GTViz, PredViz], sys.argv[1:])
     CompareViz.show()
     sys.exit(app.exec_())

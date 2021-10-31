@@ -106,8 +106,10 @@ def find_sphere_points(OriginPoints, SphereCenter, Directions, Radius):
     OminusC = o - c
     DotP = np.sum(np.multiply(u, OminusC), axis=1)
     Delta = np.square(DotP) - ( (np.linalg.norm(OminusC, axis=1) ** 2) - (Radius ** 2) )
+    Delta[Delta<=0] = 0
     d = - DotP + np.sqrt(Delta)
     SpherePoints = o + np.multiply(u, d[:, np.newaxis])
+    SpherePoints[Delta<=0] = np.zeros(3)
 
     if len(OriginPoints.shape) == 1:
         SpherePoints = np.squeeze(SpherePoints)

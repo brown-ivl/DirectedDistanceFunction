@@ -6,7 +6,7 @@ SINGLE_MASK_THRESH = 0.7
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH  # PARAM
-    Lambda = 10.0 # PARAM
+    Lambda = 0.5 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
@@ -21,6 +21,10 @@ class SingleDepthBCELoss(nn.Module):
         PredMaskConf, PredDepth = output
         PredMaskConfSig = self.Sigmoid(PredMaskConf)
 
+        if len(GTMask.size()) < 3:
+            GTMask = GTMask.unsqueeze(0)
+        if len(GTDepth.size()) < 3:
+            GTDepth = GTDepth.unsqueeze(0)
         # print('GTMask size:', GTMask.size())
         # print('GTDepth size:', GTDepth.size())
         # print('PredMaskLikelihood size', PredMaskConf.size())
@@ -57,4 +61,7 @@ class SingleDepthBCELoss(nn.Module):
         Loss = torch.mean(torch.square(labels - predictions))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
+
+        # print(torch.min(labels), torch.max(labels))
+        # print(torch.min(predictions), torch.max(predictions))
         return Loss

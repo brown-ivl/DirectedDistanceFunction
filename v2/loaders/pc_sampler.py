@@ -34,12 +34,13 @@ PC_TAN_NOISE = 0.02
 PC_UNIFORM_RATIO = 100
 PC_VERT_RATIO = 0
 PC_TAN_RATIO = 0
-PC_RADIUS = 1.25
+PC_SAMPLER_RADIUS = 1.25
 PC_MAX_INTERSECT = 1
 PC_SAMPLER_THRESH = 0.05
 PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH*2
-PC_SAMPLER_NEG_MAXOFFSET = PC_RADIUS/3
+PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS / 3
+PC_SAMPLER_POS_RATIO = 0.7
 
 
 class PointCloudSampler():
@@ -56,7 +57,7 @@ class PointCloudSampler():
 
         self.sample(self.nTargetRays)
 
-    def sample(self, TargetRays, RatioPositive=0.9):
+    def sample(self, TargetRays, RatioPositive=PC_SAMPLER_POS_RATIO):
         Tic = []
         Toc = []
         Tic.append(butils.getCurrentEpochTime())
@@ -83,15 +84,15 @@ class PointCloudSampler():
         ShuffleIdx = np.random.permutation(len(Coordinates))
         Toc.append(butils.getCurrentEpochTime())
         # ShuffleIdx = np.arange(len(Coordinates))
-        print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(PCoordinates), len(NCoordinates)))
-        print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
-        print('Sample time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
-        print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
-        print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
+        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(PCoordinates), len(NCoordinates)))
+        # print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
+        # print('Sample time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        # print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
+        # print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
 
         self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
-        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
-        self.Depths = torch.from_numpy(Depths[ShuffleIdx])
+        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32).unsqueeze(1)
+        self.Depths = torch.from_numpy(Depths[ShuffleIdx]).to(torch.float32).unsqueeze(1)
 
     def sample_negative(self, RaysPerVertex, Target):
         # Numpy version - seems faster
@@ -116,7 +117,7 @@ class PointCloudSampler():
 
         # For each normal direction, find the point on a sphere of radius PC_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
-                                                             SphereCenter=np.zeros(3), Radius=PC_RADIUS)
+                                                             SphereCenter=np.zeros(3), Radius=PC_SAMPLER_RADIUS)
 
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.zeros_like(Distances))
@@ -147,7 +148,7 @@ class PointCloudSampler():
 
         # For each normal direction, find the point on a sphere of radius PC_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
-                                                          SphereCenter=np.zeros(3), Radius=PC_RADIUS)
+                                                             SphereCenter=np.zeros(3), Radius=PC_SAMPLER_RADIUS)
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.ones_like(Distances))
         Depths = np.asarray(Distances)
