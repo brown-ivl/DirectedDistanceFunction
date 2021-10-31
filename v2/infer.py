@@ -14,11 +14,12 @@ sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-from odf_dataset import ODFDatasetLiveVisualizer
+from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 from pc_sampler import PC_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss
 from single_models import LF4DSingle
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
+from odf_dataset import ODFDatasetLoader as ODL
 
 def infer(Network, DataLoader, Objective, Device):
     Network.eval()  # switch to evaluation mode
@@ -59,6 +60,7 @@ def infer(Network, DataLoader, Objective, Device):
 
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')
+Parser.add_argument('--loader', help='Which data loader to use.', choices=['mesh', 'pc'], default='pc')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('--rays-per-shape', help='Number of ray samples per object shape.', default=1000, type=int)
 Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
@@ -85,11 +87,14 @@ if __name__ == '__main__':
     NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    if Args.loader == 'mesh':
+        ValData = ODL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=(Args.rays_per_shape), usePositionalEncoding=usePosEnc)
+    elif Args.loader == 'pc':
+        ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=0) # DEBUG, TODO: More workers not working
-
     ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device)
     # if usePosEnc:
     #     Rays = []
@@ -101,12 +106,18 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     LoadedData = ValData[0]
 
-    GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
-                             intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
-                             DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
-    PredViz =ODFDatasetLiveVisualizer(coord_type='direction', rays=Rays,
-                             intersects=Intersects, depths=Depths,
-                             DataLimit=Args.viz_limit, Offset=[1, 0, 0])
+    if Args.loader == 'mesh':
+        GTViz = ODFDatasetVisualizer(Data=ValData, DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
+        PredViz =ODFDatasetLiveVisualizer(coord_type='direction', rays=Rays,
+                                 intersects=Intersects, depths=Depths,
+                                 DataLimit=Args.viz_limit, Offset=[1, 0, 0])
+    else:
+        GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
+                                 intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
+                                 DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
+        PredViz =ODFDatasetLiveVisualizer(coord_type='direction', rays=Rays,
+                                 intersects=Intersects, depths=Depths,
+                                 DataLimit=Args.viz_limit, Offset=[1, 0, 0])
     CompareViz = Easel([GTViz, PredViz], sys.argv[1:])
     CompareViz.show()
     sys.exit(app.exec_())

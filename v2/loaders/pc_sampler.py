@@ -1,26 +1,16 @@
 import argparse
-import random
 import beacon.utils as butils
 import trimesh
 import torch
 import math
 from tqdm import tqdm
 import multiprocessing as mp
-from itertools import repeat
-from functools import partial
 
-import tk3dv.nocstools.datastructures as ds
 from PyQt5.QtWidgets import QApplication
-import PyQt5.QtCore as QtCore
-from PyQt5.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
 import numpy as np
 
 from tk3dv.pyEasel import *
-from EaselModule import EaselModule
 from Easel import Easel
-import OpenGL.GL as gl
-import OpenGL.arrays.vbo as glvbo
-from sklearn.neighbors import NearestNeighbors
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
@@ -29,19 +19,13 @@ import odf_utils
 from odf_dataset import DEFAULT_RADIUS, ODFDatasetVisualizer, ODFDatasetLiveVisualizer
 import odf_v2_utils as o2utils
 
-PC_VERT_NOISE = 0.02
-PC_TAN_NOISE = 0.02
-PC_UNIFORM_RATIO = 100
-PC_VERT_RATIO = 0
-PC_TAN_RATIO = 0
 PC_SAMPLER_RADIUS = 1.25
-PC_MAX_INTERSECT = 1
 PC_SAMPLER_THRESH = 0.05
 PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
+PC_SUBDIVIDE_THRESH = PC_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH * 2
-PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS / 3
-PC_SAMPLER_POS_RATIO = 0.7
-
+PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS
+PC_SAMPLER_POS_RATIO = 0.5
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -190,8 +174,9 @@ if __name__ == '__main__':
     butils.seedRandom(Args.seed)
 
     Mesh = trimesh.load(Args.input)
-    Verts = Mesh.vertices
-    Verts = odf_utils.mesh_normalize(Verts)
+    Verts = odf_utils.mesh_normalize(Mesh.vertices)
+    # Verts, Faces = trimesh.remesh.subdivide_to_size(Verts, Mesh.faces, max_edge=PC_SUBDIVIDE_THRESH)
+    # Mesh = trimesh.Trimesh(vertices=Verts, faces=Faces, process=False)
     VertNormals = Mesh.vertex_normals.copy()
     Norm = np.linalg.norm(VertNormals, axis=1)
     VertNormals /= Norm[:, None]
