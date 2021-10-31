@@ -24,7 +24,6 @@ class SingleDepthBCELoss(nn.Module):
             GTMask = GTMask.unsqueeze(0)
         if len(GTDepth.size()) < 3:
             GTDepth = GTDepth.unsqueeze(0)
-
         if len(PredMaskConf.size()) < 3:
             PredMaskConf = PredMaskConf.unsqueeze(0)
         if len(PredDepth.size()) < 3:
@@ -44,7 +43,7 @@ class SingleDepthBCELoss(nn.Module):
             Loss += self.Lambda * L2Loss + MaskLoss
         Loss /= B
 
-        # # Single batch version
+        # # Single batch version , comment out the unsqueeze code on top too
         # MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
         # L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
         # Loss = self.Lambda * L2Loss + MaskLoss

@@ -38,7 +38,7 @@ PC_SAMPLER_RADIUS = 1.25
 PC_MAX_INTERSECT = 1
 PC_SAMPLER_THRESH = 0.05
 PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
-PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH*2
+PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS / 3
 PC_SAMPLER_POS_RATIO = 0.7
 
@@ -124,7 +124,8 @@ class PointCloudSampler():
         Depths = np.asarray(np.zeros_like(Distances))
 
         SpherePointsNorm = np.linalg.norm(SpherePoints, axis=1)
-        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.1 # Epsilon
+        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.01 # Epsilon
+        # print('Invalid idx:', len(Coordinates) - np.sum(ValidPointsIdx))
         Coordinates = Coordinates[ValidPointsIdx]
         Intersects = Intersects[ValidPointsIdx]
         Depths = Depths[ValidPointsIdx]
