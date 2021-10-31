@@ -7,7 +7,7 @@ SINGLE_MASK_THRESH = 0.7
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH  # PARAM
     Lambda = 5.0 # PARAM
-    def __init__(self, Thresh=0.7):
+    def __init__(self, Thresh=SINGLE_MASK_THRESH):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()

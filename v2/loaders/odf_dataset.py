@@ -433,7 +433,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
     def update(self):
         print('[ INFO ]: Updating live data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
-        self.ShapePoints = np.zeros((Limit, 3), np.float64)
+        self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
         self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
@@ -457,7 +457,8 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
-                self.ShapePoints[Idx] = ShapePoint
+
+                self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
             else:
