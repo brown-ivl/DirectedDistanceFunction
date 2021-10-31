@@ -201,11 +201,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
 class ODFDatasetVisualizer(EaselModule):
     def __init__(self, Data=None, Offset=[0, 0, 0], DataLimit=10000):
         super().__init__()
-        self.isVBOBound = False
-        self.showSphere = False
-        self.showNonIntersecting = False
-        self.RayLength = 0.06
-        self.PointSize = 5.0
+        self.setup()
         self.Offset = Offset
         self.DataLimit = DataLimit # This is number of rays
 
@@ -216,6 +212,12 @@ class ODFDatasetVisualizer(EaselModule):
         else:
             self.nCoords = 6
 
+    def setup(self):
+        self.isVBOBound = False
+        self.showSphere = False
+        self.showNonIntersecting = False
+        self.RayLength = 0.06
+        self.PointSize = 20.0
 
     def init(self, argv=None):
         self.update()
@@ -412,6 +414,7 @@ class ODFDatasetVisualizer(EaselModule):
             self.showSphere = not self.showSphere
         if a0.key() == QtCore.Qt.Key_N:
             self.showNonIntersecting = not self.showNonIntersecting
+            print('[ INFO ]: Showing non-intersecting rays.', flush=True)
 
 class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
     def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0], DataLimit=10000):
@@ -427,31 +430,28 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
         self.Intersects = intersects
         self.Depths = depths
 
-        self.isVBOBound = False
-        self.showSphere = False
-        self.showNonIntersecting = False
-        self.RayLength = 0.06
-        self.PointSize = 5.0
+        super().setup()
 
     def init(self, argv=None):
         self.update()
         self.updateVBOs()
 
     def update(self):
-        nValidRays = 0
         print('[ INFO ]: Updating live data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
         self.ShapePoints = np.zeros((Limit, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
         self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
+        nRays = 0
+        nNIRays = 0
         for Idx in tqdm(range(Limit)):
             R = self.Rays[Idx]
             I = self.Intersects[Idx]
             D = self.Depths[Idx]
             isIntersect = torch.sigmoid(I) > SINGLE_MASK_THRESH
             if isIntersect:
-                nValidRays += 1
+                nRays += 1
                 Ray = np.squeeze(R.numpy())
                 Depth = np.squeeze(D.numpy())
                 if self.CoordType == 'points':
@@ -467,6 +467,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
             else:
+                nNIRays += 1
                 Ray = np.squeeze(R.numpy())
                 if self.CoordType == 'points':
                     Direction = (Ray[3:] - Ray[:3])
@@ -487,10 +488,10 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 d = - DotP + np.sqrt(Delta)
                 SpherePoint = o + np.multiply(u, d)
 
-                self.NIRayPoints = np.vstack((self.RayPoints, Ray[:3]))
-                self.NIRayPoints = np.vstack((self.RayPoints, SpherePoint))
+                self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
+                self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint))
 
-        print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
+        print('[ INFO ]: Found {} intersecting and {} non-intersecting rays.'.format(nRays, nNIRays))
 
 
 Parser = argparse.ArgumentParser()

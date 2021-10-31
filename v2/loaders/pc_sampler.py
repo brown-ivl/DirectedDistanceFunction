@@ -103,13 +103,13 @@ class PointCloudSampler():
         Dirs = np.random.randn(nDirs, 3)
         Dirs /= np.linalg.norm(Dirs, axis=0)
 
-        # Next check if chosen directions are within a threshold of vertices
         PQ = vertex - points
         P2LDistances = np.linalg.norm(np.abs(np.cross(PQ[:, None, :], Dirs[None, :, :])), axis=2)
         FailedIdx = P2LDistances < thresh  # Boolean array of all possible vertices and ray intersections that failed the threshold test
         # Find directions that failed the test
         FailedDirIdxSum = np.sum(FailedIdx, axis=0)
         SuccessDirIdx = FailedDirIdxSum <= 1  # The vertex will be at a distance of 0 so, we look for anything more than 1
+        # print(np.sum(SuccessDirIdx))
 
         Dirs = Dirs[SuccessDirIdx]
 
@@ -161,24 +161,28 @@ class PointCloudSampler():
 
         return ValidIdx
 
-    def sample(self, TargetRays, RatioPositive=0.8):
+    def sample(self, TargetRays, RatioPositive=0.9):
         nVertices = len(self.Vertices)
         TargetPositiveRays = int(TargetRays*RatioPositive)
-        RaysPerVertex = int(TargetPositiveRays/nVertices)
+        RaysPerVertex = math.ceil(TargetPositiveRays/nVertices)
         if RaysPerVertex <= 1:
             RaysPerVertex = 1
             TargetPositiveRays = RaysPerVertex*nVertices
-        print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} rays per vertex.'.format(RaysPerVertex*nVertices, TargetRays-(RaysPerVertex*nVertices), RaysPerVertex))
+        NegRaysPerVertex = math.ceil((TargetRays-TargetPositiveRays) / nVertices)
+        print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, TargetRays-(RaysPerVertex*nVertices), RaysPerVertex, NegRaysPerVertex))
 
         PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex)
-        # NegRaysPerVertex = int((TargetRays-TargetPositiveRays) / nVertices)
-        # NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex)
+        NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex)
 
-        ShuffleIdx = np.random.permutation(len(PCoordinates))
+        Coordinates = np.concatenate((PCoordinates, NCoordinates), axis=0)
+        Intersects = np.concatenate((PIntersects, NIntersects), axis=0)
+        Depths = np.concatenate((PDepths, NDepths), axis=0)
 
-        self.Coordinates = torch.from_numpy(PCoordinates[ShuffleIdx]).to(torch.float32)
-        self.Intersects = torch.from_numpy(PIntersects[ShuffleIdx]).to(torch.float32)
-        self.Depths = torch.from_numpy(PDepths[ShuffleIdx])
+        ShuffleIdx = np.random.permutation(len(Coordinates))
+
+        self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
+        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
+        self.Depths = torch.from_numpy(Depths[ShuffleIdx])
 
 
     def sample_negative(self, RaysPerVertex):
@@ -207,7 +211,6 @@ class PointCloudSampler():
 
         # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
         # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-
         o = VertexRepeats
         u = SampledDirections
         c = np.array([0, 0, 0])
