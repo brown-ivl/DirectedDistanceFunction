@@ -35,6 +35,7 @@ from data import MultiDepthDataset
 from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
 import odf_utils
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
+import odf_v2_utils as o2utils
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + MESH_DATASET_NAME + '.zip'
@@ -291,15 +292,7 @@ class ODFDatasetVisualizer(EaselModule):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
 
-                # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-                o = Ray[:3]
-                u = Direction
-                c = np.array([0, 0, 0])
-                OminusC = o - c
-                DotP = np.sum(np.multiply(u, OminusC))
-                Delta = DotP ** 2 - ((np.linalg.norm(OminusC) ** 2) - (DEFAULT_RADIUS ** 2))
-                d = - DotP + np.sqrt(Delta)
-                SpherePoint = o + np.multiply(u, d)
+                SpherePoint, _ = o2utils.find_sphere_points(Ray[:3], np.zeros(3), Direction, Radius=DEFAULT_RADIUS)
 
                 self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
                 self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint)) # Unit direction point, updated in VBO update
@@ -478,15 +471,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
 
-                # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-                o = Ray[:3]
-                u = Direction
-                c = np.array([0, 0, 0])
-                OminusC = o - c
-                DotP = np.sum(np.multiply(u, OminusC))
-                Delta = (DotP ** 2) - ((np.linalg.norm(OminusC)**2) - (DEFAULT_RADIUS ** 2))
-                d = - DotP + np.sqrt(Delta)
-                SpherePoint = o + np.multiply(u, d)
+                SpherePoint, _ = o2utils.find_sphere_points(Ray[:3], np.zeros(3), Direction, Radius=DEFAULT_RADIUS)
 
                 self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
                 self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint))
