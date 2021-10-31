@@ -123,6 +123,13 @@ class PointCloudSampler():
         Intersects = np.asarray(np.zeros_like(Distances))
         Depths = np.asarray(np.zeros_like(Distances))
 
+        SpherePointsNorm = np.linalg.norm(SpherePoints, axis=1)
+        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.1 # Epsilon
+        Coordinates = Coordinates[ValidPointsIdx]
+        Intersects = Intersects[ValidPointsIdx]
+        Depths = Depths[ValidPointsIdx]
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(len(Coordinates), Target))
+
         Toc = butils.getCurrentEpochTime()
         # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
@@ -152,6 +159,14 @@ class PointCloudSampler():
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.ones_like(Distances))
         Depths = np.asarray(Distances)
+
+        SpherePointsNorm = np.linalg.norm(SpherePoints, axis=1)
+        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.1 # Epsilon
+        Coordinates = Coordinates[ValidPointsIdx]
+        Intersects = Intersects[ValidPointsIdx]
+        Depths = Depths[ValidPointsIdx]
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(len(Coordinates), Target))
+
         Toc = butils.getCurrentEpochTime()
         # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
 

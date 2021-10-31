@@ -126,6 +126,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
             print('[ INFO ]: No ODF cache found. Will compute and write out cache.')
             self.createODFCache()
         else:
+            print('[ INFO ]: Loading ODF cache.')
             self.loadODFCache('r')
 
         if self.DataLimit is None:

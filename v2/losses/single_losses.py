@@ -6,7 +6,7 @@ SINGLE_MASK_THRESH = 0.7
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH  # PARAM
-    Lambda = 0.5 # PARAM
+    Lambda = 5.0 # PARAM
     def __init__(self, Thresh=0.7):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
@@ -20,11 +20,17 @@ class SingleDepthBCELoss(nn.Module):
         GTMask, GTDepth = target
         PredMaskConf, PredDepth = output
         PredMaskConfSig = self.Sigmoid(PredMaskConf)
+        PredDepth = PredDepth.requires_grad_()
 
-        if len(GTMask.size()) < 3:
-            GTMask = GTMask.unsqueeze(0)
-        if len(GTDepth.size()) < 3:
-            GTDepth = GTDepth.unsqueeze(0)
+        # if len(GTMask.size()) < 3:
+        #     GTMask = GTMask.unsqueeze(0)
+        # if len(GTDepth.size()) < 3:
+        #     GTDepth = GTDepth.unsqueeze(0)
+        #
+        # if len(PredMaskConfSig.size()) < 3:
+        #     PredMaskConfSig = PredMaskConf.unsqueeze(0)
+        # if len(PredDepth.size()) < 3:
+        #     PredDepth = PredDepth.unsqueeze(0)
         # print('GTMask size:', GTMask.size())
         # print('GTDepth size:', GTDepth.size())
         # print('PredMaskLikelihood size', PredMaskConf.size())
@@ -54,6 +60,7 @@ class SingleDepthBCELoss(nn.Module):
         # print(L2Loss)
 
         Loss = self.Lambda * L2Loss + MaskLoss
+        # Loss = L2Loss
 
         return Loss
 
