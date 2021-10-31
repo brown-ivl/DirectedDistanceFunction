@@ -39,7 +39,8 @@ PC_MAX_INTERSECT = 1
 PC_SAMPLER_THRESH = 0.05
 PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH*2
-PC_SAMPLER_NEG_MAXOFFSET = DEFAULT_RADIUS/3
+PC_SAMPLER_NEG_MAXOFFSET = PC_RADIUS/3
+
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -113,9 +114,9 @@ class PointCloudSampler():
         VertexRepeats = VertexRepeats[:ValidDirCtr]
         # print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
 
-        # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
+        # For each normal direction, find the point on a sphere of radius PC_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
-                                                             SphereCenter=np.zeros(3), Radius=DEFAULT_RADIUS)
+                                                             SphereCenter=np.zeros(3), Radius=PC_RADIUS)
 
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.zeros_like(Distances))
@@ -144,9 +145,9 @@ class PointCloudSampler():
         VertexRepeats = VertexRepeats[:ValidDirCtr]
         # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, Target))
 
-        # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
+        # For each normal direction, find the point on a sphere of radius PC_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
-                                                          SphereCenter=np.zeros(3), Radius=DEFAULT_RADIUS)
+                                                          SphereCenter=np.zeros(3), Radius=PC_RADIUS)
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.ones_like(Distances))
         Depths = np.asarray(Distances)
