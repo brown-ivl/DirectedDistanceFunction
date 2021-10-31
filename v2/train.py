@@ -40,12 +40,12 @@ if __name__ == '__main__':
         NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
     TrainDevice = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    # TrainData = PCDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, target_samples=Args.train_rays_per_shape, usePositionalEncoding=usePosEnc)
-    TrainData = ODL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, n_samples=(Args.train_rays_per_shape), usePositionalEncoding=usePosEnc)
+    TrainData = PCDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, target_samples=Args.train_rays_per_shape, usePositionalEncoding=usePosEnc)
+    # TrainData = ODL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, n_samples=(Args.train_rays_per_shape), usePositionalEncoding=usePosEnc)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    # ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=usePosEnc)
-    ValData = ODL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=(Args.val_rays_per_shape), usePositionalEncoding=usePosEnc)
+    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=usePosEnc)
+    # ValData = ODL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, n_samples=(Args.val_rays_per_shape), usePositionalEncoding=usePosEnc)
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.train_rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 

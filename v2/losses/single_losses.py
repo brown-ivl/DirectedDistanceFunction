@@ -19,48 +19,35 @@ class SingleDepthBCELoss(nn.Module):
     def computeLoss(self, output, target):
         GTMask, GTDepth = target
         PredMaskConf, PredDepth = output
+
+        if len(GTMask.size()) < 3:
+            GTMask = GTMask.unsqueeze(0)
+        if len(GTDepth.size()) < 3:
+            GTDepth = GTDepth.unsqueeze(0)
+
+        if len(PredMaskConf.size()) < 3:
+            PredMaskConf = PredMaskConf.unsqueeze(0)
+        if len(PredDepth.size()) < 3:
+            PredDepth = PredDepth.unsqueeze(0)
+        B, R, _ = GTDepth.size()
+
         PredMaskConfSig = self.Sigmoid(PredMaskConf)
-        PredDepth = PredDepth.requires_grad_()
-
-        # if len(GTMask.size()) < 3:
-        #     GTMask = GTMask.unsqueeze(0)
-        # if len(GTDepth.size()) < 3:
-        #     GTDepth = GTDepth.unsqueeze(0)
-        #
-        # if len(PredMaskConfSig.size()) < 3:
-        #     PredMaskConfSig = PredMaskConf.unsqueeze(0)
-        # if len(PredDepth.size()) < 3:
-        #     PredDepth = PredDepth.unsqueeze(0)
-        # print('GTMask size:', GTMask.size())
-        # print('GTDepth size:', GTDepth.size())
-        # print('PredMaskLikelihood size', PredMaskConf.size())
-        # print('PredDepth size', PredDepth.size())
-        # print('PredMaskLikelihood', PredMaskConf)
-        # print('PredDepth', PredDepth)
-
-        # print(PredMaskConf)
-        # print(GTMask)
-        # print(PredDepth)
-        # print(GTDepth)
-
-        # PredMaskMaxIdx = torch.argmax(PredMaskConfSig, dim=1).to(PredMaskConf.dtype).unsqueeze(1).requires_grad_(True)
-        # PredMaskMaxConfVal = torch.gather(PredMaskConfSig, dim=1, index=PredMaskMaxIdx.to(torch.long).view(-1, 1))
         PredMaskMaxConfVal = PredMaskConfSig
         ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
         # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
-        # print('\nGTMask:', GTMask.item())
-        # print('PredMaskMaxIdx', PredMaskMaxIdx.item())
-        # MaskLoss = self.MaskLoss(PredMaskMaxIdx.to(torch.float), GTMask.to(torch.float))
-        MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
-        # MaskLoss = self.MaskLoss(torch.tensor(0.001), torch.tensor(1.))
-        # print('MaskLoss', MaskLoss.item())
-        L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
-        # print(MaskLoss)
-        # print(L2Loss)
+        Loss = 0
+        for b in range(B):
+            MaskLoss = self.MaskLoss(PredMaskMaxConfVal[b].to(torch.float), GTMask[b].to(torch.float))
+            L2Loss = self.L2(GTDepth[b][ValidRaysIdx[b]], PredDepth[b][ValidRaysIdx[b]])
 
-        Loss = self.Lambda * L2Loss + MaskLoss
-        # Loss = L2Loss
+            Loss += self.Lambda * L2Loss + MaskLoss
+        Loss /= B
+
+        # # Single batch version
+        # MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
+        # L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+        # Loss = self.Lambda * L2Loss + MaskLoss
 
         return Loss
 
