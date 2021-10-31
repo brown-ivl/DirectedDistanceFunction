@@ -47,7 +47,7 @@ class PointCloudSampler():
         self.VertexNormals = VertexNormals
         self.nTargetRays = TargetRays
         assert self.Vertices.shape[0] == self.VertexNormals.shape[0]
-        print('[ INFO ]: Found {} vertices with normals. Will try to sample {} rays in total.'.format(len(self.Vertices), self.nTargetRays))
+        # print('[ INFO ]: Found {} vertices with normals. Will try to sample {} rays in total.'.format(len(self.Vertices), self.nTargetRays))
 
         self.Coordinates = None
         self.Intersects = None
@@ -55,24 +55,38 @@ class PointCloudSampler():
 
         self.sample(self.nTargetRays)
 
-
-
     def sample(self, TargetRays, RatioPositive=0.9):
+        Tic = []
+        Toc = []
+        Tic.append(butils.getCurrentEpochTime())
         nVertices = len(self.Vertices)
         TargetPositiveRays = math.floor(TargetRays*RatioPositive)
         TargetNegRays = (TargetRays-TargetPositiveRays)
         RaysPerVertex = math.ceil(TargetPositiveRays/nVertices)
         NegRaysPerVertex = math.ceil(TargetNegRays / nVertices)
-        print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, NegRaysPerVertex*nVertices, RaysPerVertex, NegRaysPerVertex))
+        # print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, NegRaysPerVertex*nVertices, RaysPerVertex, NegRaysPerVertex))
+        Toc.append(butils.getCurrentEpochTime())
 
+        Tic.append(butils.getCurrentEpochTime())
         PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex, Target=TargetPositiveRays)
         NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex, Target=TargetNegRays)
+        Toc.append(butils.getCurrentEpochTime())
 
+        Tic.append(butils.getCurrentEpochTime())
         Coordinates = np.concatenate((PCoordinates, NCoordinates), axis=0)
         Intersects = np.concatenate((PIntersects, NIntersects), axis=0)
         Depths = np.concatenate((PDepths, NDepths), axis=0)
+        Toc.append(butils.getCurrentEpochTime())
 
+        Tic.append(butils.getCurrentEpochTime())
         ShuffleIdx = np.random.permutation(len(Coordinates))
+        Toc.append(butils.getCurrentEpochTime())
+        # ShuffleIdx = np.arange(len(Coordinates))
+        print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(PCoordinates), len(NCoordinates)))
+        print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
+        print('Sample time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
+        print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
 
         self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
         self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
@@ -89,7 +103,7 @@ class PointCloudSampler():
         SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
         VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
         ValidDirCtr = 0
-        for VCtr in tqdm(range(nVertices)):
+        for VCtr in (range(nVertices)):
             ValidDirs = o2utils.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
             SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
             VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[np.newaxis, VCtr]
@@ -97,7 +111,7 @@ class PointCloudSampler():
 
         SampledDirections = SampledDirections[:ValidDirCtr]
         VertexRepeats = VertexRepeats[:ValidDirCtr]
-        print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
+        # print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
 
         # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
@@ -108,7 +122,7 @@ class PointCloudSampler():
         Depths = np.asarray(np.zeros_like(Distances))
 
         Toc = butils.getCurrentEpochTime()
-        print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
+        # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
         return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
@@ -119,7 +133,7 @@ class PointCloudSampler():
         SampledDirections = np.zeros((RaysPerVertex*nVertices, 3))
         VertexRepeats = np.zeros((RaysPerVertex*nVertices, 3))
         ValidDirCtr = 0
-        for VCtr in tqdm(range(nVertices)):
+        for VCtr in (range(nVertices)):
             # SampledDirections[VCtr*RaysPerVertex:(VCtr+1)*RaysPerVertex] = self.sample_directions_numpy(RaysPerVertex, normal=self.VertexNormals[VCtr])
             ValidDirs = o2utils.sample_directions_prune_normal_numpy(RaysPerVertex, vertex=self.Vertices[VCtr], normal=self.VertexNormals[VCtr], points=self.Vertices, thresh=PC_SAMPLER_THRESH)
             SampledDirections[ValidDirCtr:ValidDirCtr+len(ValidDirs)] = ValidDirs
@@ -128,7 +142,7 @@ class PointCloudSampler():
 
         SampledDirections = SampledDirections[:ValidDirCtr]
         VertexRepeats = VertexRepeats[:ValidDirCtr]
-        print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, Target))
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, Target))
 
         # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
@@ -137,7 +151,7 @@ class PointCloudSampler():
         Intersects = np.asarray(np.ones_like(Distances))
         Depths = np.asarray(Distances)
         Toc = butils.getCurrentEpochTime()
-        print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
+        # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
 
         return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
