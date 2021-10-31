@@ -185,7 +185,7 @@ class PointCloudSampler():
         for VCtr in tqdm(range(nVertices)):
             ValidDirs = self.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
             SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
-            VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[VCtr]
+            VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[np.newaxis, VCtr]
             ValidDirCtr += len(ValidDirs)
 
         SampledDirections = SampledDirections[:ValidDirCtr]
@@ -199,7 +199,7 @@ class PointCloudSampler():
         c = np.array([0, 0, 0])
         OminusC = o - c
         DotP = np.sum(np.multiply(u, OminusC), axis=1)
-        Delta = np.square(DotP) - ( np.linalg.norm(OminusC, axis=1) - (DEFAULT_RADIUS ** 2) )
+        Delta = np.square(DotP) - ( (np.linalg.norm(OminusC, axis=1) ** 2) - (DEFAULT_RADIUS ** 2) )
         d = - DotP + np.sqrt(Delta)
         SpherePoints = o + np.multiply(u, d[:, np.newaxis])
 
@@ -210,8 +210,6 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
-        print(SpherePoints.shape)
-        print(np.linalg.norm(SpherePoints, axis=1))
         return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
     def sample_positive(self, RaysPerVertex, Target):
@@ -243,7 +241,7 @@ class PointCloudSampler():
         c = np.array([0, 0, 0])
         OminusC = o - c
         DotP = np.sum(np.multiply(u, OminusC), axis=1)
-        Delta = DotP**2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS**2)
+        Delta = DotP**2 - ((np.linalg.norm(OminusC, axis=1)**2) - DEFAULT_RADIUS**2)
         d = - DotP + np.sqrt(Delta)
         SpherePoints = o + np.multiply(u, d[:, np.newaxis])
 
