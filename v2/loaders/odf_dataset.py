@@ -484,7 +484,7 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 c = np.array([0, 0, 0])
                 OminusC = o - c
                 DotP = np.sum(np.multiply(u, OminusC))
-                Delta = DotP ** 2 - (np.linalg.norm(OminusC) - DEFAULT_RADIUS ** 2)
+                Delta = (DotP ** 2) - (np.linalg.norm(OminusC) - (DEFAULT_RADIUS ** 2))
                 d = - DotP + np.sqrt(Delta)
                 SpherePoint = o + np.multiply(u, d)
 

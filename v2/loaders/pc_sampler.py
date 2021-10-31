@@ -38,7 +38,7 @@ PC_MAX_INTERSECT = 1
 PC_SAMPLER_THRESH = 0.05
 PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH*2
-PC_SAMPLER_NEG_MAXOFFSET = 0.3
+PC_SAMPLER_NEG_MAXOFFSET = DEFAULT_RADIUS/3
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -196,12 +196,10 @@ class PointCloudSampler():
         # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
         o = VertexRepeats
         u = SampledDirections
-        print(SampledDirections.shape)
-        print(np.linalg.norm(SampledDirections, axis=0))
         c = np.array([0, 0, 0])
         OminusC = o - c
         DotP = np.sum(np.multiply(u, OminusC), axis=1)
-        Delta = DotP ** 2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS ** 2)
+        Delta = np.square(DotP) - ( np.linalg.norm(OminusC, axis=1) - (DEFAULT_RADIUS ** 2) )
         d = - DotP + np.sqrt(Delta)
         SpherePoints = o + np.multiply(u, d[:, np.newaxis])
 
@@ -212,6 +210,8 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
+        print(SpherePoints.shape)
+        print(np.linalg.norm(SpherePoints, axis=1))
         return Coordinates[:Target], Intersects[:Target], Depths[:Target]
 
     def sample_positive(self, RaysPerVertex, Target):
