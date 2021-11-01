@@ -3,15 +3,17 @@ import torch.nn as nn
 import math
 
 SINGLE_MASK_THRESH = 0.7
+SINGLE_L2_LAMBDA = 3.0
 
 class SingleDepthBCELoss(nn.Module):
-    Thresh = SINGLE_MASK_THRESH  # PARAM
-    Lambda = 0.5 # PARAM
-    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+    Thresh = SINGLE_MASK_THRESH
+    Lambda = SINGLE_L2_LAMBDA
+    def __init__(self, Thresh=SINGLE_MASK_THRESH, Lambda=SINGLE_L2_LAMBDA):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
+        self.Lambda = Lambda
 
     def forward(self, output, target):
         return self.computeLoss(output, target)
@@ -32,20 +34,13 @@ class SingleDepthBCELoss(nn.Module):
 
         PredMaskConfSig = self.Sigmoid(PredMaskConf)
         PredMaskMaxConfVal = PredMaskConfSig
-        ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
-        # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
-
-        # print(GTDepth[:, :20])
-        # print(PredDepth[:, :20])
-        # print(GTMask[:, :20])
-        # print(ValidRaysIdx[:, :20])
-        # print(torch.sum(ValidRaysIdx))
-        # exit()
+        # ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
+        ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
         Loss = 0
         for b in range(B):
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal[b].to(torch.float), GTMask[b].to(torch.float))
-            L2Loss = self.L2(GTDepth[b][ValidRaysIdx[b]], PredDepth[b][ValidRaysIdx[b]])
+            L2Loss = self.L2(GTDepth[b,ValidRaysIdx[b]], PredDepth[b,ValidRaysIdx[b]])
 
             Loss += self.Lambda * L2Loss + MaskLoss
         Loss /= B
@@ -58,6 +53,8 @@ class SingleDepthBCELoss(nn.Module):
         return Loss
 
     def L2(self, labels, predictions):
+        # print(labels.size())
+        # print(predictions.size())
         Loss = torch.mean(torch.square(labels - predictions))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)

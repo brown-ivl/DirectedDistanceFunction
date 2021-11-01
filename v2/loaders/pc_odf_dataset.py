@@ -38,6 +38,7 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         self.nTargetSamples = target_samples # Per shape
         self.PositionalEnc = usePositionalEncoding
         assert self.PositionalEnc == False
+        self.Sampler = None
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType))
 
@@ -95,9 +96,10 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         Norm = np.linalg.norm(VertNormals, axis=1)
         VertNormals /= Norm[:, None]
 
-        Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
+        if self.Sampler is None: # todo: TEMP for testing with same samples
+            self.Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
 
-        return Sampler.Coordinates, (Sampler.Intersects, Sampler.Depths)
+        return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
 
 
 Parser = argparse.ArgumentParser()

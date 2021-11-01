@@ -56,34 +56,48 @@ class LF4DSingle(supernet.SuperNet):
         # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
     def forward(self, input):
-        x = input
-        for i in range(len(self.network)):
-            if i + 1 in self.pos_enc_layers:
-                x = self.network[i](torch.cat([input, x], dim=1))
-            else:
-                x = self.network[i](x)
-            x = self.relu(x)
-            # x = self.layernorm(x)
+        Input = input
+        if len(Input.size()) < 3:
+            Input = Input.unsqueeze(0)
+        B, R, _ = Input.size()
 
-        # intersection head
-        intersections = self.intersection_head[0](x)
-        intersections = self.relu(intersections)
-        # intersections = self.layernorm(intersections)
-        intersections = self.intersection_head[1](intersections)
-        # intersections = torch.sigmoid(intersections)
-        if len(intersections.size()) == 3:
-            intersections = torch.squeeze(intersections, dim=1)
+        BIntersects = []
+        BDepths = []
+        for b in range(B):
+            x = Input[b]
+            BInput = Input[b]
+            for i in range(len(self.network)):
+                if i + 1 in self.pos_enc_layers:
+                    x = self.network[i](torch.cat([BInput, x], dim=1))
+                else:
+                    x = self.network[i](x)
+                x = self.relu(x)
+                # x = self.layernorm(x)
 
-        # depth head
-        depths = self.depth_head[0](x)
-        depths = self.relu(depths)
-        # depths = self.layernorm(depths)
-        # enforce strictly increasing depth values
-        depths = self.depth_head[1](depths)
-        depths = self.relu(depths) # todo: Avoid relu at the last layer?
-        depths = torch.cumsum(depths, dim=1)
-        if len(depths.size()) == 3:
-            depths = torch.squeeze(depths, dim=1)
+            # intersection head
+            intersections = self.intersection_head[0](x)
+            intersections = self.relu(intersections)
+            # intersections = self.layernorm(intersections)
+            intersections = self.intersection_head[1](intersections)
+            # intersections = torch.sigmoid(intersections)
+            if len(intersections.size()) == 3:
+                intersections = torch.squeeze(intersections, dim=1)
 
-        return intersections, depths
+            # depth head
+            depths = self.depth_head[0](x)
+            depths = self.relu(depths)
+            # depths = self.layernorm(depths)
+            # enforce strictly increasing depth values
+            depths = self.depth_head[1](depths)
+            depths = self.relu(depths) # todo: Avoid relu at the last layer?
+            depths = torch.cumsum(depths, dim=1)
+            if len(depths.size()) == 3:
+                depths = torch.squeeze(depths, dim=1)
+            BIntersects.append(intersections)
+            BDepths.append(depths)
+
+        BIntersects = torch.cat(BIntersects)
+        BDepths = torch.cat(BDepths)
+
+        return BIntersects, BDepths
 
