@@ -57,12 +57,12 @@ class LF4DSingle(supernet.SuperNet):
 
     def forward(self, input):
         Input = input
-        if len(Input.size()) < 3:
-            Input = Input.unsqueeze(0)
-        B, R, _ = Input.size()
+        assert isinstance(input, list)
+        B = len(Input)
 
-        BIntersects = []
-        BDepths = []
+        BIntersects = [None] * B
+        BDepths = [None] * B
+        CollateList = [None] * B
         for b in range(B):
             x = Input[b]
             BInput = Input[b]
@@ -93,11 +93,10 @@ class LF4DSingle(supernet.SuperNet):
             depths = torch.cumsum(depths, dim=1)
             if len(depths.size()) == 3:
                 depths = torch.squeeze(depths, dim=1)
-            BIntersects.append(intersections)
-            BDepths.append(depths)
+            BIntersects[b] = intersections
+            BDepths[b] = depths
+            CollateList[b] = (intersections, depths)
 
-        BIntersects = torch.cat(BIntersects)
-        BDepths = torch.cat(BDepths)
-
-        return BIntersects, BDepths
+        return CollateList
+        # return BIntersects, BDepths
 

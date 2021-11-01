@@ -39,7 +39,11 @@ class PointCloudSampler():
         self.Intersects = None
         self.Depths = None
 
-        self.sample(self.nTargetRays)
+        try:
+            self.sample(self.nTargetRays)
+        except (KeyboardInterrupt, SystemExit) as e:
+            print('\n[ INFO ]: KeyboardInterrupt detected. Going up exception chain.')
+            raise ValueError('KeyboardInterrupt detected. Going up exception chain.') from e
 
     def sample(self, TargetRays, RatioPositive=PC_SAMPLER_POS_RATIO):
         Tic = []

@@ -28,7 +28,8 @@ import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
 from pc_sampler import PointCloudSampler
 
-PC_DATASET_NAME = 'bunny_dataset'
+# PC_DATASET_NAME = 'bunny_dataset'
+PC_DATASET_NAME = 'bunny_100_dataset'
 PC_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + PC_DATASET_NAME + '.zip'
 
 class PCODFDatasetLoader(torch.utils.data.Dataset):
@@ -50,6 +51,12 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         self.isTrainData = train
         self.isDownload = download
         self.DataLimit = limit
+
+    @staticmethod
+    def collate_fn(batch):
+        data = [item[0] for item in batch]
+        target = [item[1] for item in batch]
+        return (data, target)
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -96,8 +103,8 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         Norm = np.linalg.norm(VertNormals, axis=1)
         VertNormals /= Norm[:, None]
 
-        if self.Sampler is None: # todo: TEMP for testing with same samples
-            self.Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
+        # if self.Sampler is None: # todo: TEMP for testing with same samples
+        self.Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
 
         return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
 

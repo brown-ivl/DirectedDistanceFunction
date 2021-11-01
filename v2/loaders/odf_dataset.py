@@ -219,7 +219,7 @@ class ODFDatasetVisualizer(EaselModule):
         self.showSphere = False
         self.showNonIntersecting = False
         self.RayLength = 0.06
-        self.PointSize = 20.0
+        self.PointSize = 3.0
 
     def init(self, argv=None):
         self.update()
