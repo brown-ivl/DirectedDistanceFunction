@@ -80,7 +80,7 @@ class LF4DSingle(supernet.SuperNet):
         # depths = self.layernorm(depths)
         # enforce strictly increasing depth values
         depths = self.depth_head[1](depths)
-        depths = self.relu(depths)
+        depths = self.relu(depths) # todo: Avoid relu at the last layer?
         depths = torch.cumsum(depths, dim=1)
         if len(depths.size()) == 3:
             depths = torch.squeeze(depths, dim=1)

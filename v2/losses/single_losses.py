@@ -6,7 +6,7 @@ SINGLE_MASK_THRESH = 0.7
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH  # PARAM
-    Lambda = 5.0 # PARAM
+    Lambda = 0.5 # PARAM
     def __init__(self, Thresh=SINGLE_MASK_THRESH):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
@@ -34,6 +34,13 @@ class SingleDepthBCELoss(nn.Module):
         PredMaskMaxConfVal = PredMaskConfSig
         ValidRaysIdx = PredMaskMaxConfVal > self.Thresh # Use predicted mask
         # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
+
+        # print(GTDepth[:, :20])
+        # print(PredDepth[:, :20])
+        # print(GTMask[:, :20])
+        # print(ValidRaysIdx[:, :20])
+        # print(torch.sum(ValidRaysIdx))
+        # exit()
 
         Loss = 0
         for b in range(B):
