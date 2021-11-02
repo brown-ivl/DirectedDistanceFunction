@@ -21,8 +21,9 @@ from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
 from single_models import LF4DSingle
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from odf_dataset import ODFDatasetLoader as ODL
+import odf_v2_utils as o2utils
 
-def infer(Network, ValDataLoader, Objective, Device, Limit):
+def infer(Network, ValDataLoader, Objective, Device, Limit, UsePosEnc):
     Network.eval()  # switch to evaluation mode
     ValLosses = []
     Tic = butils.getCurrentEpochTime()
@@ -36,7 +37,11 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
     for i, (Data, Targets) in enumerate(ValDataLoader, 0):  # Get each batch
         if i >= ValLimit:
             break
-        DataTD = butils.sendToDevice(Data, Device)
+        DataPosEnc = Data.copy()
+        if UsePosEnc:
+            for Idx, BD in enumerate(DataPosEnc):
+                DataPosEnc[Idx] = torch.from_numpy(o2utils.get_positional_enc(BD.numpy())).to(torch.float32)
+        DataTD = butils.sendToDevice(DataPosEnc, Device)
         TargetsTD = butils.sendToDevice(Targets, Device)
 
         Output = Network.forward(DataTD)
@@ -44,7 +49,7 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
         ValLosses.append(Loss.item())
 
         for b in range(len(Output)):
-            Coords.append(Data[b].detach().cpu())
+            Coords.append(Data[b])
             GTIntersects.append(Targets[b][0])
             GTDepths.append(Targets[b][1])
             PredIntersects.append(Output[b][0].detach().cpu())
@@ -93,14 +98,14 @@ if __name__ == '__main__':
     NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=False) # NOTE: We pass the positional encoding flag to infer function
     if ValLimit < 0:
         ValLimit = len(ValData)
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
-    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device, ValLimit)
+    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device, ValLimit, usePosEnc)
 
     # if usePosEnc:
     #     Rays = []
