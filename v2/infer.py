@@ -29,8 +29,10 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
     Network.to(Device)
     # print('Val length:', len(ValDataLoader))
     Coords = []
-    Intersects = []
-    Depths = []
+    PredIntersects = []
+    PredDepths = []
+    GTIntersects = []
+    GTDepths = []
     for i, (Data, Targets) in enumerate(ValDataLoader, 0):  # Get each batch
         if i >= ValLimit:
             break
@@ -43,8 +45,10 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
 
         for b in range(len(Output)):
             Coords.append(Data[b].detach().cpu())
-            Intersects.append(Output[b][0].detach().cpu())
-            Depths.append(Output[b][1].detach().cpu())
+            GTIntersects.append(Targets[b][0])
+            GTDepths.append(Targets[b][1])
+            PredIntersects.append(Output[b][0].detach().cpu())
+            PredDepths.append(Output[b][1].detach().cpu())
 
         # Print stats
         Toc = butils.getCurrentEpochTime()
@@ -56,7 +60,7 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
         sys.stdout.flush()
     sys.stdout.write('\n')
 
-    return ValLosses, Coords, Intersects, Depths
+    return ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths
 
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')
@@ -92,12 +96,11 @@ if __name__ == '__main__':
     ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
     if ValLimit < 0:
         ValLimit = len(ValData)
-    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True,
-                                                num_workers=nCores, collate_fn=PCDL.collate_fn)
+    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
-    ValLosses, Rays, Intersects, Depths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device, ValLimit)
+    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device, ValLimit)
 
     # if usePosEnc:
     #     Rays = []
@@ -108,13 +111,12 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     VizIdx = 0
-    GTData = ValData[VizIdx]
 
-    GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=GTData[0].cpu(),
-                             intersects=GTData[1][0].cpu(), depths=GTData[1][1].cpu(),
+    GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
+                             intersects=GTIntersects[VizIdx], depths=GTDepths[VizIdx],
                              DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
-    PredViz =ODFDatasetLiveVisualizer(coord_type='direction', rays=Rays[VizIdx],
-                             intersects=Intersects[VizIdx], depths=Depths[VizIdx],
+    PredViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
+                             intersects=PredIntersects[VizIdx], depths=PredDepths[VizIdx],
                              DataLimit=Args.viz_limit, Offset=[1, 0, 0])
     CompareViz = Easel([GTViz, PredViz], sys.argv[1:])
     CompareViz.show()

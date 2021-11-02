@@ -87,6 +87,19 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         if len(self.OBJList) == 0 or self.OBJList is None:
             raise RuntimeError('[ ERR ]: No files found during data loading.')
 
+        self.LoadedOBJs = []
+        for OBJFileName in self.OBJList:
+            Mesh = trimesh.load(OBJFileName)
+            Verts = Mesh.vertices
+            Verts = odf_utils.mesh_normalize(Verts)
+            VertNormals = Mesh.vertex_normals.copy()
+            Norm = np.linalg.norm(VertNormals, axis=1)
+            VertNormals /= Norm[:, None]
+            Mesh.vertices = Verts
+            Mesh.vertex_normals = VertNormals
+
+            self.LoadedOBJs.append(Mesh)
+
         if self.DataLimit is None:
             self.DataLimit = len(self.OBJList)
         DatasetLength = self.DataLimit if self.DataLimit < len(self.OBJList) else len(self.OBJList)
@@ -96,15 +109,16 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         return (len(self.OBJList))
 
     def __getitem__(self, idx, PosEnc=None):
-        Mesh = trimesh.load(self.OBJList[idx])
-        Verts = Mesh.vertices
-        Verts = odf_utils.mesh_normalize(Verts)
-        VertNormals = Mesh.vertex_normals.copy()
-        Norm = np.linalg.norm(VertNormals, axis=1)
-        VertNormals /= Norm[:, None]
+        # Mesh = trimesh.load(self.OBJList[idx])
+        # Verts = Mesh.vertices
+        # Verts = odf_utils.mesh_normalize(Verts)
+        # VertNormals = Mesh.vertex_normals.copy()
+        # Norm = np.linalg.norm(VertNormals, axis=1)
+        # VertNormals /= Norm[:, None]
+        Mesh = self.LoadedOBJs[idx]
 
         # if self.Sampler is None: # todo: TEMP for testing with same samples
-        self.Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=self.nTargetSamples)
+        self.Sampler = PointCloudSampler(Mesh.vertices, Mesh.vertex_normals, TargetRays=self.nTargetSamples)
 
         return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
 

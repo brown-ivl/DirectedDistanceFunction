@@ -5,6 +5,7 @@ import torch
 import math
 from tqdm import tqdm
 import multiprocessing as mp
+from threading import Thread
 
 from PyQt5.QtWidgets import QApplication
 import numpy as np
@@ -25,7 +26,7 @@ PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
 PC_SUBDIVIDE_THRESH = PC_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS
-PC_SAMPLER_POS_RATIO = 0.5
+PC_SAMPLER_POS_RATIO = 0.3
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -58,23 +59,33 @@ class PointCloudSampler():
         Toc.append(butils.getCurrentEpochTime())
 
         Tic.append(butils.getCurrentEpochTime())
-        PCoordinates, PIntersects, PDepths = self.sample_positive(RaysPerVertex=RaysPerVertex, Target=TargetPositiveRays)
-        NCoordinates, NIntersects, NDepths = self.sample_negative(RaysPerVertex=NegRaysPerVertex, Target=TargetNegRays)
+        self.sample_positive(RaysPerVertex=RaysPerVertex, Target=TargetPositiveRays)
+        self.sample_negative(RaysPerVertex=NegRaysPerVertex, Target=TargetNegRays)
         Toc.append(butils.getCurrentEpochTime())
 
+        # Tic.append(butils.getCurrentEpochTime())
+        # Toc.append(butils.getCurrentEpochTime())
+        # Tic.append(butils.getCurrentEpochTime())
+        # thread2 = Thread(target=self.sample_negative, args=(NegRaysPerVertex, TargetNegRays))
+        # thread2.start()
+        # thread1 = Thread(target=self.sample_positive, args=(RaysPerVertex, TargetPositiveRays))
+        # thread1.start()
+        # thread1.join()
+        # thread2.join()
+        # Toc.append(butils.getCurrentEpochTime())
+
         Tic.append(butils.getCurrentEpochTime())
-        Coordinates = np.concatenate((PCoordinates, NCoordinates), axis=0)
-        Intersects = np.concatenate((PIntersects, NIntersects), axis=0)
-        Depths = np.concatenate((PDepths, NDepths), axis=0)
+        Coordinates = np.concatenate((self.PCoordinates, self.NCoordinates), axis=0)
+        Intersects = np.concatenate((self.PIntersects, self.NIntersects), axis=0)
+        Depths = np.concatenate((self.PDepths, self.NDepths), axis=0)
         Toc.append(butils.getCurrentEpochTime())
 
         Tic.append(butils.getCurrentEpochTime())
         ShuffleIdx = np.random.permutation(len(Coordinates))
         Toc.append(butils.getCurrentEpochTime())
-        # ShuffleIdx = np.arange(len(Coordinates))
-        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(PCoordinates), len(NCoordinates)))
+        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
         # print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
-        # print('Sample time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        # print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
         # print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
         # print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
 
@@ -122,7 +133,9 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
 
-        return Coordinates[:Target], Intersects[:Target], Depths[:Target]
+        self.NCoordinates = Coordinates[:Target]
+        self.NIntersects = Intersects[:Target]
+        self.NDepths = Depths[:Target]
 
     def sample_positive(self, RaysPerVertex, Target):
         # Numpy version - seems faster
@@ -159,7 +172,9 @@ class PointCloudSampler():
         Toc = butils.getCurrentEpochTime()
         # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
 
-        return Coordinates[:Target], Intersects[:Target], Depths[:Target]
+        self.PCoordinates = Coordinates[:Target]
+        self.PIntersects = Intersects[:Target]
+        self.PDepths = Depths[:Target]
 
     def __getitem__(self, item):
         return self.Coordinate[item], (self.Intersects[item], self.Depths[item])

@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 
 SINGLE_MASK_THRESH = 0.7
-SINGLE_L2_LAMBDA = 0.5
+SINGLE_L2_LAMBDA = 5.0
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH
