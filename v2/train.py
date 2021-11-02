@@ -34,7 +34,7 @@ if __name__ == '__main__':
         exit()
 
     butils.seedRandom(Args.seed)
-    nCores = 0#mp.cpu_count()
+    nCores = 4#mp.cpu_count()
 
     usePosEnc = not Args.no_posenc
     if Args.arch == 'standard':

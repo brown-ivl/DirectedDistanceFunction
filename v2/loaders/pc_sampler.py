@@ -103,12 +103,12 @@ class PointCloudSampler():
     def sample_negative(self, RaysPerVertex, Target):
         # Numpy version - seems faster
         Tic = butils.getCurrentEpochTime()
-        nVertices = len(self.Vertices)
         # Randomly offset vertices
         RandomDistances = np.random.uniform(PC_SAMPLER_NEG_MINOFFSET, PC_SAMPLER_NEG_MAXOFFSET, len(self.Vertices))
         Offsets = RandomDistances[:, np.newaxis] * self.VertexNormals
         OffsetVertices = self.Vertices + Offsets
         Tic = butils.getCurrentEpochTime()
+        # nVertices = len(self.Vertices)
         # SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
         # VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
         # ValidDirCtr = 0
