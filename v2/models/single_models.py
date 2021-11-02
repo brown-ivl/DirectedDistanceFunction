@@ -107,7 +107,7 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
     This is the autodecoder version
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, Args=None):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, latent_size=256, Args=None):
         super().__init__(Args=Args)
 
         # store args
@@ -115,6 +115,8 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
         self.preprocessing = coord_type
         self.pos_enc = pos_enc
         self.radius = radius
+        self.LatentSize = latent_size
+        self.InputSize = input_size + self.LatentSize
         assert (n_layers > 1)
 
         # set which layers (aside from the first) should have the positional encoding passed in
@@ -123,12 +125,14 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
         else:
             self.pos_enc_layers = []
 
+        self.LatentCode = nn.Parameter()
+
         # Define the main network body
         main_layers = []
-        main_layers.append(nn.Linear(input_size, hidden_size))
+        main_layers.append(nn.Linear(self.InputSize, hidden_size))
         for l in range(n_layers - 1):
             if l + 2 in self.pos_enc_layers:
-                main_layers.append(nn.Linear(hidden_size + input_size, hidden_size))
+                main_layers.append(nn.Linear(hidden_size + self.InputSize, hidden_size))
             else:
                 main_layers.append(nn.Linear(hidden_size, hidden_size))
         self.network = nn.ModuleList(main_layers)

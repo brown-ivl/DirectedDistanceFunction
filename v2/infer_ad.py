@@ -62,7 +62,7 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
 
     return ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths
 
-Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
+Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs autodecoder.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('--rays-per-shape', help='Number of ray samples per object shape.', default=1000, type=int)

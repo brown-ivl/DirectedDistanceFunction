@@ -26,7 +26,7 @@ PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
 PC_SUBDIVIDE_THRESH = PC_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH * 2
 PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS
-PC_SAMPLER_POS_RATIO = 0.3
+PC_SAMPLER_POS_RATIO = 0.5
 
 class PointCloudSampler():
     def __init__(self, Vertices, VertexNormals, TargetRays):
@@ -83,11 +83,11 @@ class PointCloudSampler():
         Tic.append(butils.getCurrentEpochTime())
         ShuffleIdx = np.random.permutation(len(Coordinates))
         Toc.append(butils.getCurrentEpochTime())
-        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
-        # print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
-        # print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
-        # print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
-        # print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
+        print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
+        print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
+        print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
+        print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
 
         self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
         self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32).unsqueeze(1)
@@ -101,22 +101,31 @@ class PointCloudSampler():
         RandomDistances = np.random.uniform(PC_SAMPLER_NEG_MINOFFSET, PC_SAMPLER_NEG_MAXOFFSET, len(self.Vertices))
         Offsets = RandomDistances[:, np.newaxis] * self.VertexNormals
         OffsetVertices = self.Vertices + Offsets
-        SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
-        VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
-        ValidDirCtr = 0
-        for VCtr in (range(nVertices)):
-            ValidDirs = o2utils.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
-            SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
-            VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[np.newaxis, VCtr]
-            ValidDirCtr += len(ValidDirs)
+        Tic = butils.getCurrentEpochTime()
+        # SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
+        # VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
+        # ValidDirCtr = 0
+        # for VCtr in (range(nVertices)):
+        #     ValidDirs = o2utils.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
+        #     SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
+        #     VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[np.newaxis, VCtr]
+        #     ValidDirCtr += len(ValidDirs)
+        SampledDirections, VertexRepeats = o2utils.sample_directions_batch_prune(RaysPerVertex, vertices=OffsetVertices, points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
+        ValidDirCtr = len(SampledDirections)
+        Toc = butils.getCurrentEpochTime()
+        print('Prune time:', (Toc-Tic)*1e-3)
+        # exit()
 
         SampledDirections = SampledDirections[:ValidDirCtr]
         VertexRepeats = VertexRepeats[:ValidDirCtr]
         # print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
 
         # For each normal direction, find the point on a sphere of radius PC_RADIUS
+        Tic = butils.getCurrentEpochTime()
         SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
                                                              SphereCenter=np.zeros(3), Radius=PC_SAMPLER_RADIUS)
+        Toc = butils.getCurrentEpochTime()
+        # print('Sphere points time:', (Toc - Tic) * 1e-3)
 
         Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
         Intersects = np.asarray(np.zeros_like(Distances))

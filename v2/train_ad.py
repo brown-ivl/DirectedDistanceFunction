@@ -11,7 +11,7 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from pc_sampler import PC_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss
-from single_models import LF4DSingle
+from single_models import LF4DSingleAutoDecoder
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
 
 Parser = argparse.ArgumentParser(description='Training code for NeuralODF autodecoder.')

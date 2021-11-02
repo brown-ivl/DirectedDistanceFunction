@@ -63,6 +63,36 @@ def sample_directions_prune_numpy(nDirs, vertex, points, thresh):
 
     return Dirs
 
+def sample_directions_batch_prune(nDirs, vertices, points, thresh):
+    nVertices = len(vertices)
+    Dirs = np.random.randn(nDirs*nVertices, 3)
+    Norm = np.linalg.norm(Dirs, axis=1)
+    Dirs = np.divide(Dirs, Norm[:, np.newaxis])
+    Dirs = np.reshape(Dirs, (nVertices, nDirs, -1))
+
+    # Point-line distance, ray form: https://www.math.kit.edu/ianm2/lehre/am22016s/media/distance-harvard.pdf
+    # PQ = np.reshape(points[:, None, :] - vertices[None, :, :], (-1, 3))
+    PQ = vertices[:, None, :] - points[None, :, :]
+
+    SampledDirections = np.zeros((nDirs * nVertices, 3))
+    VertexRepeats = np.zeros((nDirs * nVertices, 3))
+    ValidDirCtr = 0
+    for VCtr in range(nVertices):
+        P2LDistances = np.linalg.norm(np.abs(np.cross(PQ[VCtr, :, None, :], Dirs[VCtr, None, :, :])), axis=2)
+        FailedIdx = P2LDistances < thresh  # Boolean array of all possible vertices and ray intersections that failed the threshold test
+        # Find directions that failed the test
+        FailedDirIdxSum = np.sum(FailedIdx, axis=0)
+        SuccessDirIdx = FailedDirIdxSum == 0
+        nSuccessIdx = np.sum(SuccessDirIdx)
+        SampledDirections[ValidDirCtr:ValidDirCtr + nSuccessIdx] = Dirs[VCtr, SuccessDirIdx]
+        VertexRepeats[ValidDirCtr:ValidDirCtr + nSuccessIdx] = vertices[np.newaxis, VCtr]
+        ValidDirCtr += nSuccessIdx
+
+    SampledDirections = SampledDirections[:ValidDirCtr]
+    VertexRepeats = VertexRepeats[:ValidDirCtr]
+
+    return SampledDirections, VertexRepeats
+
 def prune_rays(Start, End, Vertices, thresh):
         ValidIdx = np.ones(len(Start), dtype=bool) * True
         RaysPerVertex = int(len(Start) / len(Vertices))
