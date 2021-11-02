@@ -70,7 +70,7 @@ Parser.add_argument('--force-test-on-train', help='Choose to test on the trainin
 Parser.set_defaults(force_test_on_train=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
-Parser.set_defaults(no_posenc=True) # Debug, fix this
+Parser.set_defaults(no_posenc=False)
 Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 Parser.add_argument('-l', '--val-limit', help='Limit validation samples.', required=False, type=int, default=-1)
 

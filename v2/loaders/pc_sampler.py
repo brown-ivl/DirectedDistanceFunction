@@ -29,10 +29,11 @@ PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS
 PC_SAMPLER_POS_RATIO = 0.5
 
 class PointCloudSampler():
-    def __init__(self, Vertices, VertexNormals, TargetRays):
+    def __init__(self, Vertices, VertexNormals, TargetRays, UsePosEnc=False):
         self.Vertices = Vertices
         self.VertexNormals = VertexNormals
         self.nTargetRays = TargetRays
+        self.UsePosEnc = UsePosEnc
         assert self.Vertices.shape[0] == self.VertexNormals.shape[0]
         # print('[ INFO ]: Found {} vertices with normals. Will try to sample {} rays in total.'.format(len(self.Vertices), self.nTargetRays))
 
@@ -81,13 +82,19 @@ class PointCloudSampler():
         Toc.append(butils.getCurrentEpochTime())
 
         Tic.append(butils.getCurrentEpochTime())
+        if self.UsePosEnc:
+            Coordinates = o2utils.get_positional_enc(Coordinates)
+        Toc.append(butils.getCurrentEpochTime())
+
+        Tic.append(butils.getCurrentEpochTime())
         ShuffleIdx = np.random.permutation(len(Coordinates))
         Toc.append(butils.getCurrentEpochTime())
-        print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
-        print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
-        print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
-        print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
-        print('Permute time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
+        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
+        # print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
+        # print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        # print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
+        # print('Positional encoding time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
+        # print('Permute time: {}ms.'.format((Toc[4] - Tic[4]) * 1e-3))
 
         self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
         self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32).unsqueeze(1)
@@ -113,7 +120,7 @@ class PointCloudSampler():
         SampledDirections, VertexRepeats = o2utils.sample_directions_batch_prune(RaysPerVertex, vertices=OffsetVertices, points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
         ValidDirCtr = len(SampledDirections)
         Toc = butils.getCurrentEpochTime()
-        print('Prune time:', (Toc-Tic)*1e-3)
+        # print('Prune time:', (Toc-Tic)*1e-3)
         # exit()
 
         SampledDirections = SampledDirections[:ValidDirCtr]
@@ -151,7 +158,7 @@ class PointCloudSampler():
         Tic = butils.getCurrentEpochTime()
         nVertices = len(self.Vertices)
         SampledDirections = np.zeros((RaysPerVertex*nVertices, 3))
-        VertexRepeats = np.zeros((RaysPerVertex*nVertices, 3))
+        VertexRepeats = np.zeros_like(SampledDirections)
         ValidDirCtr = 0
         for VCtr in (range(nVertices)):
             # SampledDirections[VCtr*RaysPerVertex:(VCtr+1)*RaysPerVertex] = self.sample_directions_numpy(RaysPerVertex, normal=self.VertexNormals[VCtr])

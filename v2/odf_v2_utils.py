@@ -75,7 +75,7 @@ def sample_directions_batch_prune(nDirs, vertices, points, thresh):
     PQ = vertices[:, None, :] - points[None, :, :]
 
     SampledDirections = np.zeros((nDirs * nVertices, 3))
-    VertexRepeats = np.zeros((nDirs * nVertices, 3))
+    VertexRepeats = np.zeros_like(SampledDirections)
     ValidDirCtr = 0
     for VCtr in range(nVertices):
         P2LDistances = np.linalg.norm(np.abs(np.cross(PQ[VCtr, :, None, :], Dirs[VCtr, None, :, :])), axis=2)
@@ -146,3 +146,29 @@ def find_sphere_points(OriginPoints, SphereCenter, Directions, Radius):
         d = np.squeeze(d)
 
     return SpherePoints, d
+
+def get_positional_enc(in_array, L = 10):
+    '''
+    val - Array of values (usually Nx6)
+    L   - controls the size of the encoding (size = 2*L  - see paper for details)
+    Implements the positional encoding described in section 5.1 of NeRF
+    https://arxiv.org/pdf/2003.08934.pdf
+    '''
+    N = in_array.shape[0]
+    nCoords = in_array.shape[1]
+    out_array = np.zeros((N, nCoords*2*L))
+    for Idx in range(nCoords):
+        Val = in_array[:, Idx]
+        PosEnc = [x for i in range(L) for x in [np.sin(2 ** (i) * math.pi * Val), np.cos(2 ** (i) * math.pi * Val)]]
+        out_array[:, Idx*2*L:(Idx+1)*2*L] = np.array(PosEnc).T
+
+    # # Test
+    # Row = 73
+    # Col = 3
+    # Val = in_array[Row, Col]
+    # TestOrig = [x for i in range(L) for x in [math.sin(2 ** (i) * math.pi * Val), math.cos(2 ** (i) * math.pi * Val)]]
+    # print(TestOrig)
+    # print(out_array[Row, Col*2*L:(Col+1)*2*L])
+
+    return out_array
+

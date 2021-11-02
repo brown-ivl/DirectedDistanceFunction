@@ -25,7 +25,7 @@ Parser.add_argument('--force-test-on-train', help='Choose to test on the trainin
 Parser.set_defaults(force_test_on_train=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
-Parser.set_defaults(no_posenc=True) # DEBUG. todo: fix this
+Parser.set_defaults(no_posenc=False)
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
