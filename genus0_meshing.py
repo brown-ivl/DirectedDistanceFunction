@@ -7,6 +7,12 @@ import torch
 
 import rasterization
 import odf_utils
+from visualization import RayVisualizer
+
+# TODO: selectively import this so this file can be used on Oscar
+import visualization
+import open3d as o3d
+from datetime import datetime
 
 #Icosahedron taken from https://people.sc.fsu.edu/~jburkardt/data/obj/icosahedron.obj
 #Icosahedron sphere connectivity https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.90.6202&rep=rep1&type=pdf
@@ -49,6 +55,10 @@ icosahedron_faces = [
 [5, 9, 1]
 ]
 
+# mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj"
+mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj"
+mesh = trimesh.load(mesh_file)
+
 class MeshODF():
 
     def __init__(self, vertices, faces):
@@ -61,6 +71,10 @@ class MeshODF():
         Queries the surface depth from the provided points in the provided directions
         This only uses the first intersection
         '''
+        # for i in range(len(directions)):
+        #     if abs(np.linalg.norm(directions[i]) - 1.0) > 0.0001:
+        #         print(np.linalg.norm(directions[i]))
+        #     assert(abs(np.linalg.norm(directions[i]) - 1.0) > 0.0001)
         points = np.array(points)
         directions = np.array(directions)
         intersect = []
@@ -79,7 +93,15 @@ class MeshODF():
             rot_verts = rasterization.rotate_mesh(self.vertices, start_point, end_point)
             _, depth = rasterization.ray_occ_depth(self.faces, rot_verts, ray_start_depth=ray_length, near_face_threshold=near_face_threshold)
             depth -= np.linalg.norm(points[i] - start_point)
+            # if depth < 0.:
+            #     print("NEG DEPTH")
+            #     lines = np.concatenate([self.faces[:,:2], self.faces[:,1:], self.faces[:,[0,2]]], axis=0)
+            #     visualizer = visualization.RayVisualizer(self.vertices, lines)
+            #     visualizer.add_point(points[i], [1.0,0.0,0.0])
+            #     visualizer.add_ray([points[i], points[i]+directions[i]*0.1], [0., 0., 1.])
+            #     visualizer.display()
             depth = depth if depth > 0. else np.inf
+
             intersect.append(depth < np.inf)
             depths.append([depth])
         # return torch tensors just so the output is exactly the same as the learned NN
@@ -305,13 +327,11 @@ def sphere_surface_to_mesh(obj_verts, obj_faces, sphere_vertices, focal_point=[0
 
 
 
-def show_subdivisions_and_probes(vertices, probes, inf_mask, directions, faces, delta, cluster=[], c_verts=[], c_faces=[], show_mesh_faces=True):
+def show_subdivisions_and_probes(vertices, probes, inf_mask, directions, faces, delta, cluster={}, show_mesh_faces=True, show_new_lines=True, show_probes=True):
     '''
     For visualization purposes.
     Shows which edges have been subdivided and where the probe locations are.
     '''
-    mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj"
-    mesh = trimesh.load(mesh_file)
     gt_faces = mesh.faces
     gt_verts = mesh.vertices
     gt_verts = odf_utils.mesh_normalize(gt_verts)
@@ -335,27 +355,27 @@ def show_subdivisions_and_probes(vertices, probes, inf_mask, directions, faces, 
     new_lines = lines[np.any(lines >= probes_offset, axis=1)]
     new_lines = vertices[new_lines]
     
-    for i in range(new_lines.shape[0]):
-        visualizer.add_ray([new_lines[i,0,:], new_lines[i,1,:]], np.array([1.,0.,0.]))
-    for i in range(probes.shape[0]):
-        visualizer.add_ray([probes[i], probes[i]+delta*directions[i]], np.array([0.,0.,1.]))
-        if inf_mask[i]:
-            if i in cluster:
-                visualizer.add_point(probes[i], np.array([1.,0.,1.]))
+    if show_new_lines:
+        for i in range(new_lines.shape[0]):
+            visualizer.add_ray([new_lines[i,0,:], new_lines[i,1,:]], np.array([1.,0.,0.]))
+
+    if show_probes:
+        for i in range(probes.shape[0]):
+            visualizer.add_ray([probes[i], probes[i]+delta*directions[i]], np.array([0.,0.,1.]))
+            if inf_mask[i]:
+                if i+probes_offset in cluster:
+                    visualizer.add_point(probes[i], np.array([1.,0.,1.]))
+                else:
+                    visualizer.add_point(probes[i], np.array([1.,0.,0.]))
             else:
-                visualizer.add_point(probes[i], np.array([1.,0.,0.]))
-        else:
-            visualizer.add_point(probes[i], np.array([0.,1.,0.]))
-
-    # Visualize the expanded cluster of infinite depth vertices and their neghboring faces
-    for v in c_verts:
-        visualizer.add_point(vertices[v], [1.,0.,1.])
-    for f in c_faces:
-        visualizer.add_colored_mesh(vertices[faces[f]], np.array([[0,1,2]]), np.array([[1.,0.2,1.]]))
-
+                visualizer.add_point(probes[i], np.array([0.,1.,0.]))
+    
+    # for x in {898, 899, 901, 902, 903, 1825, 1826, 1830, 807, 1216, 1217, 1218, 1219, 1220, 1221, 1222, 1227, 1228, 1230, 1232, 1235, 1236, 1631, 1632, 1634, 1637, 1638, 1639, 1641, 1643, 1646, 885, 888, 890, 894, 895}:
+    #     print(x)
+    #     visualizer.add_point(vertices[x], [1.,0.,0.])
     visualizer.display(show_wireframe=True)
 
-def get_depths(model, probes, directions, delta):
+def get_depths(model, probes, directions, delta=0.08):
     '''
     Gets the ODF predicted distance for each probe in the provided direction. Each probe is offset from the estimated surface point by delta.
     If depth is infinity, checks the opposite direction. If the opposite direction doesn't confirm infinity, then depth is set to be delta.
@@ -395,7 +415,8 @@ def get_depths(model, probes, directions, delta):
         # reverse so we can pop the elements off in order
         confirmed_inf.reverse()
         # update the depths of the inf rays depending on whether or not they were confirmed
-        model_depths = [x if x != np.inf else (np.inf if confirmed_inf.pop() else 0.0) for x in model_depths]
+        model_depths = [x if x != np.inf else (np.inf if confirmed_inf.pop() else delta) for x in model_depths]
+        # model_depths = [x if x != np.inf else np.inf for x in model_depths]
 
     return model_depths
 
@@ -407,277 +428,173 @@ def pull_back_probes(probes, directions, delta):
     probes = [probes[i]- delta*directions[i] for i in range(len(probes))]
     return probes
 
-# #####################################################################################
-#                  PROBE CLUSTERING, TUNNELING, AND HOLE REPAIR
-# #####################################################################################
-def edges_adjacent_to_faces(lines, faces, face_indices, used_lines):
-    face_vertices = set(list(faces[face_indices].flatten()))
-    all_masks = [np.any(lines==x, axis=1)[:,np.newaxis] for x in face_vertices]
-    final_mask = np.any(np.hstack(all_masks), axis=1)
-    adj_lines = list(lines[final_mask])
-    return [x for x in adj_lines if x not in used_lines]
-
-def faces_adjacent_to_edges(faces, edges, used_faces):
-    all_masks = [np.any(np.hstack([np.any(faces==x[0], axis=1)[:, np.newaxis], np.any(faces==x[1], axis=1)[:, np.newaxis]]))[:, np.newaxis] for x in edges]
-    new_face_inds = [i for i in range(faces.shape[0]) if all_masks[i] and i not in used_faces]
-    return new_face_inds
-
-def face_plane_intersection(faces, intersected_face1, intersected_face2, vert1, direction1, vert2, direction2):
+def fix_inconsistent_vertices(model, inconsistent_vertices, vertices, vert2vert, new_positions, show_clusters=False, faces=None):
     '''
-    Returns all the faces intersected by the plane connecting two probe rays
+    For each inconsistent vertex, finds the new probe direction, queries it, and updates the vertex in new_points
     '''
 
-    plane_verts, plane_faces = adjacent_rays_plane(vert1, direction1, vert2, direction2)
-    intersected_faces = [intersected_face1, intersected_face2]
+
+    if show_clusters:
+        gt_faces = mesh.faces
+        gt_verts = mesh.vertices
+        gt_verts = odf_utils.mesh_normalize(gt_verts)
+        gt_lines = np.concatenate([gt_faces[:,:2], gt_faces[:,1:], gt_faces[:,[0,2]]], axis=0)
+
+
+    all_probe_directions = {}
+    # cluster the inconsistent vertices
+    clusters = cluster_inconsistent_probes(inconsistent_vertices, vert2vert)
+    # get the anchors and calculate the probe directions for each cluster
+    for c in clusters:
+        anchors, anchor_sum, vert_anchors = cluster_weighted_anchors(c, vert2vert, new_positions)
+        new_probe_directions, new_probe_looks = new_cluster_probes(c, anchors, vert2vert, vertices, new_positions)
+        all_probe_directions.update(new_probe_directions)
+
+        # visualize the cluster, anchors, and new probe directions
+        if show_clusters:
+            assert(faces is not None)
+            faces = np.array(faces)
+            lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+            visualizer = visualization.RayVisualizer(gt_verts, gt_lines)
+
+            for v in new_probe_looks:
+                visualizer.add_ray([vertices[v], new_probe_looks[v]], [0.,0.,1.])
+            for a in anchors:
+                visualizer.add_point(new_positions[a], anchors[a]/anchor_sum*np.array([0.,1.,1.]))
+                visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
+                visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
+            for v in vert_anchors:
+                visualizer.add_ray([vertices[v],vertices[vert_anchors[v]]], [0.,1.,0.])
+            visualizer.display()
+
+
+    # query the ODF for the depth from the new probe and direction
+    ordered_inconsistent_verts = [x for x in inconsistent_vertices]
+    probe_locations = np.array([vertices[i] for i in ordered_inconsistent_verts])
+    probe_directions = np.array([all_probe_directions[i] for i in ordered_inconsistent_verts])
+    depths = get_depths(model, probe_locations, probe_directions)
+    depth_dict = {ordered_inconsistent_verts[i]: depths[i] for i in range(len(ordered_inconsistent_verts))}
+    dir_dict = {ordered_inconsistent_verts[i]: probe_directions[i] for i in range(len(ordered_inconsistent_verts))}
+    pos_dict = {i: vertices[i] + depth_dict[i] * dir_dict[i] for i in ordered_inconsistent_verts if depth_dict[i] != np.inf}
+    new_positions = [new_positions[i] if i not in pos_dict else pos_dict[i] for i in range(len(new_positions))]
+
+    # TODO: set inconsistent verts not in pos_dict to be linear interpolations of neighbors (weighted?)
+    print("not updated")
+    print(len(set(dir_dict)-set(pos_dict)))
+    not_updated_points = set(dir_dict)-set(pos_dict)
+
+    return new_positions
+
+
+def new_cluster_probes(cluster, anchors, vert2vert, vertices, new_points):
+    '''
+    Returns new probe directions for points in the cluster, based on the anchor points and vertex distances
+    '''
+    # TODO figure out how to weight the anchors according to both their graph distances and euclidean distance
+
+    anchor_dists = {v: {} for v in cluster}
     
-    faces = np.array(faces)
-    lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
-    used_lines = np.concatenate([faces[intersected_faces,:2], faces[intersected_faces,1:], faces[intersected_faces,[0,2]]], axis=0)
-    used_lines = list(used_lines)
+    for v in cluster:
+        # Run Dijkstra's for each element in the cluster to get the distance to all anchor points
+        
+        dijkstra_queue = {x for x in cluster}
+        dist = {x: np.inf for x in dijkstra_queue}
+        dist[v] = 0
 
-    latest_faces = [x for x in intersected_faces]
+        while len(dijkstra_queue) > 0:
+            # Find the next point to look at
+            lowest_dist = np.inf
+            next_point = None
+            for x in dijkstra_queue:
+                if lowest_dist == np.inf:
+                    next_point = x
+                    lowest_dist = dist[x]
+                elif dist[x] < lowest_dist:
+                    next_point = x
+                    lowest_dist = dist[x]
+            dijkstra_queue -= {next_point}
 
-    while len(latest_faces) > 0:
-        # get new neighboring lines
-        neighbor_lines = edges_adjacent_to_faces(lines, faces, latest_faces, used_lines)
-        # select only the neighboring lines that intersect our plane
-        intersecting_neighbor_lines = []
-        near_face_threshold = rasterization.max_edge(plane_verts, plane_faces)
-        for l in neighbor_lines:
-            rot_verts = rasterization.rotate_mesh(plane_verts, l[0], l[1])
-            _, depth, _ = rasterization.ray_occ_depth(plane_faces, rot_verts, ray_start_depth=np.linalg.norm(l[1]-l[0]), near_face_threshold=near_face_threshold)
-            if depth < np.inf:
-                intersecting_neighbor_lines.append(l)
+            # update distance to neighbors
+            for x in set.intersection(vert2vert[next_point], cluster):
+                if dist[next_point] + 1 < dist[x]:
+                    dist[x] = dist[next_point] + 1
+        
+        # Calculate the distance from v to each anchor point
+        for point in cluster:
+            for anchor in set.intersection(vert2vert[point], set(anchors)):
+                if anchor not in anchor_dists[v]:
+                    anchor_dists[v][anchor] = dist[point] + 1
+                elif dist[point] + 1 < anchor_dists[v][anchor]:
+                    anchor_dists[v][anchor] = dist[point] + 1
 
-        #get new faces that border the new lines
-        latest_faces = faces_adjacent_to_edges(faces, intersecting_neighbor_lines, intersected_faces)
-
-        # add new faces and lines to respective lists
-        used_lines += intersecting_neighbor_lines
-        faces += latest_faces
-
-    return intersected_faces
-
-def probe_edges_all_intersections(vertices, faces, directions, probe_edges):
-    '''
-    Returns all the faces that are intersected by the probe planes defined by each edge.
-    Returns faces as a set of indices
-    '''
-    intersected_faces = set()
-    near_face_threshold = rasterization.max_edge(vertices, faces)
-    for e in probe_edges:
-        intersection1 = single_vert_intersection(vertices, faces, vertices[e[0]], directions[e[0]], near_face_threshold)
-        intersection2 = single_vert_intersection(vertices, faces, vertices[e[0]], directions[e[0]], near_face_threshold)
-        intersected_faces = set.union(intersected_faces, face_plane_intersection(faces, intersection1, intersection2, vertices[e[0]], directions[e[0]], vertices[e[1]], directions[e[1]]))
-    return intersected_faces
+    # calculate the look direction for each of the points in the cluster (using the anchor weights, distances, and positions)
+    new_probe_directions = {}
+    new_probe_look_points = {}
+    for v in cluster:
+        anchor_weight_sum = 0.0
+        for a in anchors:
+            anchor_weight_sum += (1./anchor_dists[v][a])*anchors[a]
+        look_point = np.array([0.,0.,0.])
+        for a in anchors:
+            look_point += new_points[a]*(1./anchor_dists[v][a])*anchors[a]/anchor_weight_sum
+        new_probe_look_points[v] = look_point
+        new_probe_directions[v] = look_point - vertices[v]
+        new_probe_directions[v] /= np.linalg.norm(new_probe_directions[v])
     
+    return new_probe_directions, new_probe_look_points
 
-def adjacent_rays_plane(vert1, direction1, vert2, direction2):
+
+def cluster_weighted_anchors(cluster, vert2vert, new_positions):
     '''
-    Given two vertices and their probe_directions, returns the adjacent triangle planes that join the two sampling rays
+    Returns a dictionary that maps vertex indices to weights
+    the weights correspond to how strongly that vertex's new position pulls the cluster probes towards it
     '''
+    anchors = {}
+    # factor to accentuate the importance of max min cos
+    K = 2.
+    anchor_sum = 0.
 
-    ray1_sphere_intersect = odf_utils.get_sphere_intersections(vert1, direction1, 1.0)[1]
-    ray2_sphere_intersect = odf_utils.get_sphere_intersections(vert2, direction2, 1.0)[1]
+    # map cluster vertices to their anchors
+    vert_to_anchor_edges = {}
 
-    if np.linalg.norm(ray1_sphere_intersect-vert2) < np.linalg.norm(ray2_sphere_intersect-vert1):
-        return np.array([vert1, vert2, ray1_sphere_intersect, ray2_sphere_intersect]), np.array([[0,2,1], [1,2,3]])
-    else:
-        return np.array([vert1, vert2, ray1_sphere_intersect, ray2_sphere_intersect]), np.array([[0,2,3], [1,0,3]])
+    # each vertex in the cluster can add one anchor
+    for v in cluster:
+        new_anchor = None
+        max_min_cos = -2.0
+        # check all of the neighboring vertices as potential anchor candidates
+        for neighbor in vert2vert[v] - cluster:
+            min_cos = 2.0
+            neighbor_vec = new_positions[neighbor] - new_positions[v]
+            # check all other neighbors to see what the minimum cosine is for this candidate
+            for other_neighbor in vert2vert[v] - cluster - {neighbor}:
+                other_neighbor_vec = new_positions[other_neighbor] - new_positions[v]
+                new_cos = np.dot(neighbor_vec, other_neighbor_vec) / (np.linalg.norm(neighbor_vec) * np.linalg.norm(other_neighbor_vec))
+                if new_cos < min_cos:
+                    min_cos = new_cos
+            if min_cos < 2.0 and min_cos > max_min_cos:
+                max_min_cos = min_cos
+                new_anchor = neighbor
+        if new_anchor is not None:
+            anchor_sum += ((1. + max_min_cos) / 2.0) ** K
+            if new_anchor not in anchors:
+                anchors[new_anchor] = ((1. + max_min_cos) / 2.0) ** K
+            else:
+                anchors[new_anchor] += ((1. + max_min_cos) / 2.0) ** K
 
-def single_vert_intersection(vertices, faces, vert, direction, near_face_threshold):
-    '''
-    Returns the face index of the first self intersection from the vert and the specified direction
-    '''
-    vertices = np.array(vertices)
-    faces = np.array(faces)
-
-    # epsilon value prevents intersecting the face we start at (same idea as avoiding shadow acne in ray tracing)
-    epsilon = 0.000001
-    ray_length = np.linalg.norm(direction) - epsilon
-    rot_verts = rasterization.rotate_mesh(vertices, vert, vert + direction)
-    _, _, intersected_face = rasterization.ray_occ_depth_visual(faces, rot_verts, ray_start_depth=ray_length, near_face_threshold=near_face_threshold)
-    return intersected_face
-
-def vert_cluster_intersections(vertices, faces, probe_cluster, directions):
-    '''
-    Returns the indices of faces that are intersected by the probes in the cluster
-    '''
-
-    near_face_threshold = rasterization.max_edge(np.array(vertices), np.array(faces))
+            vert_to_anchor_edges[v] = new_anchor
     
-    intersected_faces = []
-    for i, probe in enumerate(probe_cluster):
-        # print(single_vert_intersection(vertices, faces, probe, directions[i], delta, near_face_threshold))
-        # print("SHOWING FAILED VERTEX")
+    return anchors, anchor_sum, vert_to_anchor_edges
 
-        # _, depth = single_vert_intersection(vertices, faces, vertices[probe], directions[i], delta, near_face_threshold)
-        # print(depth)
-
-        # show_subdivisions_and_probes(np.array(vertices), np.array([vertices[probe], vertices[probe] + depth*directions[i]]), [True, True], [directions[i], directions[i]], faces, delta)
-        intersected_faces.append(single_vert_intersection(vertices, faces, vertices[probe], directions[i], near_face_threshold)[0])
-    return list(set(intersected_faces))
-
-# def vert_neighbors(faces, face_cluster, inf_vertices):
-#     '''
-#     Given a set of faces, returns the vertices neighboring the faces that have infinite depth
-#     '''
-#     face_cluster = np.array(face_cluster)
-#     faces = np.array(faces)
-#     neighboring_vert_indices = list(set(list(faces[face_cluster].flatten())))
-#     inf_vertices = set(inf_vertices)
-#     # TODO: don't just check if it's in inf_vertices, check if there is a self intersection before the predicted depth.
-#     neighbors = [x for x in neighboring_vert_indices if x in inf_vertices]
-#     return neighbors
-
-# def face_neighbors(faces, vert_cluster):
-#     '''
-#     Given a set of vertices, returns the faces neighboring the vertices
-#     '''
-#     faces = np.array(faces)
-#     face_masks = []
-#     for v in vert_cluster:
-#         face_masks.append(np.any(faces==v, axis=1)[:, np.newaxis])
-#     final_mask = np.any(np.hstack(face_masks), axis=1)
-
-#     face_indices = [i for i in range(faces.shape[0]) if final_mask[i]]
-#     return face_indices
-
-def new_edges(all_vertices, new_vertices, vert2vert):
+def cluster_inconsistent_probes(inconsistent_indices, vert2vert):
     '''
-    Returns all edges (pairs of vertices) that contain one element of all_vertices and one element of new_vertices. 
-    Edges are only valid if the two vertices are neighbors in the adjacency mapping (vert2vert)
-    Note that new_vertices is a subset of all_vertices
+    Returns a list of sets of the provided indices. Each sublist represents a set of infinite depth vertices that are connected by mesh edges.
     '''
-    new_edges = []
-    for v1 in new_vertices:
-        neighbors = vert2vert[v1]
-        for v2 in all_vertices:
-            if v2 in neighbors:
-                new_edges.append((v1,v2))
-    return new_edges
-
-
-def cluster_expansion(vertices, faces, cluster, inf_verts, directions, odf_depths, vert2vert, vert2face, face2vert):
-    '''
-    Takes a cluster of infinite depth vertices.
-    Returns two clusters, each of both faces and vertices.
-    Cluster A contains the vertices and neighboring faces around the input cluster.
-    Cluster B is the faces intersected by the first cluster and their neighboring vertices.
-    Directions should be the directions for ALL vertices!
-    NOTE: faces and vertices are both returned as indices into their respective arrays
-    '''
-    near_face_threshold = rasterization.max_edge(vertices, faces)
-
-    # TODO: make sure that inf_verts is a set
-    # The two clusters (A&B)
-    A_vertices = set([x for x in cluster])
-    A_faces = set()
-    B_vertices = set()
-    B_faces = set()
-
-    #items added to the clusters in the most recent iteration
-    av_new = set([x for x in A_vertices])
-    af_new = set()
-    bv_new = set()
-    bf_new = set()
-
-    # Dictionary to store the self intersection depth of individual vertices so they don't get queried twice
-    self_intersection_before_depth = {}
-
-    #iterate while new things are still being added to the clusters
-    while((len(av_new) + len(af_new) + len(bv_new) + len(bf_new)) > 0):
-        # af_next = vert_cluster_intersections(vertices, faces, bv_new, [directions[i] for i in bv_new]) if len(bv_new) > 0 else []
-        # af_next += face_neighbors(faces, av_new) if len(av_new) > 0 else []
-        # af_next = list(set(af_next))
-
-        # bf_next = vert_cluster_intersections(vertices, faces, av_new, [directions[i] for i in av_new]) if len(av_new) > 0 else []
-        # bf_next += face_neighbors(faces, bv_new) if len(bv_new) > 0 else []
-        # bf_next = list(set(bf_next))
-
-        #UPDATE FACES
-
-        # Add Face Condition 1 : Intersected by probe plane
-        af_next = probe_edges_all_intersections(vertices, faces, directions, new_edges(B_vertices, bv_new, vert2vert))
-        # Add Face Condition 2 : Adjacent to an added vertex
-        for v in av_new:
-            af_next = set.union(af_next, vert2face[v])
-
-        # Add Face Condition 1 : Intersected by probe plane
-        af_next = probe_edges_all_intersections(vertices, faces, directions, new_edges(B_vertices, bv_new, vert2vert))
-        # Add Face Condition 2 : Adjacent to an added vertex
-        for v in av_new:
-            af_next = set.union(af_next, vert2face[v])
-
-
-        #UPDATE VERTICES
-
-        def new_vertices(new_faces, existing_vertices):
-            #Add Vertex Condition 1: Neighboring added plane 
-            neighbors = set()
-            for f in new_faces:
-                neighbors = set.union(neighbors, face2vert[f])
-            #1.1 Neighbors added if they are inf depth (and haven't been added)
-            new_verts = set.union(neighbors, inf_verts) - existing_vertices
-            
-            #1.2 TODO: Map inf verts to cluster sets and add all verts from the cluster
-
-            #1.3 Neighbors added if their self intersection is closer than their odf depth
-            for v in neighbors - existing_vertices - inf_verts:
-                # check if this value has already been computed
-                if v in self_intersection_before_depth:
-                    if self_intersection_before_depth[v]:
-                        new_verts = set.union(new_verts, v)
-                else:
-                    # Compute the depth of the first self intersection
-                    # Use epsilon to avoid intersecting the current face
-                    epsilon = 0.000001
-                    ray_start = vertices[v] + epsilon * directions[v]
-                    ray_end = vertices[v] + epsilon * directions[v]
-                    rot_verts = rasterization.rotate_mesh(vertices, ray_start, ray_end)
-                    _, self_intersection_depth = rasterization.ray_occ_depth(faces, rot_verts, ray_start_depth=np.linalg.norm(ray_end - ray_start), near_face_threshold=near_face_threshold)
-                    intersect_before_odf_depth = self_intersection_depth < odf_depths[v]
-                    self_intersection_before_depth[v] = intersect_before_odf_depth
-                    if intersect_before_odf_depth:
-                        new_verts.add(v)
-            return new_verts        
-
-        av_new = new_vertices(af_new, A_vertices)
-        bv_new = new_vertices(bf_new, B_vertices)   
-
-        # check to see which ones are actually new
-        af_next = [x for x in af_next if x not in A_faces]
-        bf_next = [x for x in bf_next if x not in B_faces]
-        av_next = [x for x in av_next if x not in A_vertices]
-        bv_next = [x for x in bv_next if x not in B_vertices]
-        A_faces += af_next
-        B_faces += bf_next
-        A_vertices += av_next
-        B_vertices += bv_next
-
-        # update the new additions for the next iteration
-        af_new = af_next
-        bf_new = bf_next
-        av_new = av_next
-        bv_new = bv_next
-
-    print("FINISHED CLUSTER EXPANSION")
-    print(A_vertices)
-    print(A_faces)
-    print(B_vertices)
-    print(B_faces)
-
-    return A_vertices, A_faces, B_vertices, B_faces
-
-def cluster_inf_probes(inf_indices, faces, vert2vert):
-    '''
-    Returns a list of lists of the provided indices. Each sublist represents a set of infinite depth vertices that are connected by mesh edges.
-    '''
+    # don't want to change the actual data structure that was passed in
+    inconsistent_copy = [x for x in inconsistent_indices]
     clusters = []
-    faces = np.array(faces)
-    while len(inf_indices) != 0:
+    while len(inconsistent_copy) != 0:
         # start with one of the inf vertices
-        new_cluster = [inf_indices.pop()]
+        new_cluster = [inconsistent_copy.pop()]
         new_indices = [new_cluster[0]]
 
         # as long as new neighbors are being added, keep iterating
@@ -689,51 +606,224 @@ def cluster_inf_probes(inf_indices, faces, vert2vert):
 
             # update new indices for next round by assigning all neighbors that have inf depth to it
             new_indices = []
-            for x in inf_indices:
+            for x in inconsistent_copy:
                 if x in neighbors:
                     new_indices.append(x)
                     new_cluster.append(x)
 
             # remove elements from inf indices if they were added to the current cluster
-            inf_indices = [x for x in inf_indices if x not in neighbors]
+            inconsistent_copy = [x for x in inconsistent_copy if x not in neighbors]
 
         # add the new cluster to the list 
-        clusters.append(new_cluster)
+        clusters.append(set(new_cluster))
     return clusters
+
+def get_inconsistent_probes(vertices, faces, probes, probe_directions, odf_depths, probes_offset):
+    '''
+    Returns probes that overlap with their neighbors, leading to self intersections.
+    '''
+    epsilon = 0.000001
+    vertices = np.array(vertices)
+    faces = np.array(faces)
+    rho = 0.1
+    near_face_threshold = rasterization.max_edge(vertices, faces)
+    # Currently: return any probes with infinite depth
+    inf_depth_probes = set([i + probes_offset for i in range(len(probe_directions)) if odf_depths[i] == np.inf])
+    # TODO: also return any probes that overlap with their neighbors
+
+    self_intersecting_probes = set()
+    for i in range(len(probe_directions)):
+        if odf_depths[i] > rho:
+            vi = i+probes_offset
+            rot_verts = rasterization.rotate_mesh(vertices, vertices[i+probes_offset] + epsilon*probe_directions[i], vertices[i+probes_offset] + probe_directions[i])
+            _, depth = rasterization.ray_occ_depth(faces, rot_verts, ray_start_depth=np.linalg.norm(probe_directions[i])-epsilon, near_face_threshold=near_face_threshold)
+            if depth < odf_depths[i]:
+                self_intersecting_probes.add(vi)
+        
+    inconsistent_probes = set.union(inf_depth_probes, self_intersecting_probes)
+    # inconsistent_probes = inf_depth_probes
+
+    return inconsistent_probes
+
+# def step_probe_directions(vertices, new_positions, probe_directions, inconsistent_probes, update_probes, neighbor_weights, probes_offset, alpha):
+#     '''
+#     Steps the probe sampling directions toward valid neighbors
+#     '''
+#     new_probe_directions = []
+#     was_updated = []
+#     for i in range(probes_offset, len(vertices)):
+#         if i in update_probes:
+#             # iterate over all neighbors
+#             new_direction = np.array([0., 0., 0.])
+#             gamma = 0.
+#             for n in neighbor_weights[i]:
+#                 if not n in inconsistent_probes:
+#                     direction = (new_positions[n]-vertices[i])
+#                     direction /= np.linalg.norm(direction)
+#                     new_direction += direction*neighbor_weights[i][n]
+#                     gamma += neighbor_weights[i][n]
+#             if np.linalg.norm(new_direction) > 0.:
+#                 new_direction /= np.linalg.norm(new_direction)
+            
+            
+#             # the new direction is the weighted sum of the original direction and the neighboring directions (using refinement rate hyperparam)
+#             new_direction = (alpha*gamma) * new_direction + (1.- (alpha*gamma)) * probe_directions[i-probes_offset]
+#             new_direction /= np.linalg.norm(new_direction)
+
+#             # if i == 1236:
+#             #     print(f"old direction: {probe_directions[i-probes_offset]}")
+#             #     print(f"new direction: {new_direction}")
+
+#             new_probe_directions.append(new_direction)
+#             was_updated.append(True)
+#         else:
+#             new_probe_directions.append(probe_directions[i-probes_offset])
+#             was_updated.append(False)
+
+#     return new_probe_directions, was_updated
+
+# def get_neighbor_weights(vertices, vert2vert, probes_offset, k):
+#     '''
+#     Returns a dictionary of dictionaries defining the relative weight of each neighboring vertex of each probe point
+
+#     vertices      - vertex positions
+#     vert2vert     - a dictionary mapping each vertex index to the indices of it's neighbors
+#     probes_offset - The number of non-probe points, also the index into vertices at which the probes start
+#     k             - an exponent controlling the relative weights of short vs longer edges (higher k --> shorter edges are more important)
+#     '''
+#     neighbor_weights = {i:{} for i in range(probes_offset, len(vertices))}
+
+#     for i in range(probes_offset, len(vertices)):
+#         individual_weights = {}
+#         for n in vert2vert[i]:
+#             dist = np.linalg.norm(vertices[n] - vertices[i])
+#             individual_weights[n] = dist**(-k)
+
+#         total_weight = sum([individual_weights[x] for x in individual_weights])
+
+#         # no one edge should hold more than 50% of the weight so we don't get stuck with probes that are both inconsistent yet dependent on each other
+#         adjust_weights = False
+#         reallocated_amount = 0.
+#         minority_total = 0.
+#         max_index = -1
+#         for n in vert2vert[i]:
+#             if individual_weights[n] > total_weight/2.:
+#                 adjust_weights = True
+#                 reallocated_amount = individual_weights[n] - total_weight/2.
+#                 minority_total = total_weight - individual_weights[n]
+#                 max_index = n
+#                 individual_weights[n] = total_weight/2.
+#         if adjust_weights:
+#             for n in vert2vert[i]:
+#                 if n != max_index:
+#                     individual_weights[n] = individual_weights[n]/minority_total * reallocated_amount
+
+#         for n in vert2vert[i]:
+#             neighbor_weights[i][n] = individual_weights[n] / total_weight
+
+#     return neighbor_weights
+
         
 
-def update_step(model, vertices, faces, probes, directions, radius, delta):
+def update_step(model, vertices, faces, probes, directions, delta, show_clusters=False):
     '''
     Updates vertex locations and fixes any self intersections in the mesh. Returns new vertices and faces.
     '''
+    # Hyperparameters
+    REFINEMENT_RATE = 0.5
+    K = 2
+
     # we only care about the probe directions
     # directions = [x / np.linalg.norm(x) for x in directions]
     probe_directions = directions[-len(probes):]
-
-    probe_depths = get_depths(model, probes, probe_directions, delta)
-    inf_mask = [probe_depths[i] == np.inf for i in range(len(probe_depths))]
-    show_subdivisions_and_probes(vertices, probes, inf_mask, probe_directions, faces, delta)
-
-    # Cluster inf depth vertices together
     probes_offset = len(vertices) - len(probes)
-    inf_indices = [i + probes_offset for i in range(len(probe_depths)) if probe_depths[i]==np.inf]
-    vert2vert, vert2face, face2vert, face2edge, edge2face = odf_utils.mesh_adjacency_dictionaries(vertices, faces)
-    clusters = cluster_inf_probes(inf_indices, faces, vert2vert)
-    for c in clusters:
-        c_probe = [x-probes_offset for x in c]
-        A_vertices, A_faces, B_vertices, B_faces = cluster_expansion(vertices, faces, c, inf_indices, directions, delta)
-        show_subdivisions_and_probes(vertices, probes, inf_mask, probe_directions, faces, delta, cluster=c_probe, c_verts=A_vertices, c_faces=A_faces, show_mesh_faces=False)
-        show_subdivisions_and_probes(vertices, probes, inf_mask, probe_directions, faces, delta, cluster=c_probe, c_verts=B_vertices, c_faces=B_faces, show_mesh_faces=False)
 
-    # TODO: hole repair
-
-    new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i] + probe_depths[i]*probe_directions[i] if probe_depths[i] != np.inf else vertices[probes_offset + i] for i in range(len(probes))]
-
-    return new_vertices, faces
+    # graph properties that will be used during probe refinement
+    vert2vert = odf_utils.get_vertex_adjacencies(vertices, faces)
+    # neighbor_weights = get_neighbor_weights(vertices, vert2vert, probes_offset, K)
 
 
+    probe_depths = get_depths(model, probes, probe_directions)
 
-def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_point=[0.,0.,0.], show=True, iterations = 3, delta=0.08):
+    # STEP 1: Identify inconsistent probes
+    inconsistent_probes = get_inconsistent_probes(vertices, faces, probes, probe_directions, probe_depths, probes_offset)
+    inconsistent_mask = [True if i+probes_offset in inconsistent_probes else False for i in range(len(probes))]
+
+    # TODO: Gradually phase out update probes based on how close they are to the originally inconsistent ones
+    update_probes = [x for x in inconsistent_probes]
+
+    new_positions = [vertices[i] for i in range(probes_offset)] + [probes[i-probes_offset] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if not i in inconsistent_probes else vertices[i] for i in range(probes_offset, len(vertices))]
+
+    if show_clusters:
+        clusters = cluster_inconsistent_probes(inconsistent_probes, vert2vert)
+        for c in clusters:
+        #     anchors, anchor_sum, vert_anchors = cluster_weighted_anchors(c, vert2vert, new_positions)
+        #     dirs, looks = new_cluster_probes(c, anchors, vert2vert, vertices, new_positions)
+        #     faces = np.array(faces)
+        #     lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        #     visualizer = visualization.RayVisualizer(vertices, lines)
+        #     for v in looks:
+        #         visualizer.add_ray([vertices[v], looks[v]], [0.,0.,1.])
+        #     for a in anchors:
+        #         visualizer.add_point(new_positions[a], anchors[a]/anchor_sum*np.array([0.,1.,1.]))
+        #     visualizer.display()
+            show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, cluster=c)
+
+    new_positions = fix_inconsistent_vertices(model, inconsistent_probes, vertices, vert2vert, new_positions, show_clusters=show_clusters, faces=faces) if len(inconsistent_probes) > 0 else new_positions
+
+    return np.array(new_positions), faces
+
+
+    # num_iterations = 0
+    # was_updated = []
+    # while (num_iterations < n_refinements) and len(inconsistent_probes) > 0:
+    #     num_iterations += 1
+    #     print(f"n iterations {num_iterations}")
+    #     print(f"min{np.min(np.linalg.norm(probe_directions, axis=1))}")
+
+
+    #     inconsistent_mask = [True if i+probes_offset in inconsistent_probes else False for i in range(len(probes))]
+    #     # show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, was_updated=was_updated)
+        
+    #     #STEP 2: Calculate updated points for all vertices
+    #     # new_positions = [vertices[i] for i in range(probes_offset)] + [vertices[i] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if probe_depths[i-probes_offset] < np.inf else vertices[i] for i in range(probes_offset, len(vertices))]
+    #     new_positions = [vertices[i] for i in range(probes_offset)] + [vertices[i] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if not i in inconsistent_probes else vertices[i] for i in range(probes_offset, len(vertices))]
+
+    #     # show_inconsistent_probes_and_weights(vertices, new_positions, faces, probes, inconsistent_probes, update_probes, directions, neighbor_weights, delta)
+
+
+    #     #STEP 3: Refine sampling direction of inconsistent probes
+    #     # TODO: weight in the directions of static (non-probe) vertices
+    #     probe_directions, was_updated = step_probe_directions(vertices, new_positions, probe_directions, inconsistent_probes, update_probes, neighbor_weights, probes_offset, REFINEMENT_RATE)
+
+    #     if True:
+    #         show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, was_updated=was_updated)
+
+    #     # get the new depths for the updated probes
+    #     updated_directions = [probe_directions[i] for i in range(len(probe_directions)) if was_updated[i]]
+    #     corresponding_verts = [vertices[i+probes_offset] for i in range(len(probe_directions)) if was_updated[i]]
+    #     new_probes = pull_back_probes(corresponding_verts, updated_directions, delta)
+    #     new_depths = get_depths(model, new_probes, updated_directions)
+    #     # TODO why is this an ndarray
+    #     new_depths = list(new_depths)
+    #     new_depths.reverse()
+    #     new_probes.reverse()
+    #     probe_depths = [probe_depths[i] if not was_updated[i] else new_depths.pop() for i in range(len(probes))]
+    #     probes = [probes[i] if not was_updated[i] else new_probes.pop() for i in range(len(probes))]
+
+    #     # re-check which probes are inconsistent
+    #     inconsistent_probes = get_inconsistent_probes(vertices, faces, probes, probe_directions, probe_depths, probes_offset)
+
+    # # TODO: hole repair
+
+    # new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i] + probe_depths[i]*probe_directions[i] if probe_depths[i] != np.inf else vertices[probes_offset + i] for i in range(len(probes))]
+
+    # return new_vertices, faces
+
+
+
+def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_point=[0.,0.,0.], show=True, iterations = 4, delta=0.08):
+    start_time = datetime.now()
     focal_point = np.array(focal_point)
     vertices, faces = icosahedron_sphere_tessalation(radius, subdivisions=initial_tessalation_factor)
     faces = np.array(faces)
@@ -741,12 +831,10 @@ def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_poin
     
     # if show:
     #     show_subdivisions_and_probes(vertices, vertices, ray_directions, faces, delta)
-    vertices, faces = update_step(model, vertices, faces, vertices, ray_directions, radius, delta)
+    vertices, faces = update_step(model, vertices, faces, vertices, ray_directions, delta, show_clusters=show)
 
     if show:
         # can't import visualization on OSCAR because it uses Open3D and OpenGL
-        import visualization
-        import open3d as o3d
         o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
     
     for i in range(iterations - 1):
@@ -757,13 +845,18 @@ def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_poin
         #     show_subdivisions_and_probes(vertices, probes, directions, faces, delta)
 
         probes = pull_back_probes(probes, directions, delta)
-        vertices, faces = update_step(model, vertices, faces, probes, directions, radius, delta)
+        vertices, faces = update_step(model, vertices, faces, probes, directions, delta, show_clusters=show)
 
         if show:
             # can't import visualization on OSCAR because it uses Open3D and OpenGL
-            import visualization
-            import open3d as o3d
             o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
+    
+    end_time = datetime.now()
+
+    elapsed_time = end_time - start_time
+    print(f'elapsed time: {elapsed_time}')
+
+    o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
 
     
     # TODO: save to file
@@ -776,6 +869,15 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--pointcloud", action="store_true", help="visualize the pointcloud generated from the sphere looking inwards")
     parser.add_argument("-m", "--mesh", action="store_true", help="visualize the mesh generated from the sphere looking inwards")
     parser.add_argument("-r", "--repair", action="store_true", help="visualize mesh hole repair")
+
+    # mesh extraction parameters
+    parser.add_argument("-t", "--tesselation_subdivisions", type=int, default=3, help="The number of times to subdivide the initial sphere tesselation")
+    parser.add_argument("-c", "--update_cycles", type=int, default=3, help="The number of times to update the mesh vertices")
+    parser.add_argument("--delta", type=float, default=0.08, help="The amount to pull the probe points back by")
+    parser.add_argument("--rho", type=float, default=0.10, help="The depth threshold above which points should be checked for self intersection")
+    parser.add_argument("--edge_subdivision_threshold", type=float, default=0.05, help="The edge length threshold, above which an edge will be subdivided")
+
+    parser.add_argument("-s", "--show", action="store_true", help="visualize the mesh creation process")
     parser.add_argument("--mesh_file", default="F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj", help="Source of mesh file")
     args = parser.parse_args()
 
@@ -821,7 +923,7 @@ if __name__ == "__main__":
         subdivisions = 4
 
         # setup
-        mesh = trimesh.load(args.mesh_file)
+        # mesh = trimesh.load(args.mesh_file)
         faces = mesh.faces
         verts = mesh.vertices
         verts = odf_utils.mesh_normalize(verts)
@@ -835,19 +937,4 @@ if __name__ == "__main__":
 
 
         gt_model = MeshODF(verts, faces)
-        make_model_mesh(gt_model, initial_tessalation_factor=3)
-
-    if args.repair:
-        radius = 1.25
-        subdivisions = 2
-        vertices, faces = icosahedron_sphere_tessalation(radius=radius, subdivisions=subdivisions)
-        inf_vert_index = 1
-        direction = -1. * vertices[inf_vert_index] / np.linalg.norm(vertices[inf_vert_index])
-        direction += np.array([0.01,0.005,0.012])
-        non_intersecting_vertices = [inf_vert_index]
-        # can't import visualization on OSCAR because it uses Open3D and OpenGL
-        import visualization
-        import open3d as o3d
-        o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
-        vertices, faces, _, _ = recompute_mesh_connectivity(vertices, faces, inf_vert_index, direction, non_intersecting_vertices)
-        o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
+        make_model_mesh(gt_model, initial_tessalation_factor=args.tesselation_subdivisions, iterations=args.update_cycles, show=args.show)
