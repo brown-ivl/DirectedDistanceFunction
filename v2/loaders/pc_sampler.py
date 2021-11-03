@@ -1,69 +1,196 @@
 import argparse
-import random
 import beacon.utils as butils
 import trimesh
 import torch
 import math
 from tqdm import tqdm
 import multiprocessing as mp
-from itertools import repeat
-from functools import partial
+from threading import Thread
 
-import tk3dv.nocstools.datastructures as ds
 from PyQt5.QtWidgets import QApplication
-import PyQt5.QtCore as QtCore
-from PyQt5.QtGui import QKeyEvent, QMouseEvent, QWheelEvent
 import numpy as np
 
 from tk3dv.pyEasel import *
-from EaselModule import EaselModule
 from Easel import Easel
-import OpenGL.GL as gl
-import OpenGL.arrays.vbo as glvbo
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 import odf_utils
 from odf_dataset import DEFAULT_RADIUS, ODFDatasetVisualizer, ODFDatasetLiveVisualizer
+import odf_v2_utils as o2utils
 
-PC_VERT_NOISE = 0.02
-PC_TAN_NOISE = 0.02
-PC_UNIFORM_RATIO = 100
-PC_VERT_RATIO = 0
-PC_TAN_RATIO = 0
-PC_RADIUS = 1.25
-PC_MAX_INTERSECT = 1
+PC_SAMPLER_RADIUS = 1.25
+PC_SAMPLER_THRESH = 0.05
+PC_NEG_SAMPLER_THRESH = PC_SAMPLER_THRESH
+PC_SUBDIVIDE_THRESH = PC_SAMPLER_THRESH * 2
+PC_SAMPLER_NEG_MINOFFSET = PC_NEG_SAMPLER_THRESH * 2
+PC_SAMPLER_NEG_MAXOFFSET = PC_SAMPLER_RADIUS
+PC_SAMPLER_POS_RATIO = 0.5
 
 class PointCloudSampler():
-    def __init__(self, Vertices, VertexNormals):
+    def __init__(self, Vertices, VertexNormals, TargetRays, UsePosEnc=False):
         self.Vertices = Vertices
         self.VertexNormals = VertexNormals
+        self.nTargetRays = TargetRays
+        self.UsePosEnc = UsePosEnc
         assert self.Vertices.shape[0] == self.VertexNormals.shape[0]
-        print('[ INFO ]: Found {} vertices with normals.'.format(self.Vertices.shape[0]))
+        # print('[ INFO ]: Found {} vertices with normals. Will try to sample {} rays in total.'.format(len(self.Vertices), self.nTargetRays))
 
         self.Coordinates = None
         self.Intersects = None
         self.Depths = None
 
-        self.sample()
+        try:
+            self.sample(self.nTargetRays)
+        except (KeyboardInterrupt, SystemExit) as e:
+            print('\n[ INFO ]: KeyboardInterrupt detected. Going up exception chain.')
+            raise ValueError('KeyboardInterrupt detected. Going up exception chain.') from e
 
-    def sample(self):
-        # For each normal direction, find the point on a sphere of radius DEFAULT_RADIUS
-        # print(np.mean(self.Vertices, axis=0))
-        # Line-Sphere intersection: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-        o = self.Vertices
-        u = self.VertexNormals
-        c = np.array([0, 0, 0])
-        OminusC = o - c
-        DotP = np.sum(np.multiply(u, OminusC), axis=1)
-        Delta = DotP**2 - (np.linalg.norm(OminusC, axis=1) - DEFAULT_RADIUS**2)
-        d = - DotP + np.sqrt(Delta)
-        SpherePoints = o + np.multiply(u, d[:, np.newaxis])
+    def sample(self, TargetRays, RatioPositive=PC_SAMPLER_POS_RATIO):
+        Tic = []
+        Toc = []
+        Tic.append(butils.getCurrentEpochTime())
+        nVertices = len(self.Vertices)
+        TargetPositiveRays = math.floor(TargetRays*RatioPositive)
+        TargetNegRays = (TargetRays-TargetPositiveRays)
+        RaysPerVertex = math.ceil(TargetPositiveRays/nVertices)
+        NegRaysPerVertex = math.ceil(TargetNegRays / nVertices)
+        # print('[ INFO ]: Aiming for {} positive and {} negative ray samples, {} positive rays per vertex, {} negative rays per vertex.'.format(RaysPerVertex*nVertices, NegRaysPerVertex*nVertices, RaysPerVertex, NegRaysPerVertex))
+        Toc.append(butils.getCurrentEpochTime())
 
-        self.Coordinates = torch.from_numpy(np.asarray(np.hstack((SpherePoints, - u)))).to(torch.float32)
-        self.Intersects = torch.from_numpy(np.asarray(np.ones_like(d))).to(torch.float32)
-        self.Depths = torch.from_numpy(np.asarray(d))
+        Tic.append(butils.getCurrentEpochTime())
+        self.sample_positive(RaysPerVertex=RaysPerVertex, Target=TargetPositiveRays)
+        self.sample_negative(RaysPerVertex=NegRaysPerVertex, Target=TargetNegRays)
+        Toc.append(butils.getCurrentEpochTime())
+
+        # Tic.append(butils.getCurrentEpochTime())
+        # Toc.append(butils.getCurrentEpochTime())
+        # Tic.append(butils.getCurrentEpochTime())
+        # thread2 = Thread(target=self.sample_negative, args=(NegRaysPerVertex, TargetNegRays))
+        # thread2.start()
+        # thread1 = Thread(target=self.sample_positive, args=(RaysPerVertex, TargetPositiveRays))
+        # thread1.start()
+        # thread1.join()
+        # thread2.join()
+        # Toc.append(butils.getCurrentEpochTime())
+
+        Tic.append(butils.getCurrentEpochTime())
+        Coordinates = np.concatenate((self.PCoordinates, self.NCoordinates), axis=0)
+        Intersects = np.concatenate((self.PIntersects, self.NIntersects), axis=0)
+        Depths = np.concatenate((self.PDepths, self.NDepths), axis=0)
+        Toc.append(butils.getCurrentEpochTime())
+
+        Tic.append(butils.getCurrentEpochTime())
+        if self.UsePosEnc:
+            Coordinates = o2utils.get_positional_enc(Coordinates)
+        Toc.append(butils.getCurrentEpochTime())
+
+        Tic.append(butils.getCurrentEpochTime())
+        ShuffleIdx = np.random.permutation(len(Coordinates))
+        Toc.append(butils.getCurrentEpochTime())
+        # print('[ INFO ]: Sampled {} rays -- {} positive and {} negative.'.format(len(Coordinates), len(self.PCoordinates), len(self.NCoordinates)))
+        # print('Prep time: {}ms.'.format((Toc[0]-Tic[0])*1e-3))
+        # print('Sample positive/negative time: {}ms.'.format((Toc[1] - Tic[1]) * 1e-3))
+        # print('Concat time: {}ms.'.format((Toc[2] - Tic[2]) * 1e-3))
+        # print('Positional encoding time: {}ms.'.format((Toc[3] - Tic[3]) * 1e-3))
+        # print('Permute time: {}ms.'.format((Toc[4] - Tic[4]) * 1e-3))
+
+        self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
+        self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32).unsqueeze(1)
+        self.Depths = torch.from_numpy(Depths[ShuffleIdx]).to(torch.float32).unsqueeze(1)
+
+    def sample_negative(self, RaysPerVertex, Target):
+        # Numpy version - seems faster
+        Tic = butils.getCurrentEpochTime()
+        # Randomly offset vertices
+        RandomDistances = np.random.uniform(PC_SAMPLER_NEG_MINOFFSET, PC_SAMPLER_NEG_MAXOFFSET, len(self.Vertices))
+        Offsets = RandomDistances[:, np.newaxis] * self.VertexNormals
+        OffsetVertices = self.Vertices + Offsets
+        Tic = butils.getCurrentEpochTime()
+        # nVertices = len(self.Vertices)
+        # SampledDirections = np.zeros((RaysPerVertex * nVertices, 3))
+        # VertexRepeats = np.zeros((RaysPerVertex * nVertices, 3))
+        # ValidDirCtr = 0
+        # for VCtr in (range(nVertices)):
+        #     ValidDirs = o2utils.sample_directions_prune_numpy(RaysPerVertex, vertex=OffsetVertices[VCtr], points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
+        #     SampledDirections[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = ValidDirs
+        #     VertexRepeats[ValidDirCtr:ValidDirCtr + len(ValidDirs)] = OffsetVertices[np.newaxis, VCtr]
+        #     ValidDirCtr += len(ValidDirs)
+        SampledDirections, VertexRepeats = o2utils.sample_directions_batch_prune(RaysPerVertex, vertices=OffsetVertices, points=self.Vertices, thresh=PC_NEG_SAMPLER_THRESH)
+        ValidDirCtr = len(SampledDirections)
+        Toc = butils.getCurrentEpochTime()
+        # print('Prune time:', (Toc-Tic)*1e-3)
+        # exit()
+
+        SampledDirections = SampledDirections[:ValidDirCtr]
+        VertexRepeats = VertexRepeats[:ValidDirCtr]
+        # print('[ INFO ]: Only able to sample {} valid negative rays out of {} requested.'.format(ValidDirCtr, Target))
+
+        # For each normal direction, find the point on a sphere of radius PC_RADIUS
+        Tic = butils.getCurrentEpochTime()
+        SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
+                                                             SphereCenter=np.zeros(3), Radius=PC_SAMPLER_RADIUS)
+        Toc = butils.getCurrentEpochTime()
+        # print('Sphere points time:', (Toc - Tic) * 1e-3)
+
+        Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
+        Intersects = np.asarray(np.zeros_like(Distances))
+        Depths = np.asarray(np.zeros_like(Distances))
+
+        SpherePointsNorm = np.linalg.norm(SpherePoints, axis=1)
+        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.01 # Epsilon
+        # print('Invalid idx:', len(Coordinates) - np.sum(ValidPointsIdx))
+        Coordinates = Coordinates[ValidPointsIdx]
+        Intersects = Intersects[ValidPointsIdx]
+        Depths = Depths[ValidPointsIdx]
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(len(Coordinates), Target))
+
+        Toc = butils.getCurrentEpochTime()
+        # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc - Tic) * 1e-3))
+
+        self.NCoordinates = Coordinates[:Target]
+        self.NIntersects = Intersects[:Target]
+        self.NDepths = Depths[:Target]
+
+    def sample_positive(self, RaysPerVertex, Target):
+        # Numpy version - seems faster
+        Tic = butils.getCurrentEpochTime()
+        nVertices = len(self.Vertices)
+        SampledDirections = np.zeros((RaysPerVertex*nVertices, 3))
+        VertexRepeats = np.zeros_like(SampledDirections)
+        ValidDirCtr = 0
+        for VCtr in (range(nVertices)):
+            # SampledDirections[VCtr*RaysPerVertex:(VCtr+1)*RaysPerVertex] = self.sample_directions_numpy(RaysPerVertex, normal=self.VertexNormals[VCtr])
+            ValidDirs = o2utils.sample_directions_prune_normal_numpy(RaysPerVertex, vertex=self.Vertices[VCtr], normal=self.VertexNormals[VCtr], points=self.Vertices, thresh=PC_SAMPLER_THRESH)
+            SampledDirections[ValidDirCtr:ValidDirCtr+len(ValidDirs)] = ValidDirs
+            VertexRepeats[ValidDirCtr:ValidDirCtr+len(ValidDirs)] = self.Vertices[VCtr]
+            ValidDirCtr += len(ValidDirs)
+
+        SampledDirections = SampledDirections[:ValidDirCtr]
+        VertexRepeats = VertexRepeats[:ValidDirCtr]
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(ValidDirCtr, Target))
+
+        # For each normal direction, find the point on a sphere of radius PC_RADIUS
+        SpherePoints, Distances = o2utils.find_sphere_points(OriginPoints=VertexRepeats, Directions=SampledDirections,
+                                                             SphereCenter=np.zeros(3), Radius=PC_SAMPLER_RADIUS)
+        Coordinates = np.asarray(np.hstack((SpherePoints, - SampledDirections)))
+        Intersects = np.asarray(np.ones_like(Distances))
+        Depths = np.asarray(Distances)
+
+        SpherePointsNorm = np.linalg.norm(SpherePoints, axis=1)
+        ValidPointsIdx = np.abs(SpherePointsNorm - PC_SAMPLER_RADIUS) < 0.1 # Epsilon
+        Coordinates = Coordinates[ValidPointsIdx]
+        Intersects = Intersects[ValidPointsIdx]
+        Depths = Depths[ValidPointsIdx]
+        # print('[ INFO ]: Only able to sample {} valid rays out of {} requested.'.format(len(Coordinates), Target))
+
+        Toc = butils.getCurrentEpochTime()
+        # print('[ INFO ]: Numpy processed in {}ms.'.format((Toc-Tic)*1e-3))
+
+        self.PCoordinates = Coordinates[:Target]
+        self.PIntersects = Intersects[:Target]
+        self.PDepths = Depths[:Target]
 
     def __getitem__(self, item):
         return self.Coordinate[item], (self.Intersects[item], self.Depths[item])
@@ -75,25 +202,27 @@ Parser = argparse.ArgumentParser()
 Parser.add_argument('-i', '--input', help='Specify the input point cloud and normals in OBJ format.', required=True)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
+Parser.add_argument('-n', '--target-rays', help='Attempt to sample n rays per vertex.', required=False, type=int, default=100)
 
 if __name__ == '__main__':
     Args = Parser.parse_args()
     butils.seedRandom(Args.seed)
 
     Mesh = trimesh.load(Args.input)
-    Verts = Mesh.vertices
-    Verts = odf_utils.mesh_normalize(Verts)
+    Verts = odf_utils.mesh_normalize(Mesh.vertices)
+    # Verts, Faces = trimesh.remesh.subdivide_to_size(Verts, Mesh.faces, max_edge=PC_SUBDIVIDE_THRESH)
+    # Mesh = trimesh.Trimesh(vertices=Verts, faces=Faces, process=False)
     VertNormals = Mesh.vertex_normals.copy()
     Norm = np.linalg.norm(VertNormals, axis=1)
     VertNormals /= Norm[:, None]
 
-    Sampler = PointCloudSampler(Verts, VertNormals)
+    Sampler = PointCloudSampler(Verts, VertNormals, TargetRays=Args.target_rays)
 
     app = QApplication(sys.argv)
 
     if len(Sampler) < Args.viz_limit:
         Args.viz_limit = len(Sampler)
-    mainWindow = Easel([ODFDatasetLiveVisualizer(coord_type='direction', rays=Sampler.Coordinates, intersects=Sampler.Intersects, depths=Sampler.Depths)], sys.argv[1:])
+    mainWindow = Easel([ODFDatasetLiveVisualizer(coord_type='direction', rays=Sampler.Coordinates.cpu(), intersects=Sampler.Intersects.cpu(), depths=Sampler.Depths.cpu(), DataLimit=Args.viz_limit)], sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())
 

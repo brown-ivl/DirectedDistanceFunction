@@ -35,6 +35,7 @@ from data import MultiDepthDataset
 from sampling import sample_uniform_4D, sampling_preset_noise, sample_vertex_4D, sample_tangential_4D
 import odf_utils
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
+import odf_v2_utils as o2utils
 
 MESH_DATASET_NAME = 'bunny_dataset'
 MESH_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + MESH_DATASET_NAME + '.zip'
@@ -125,6 +126,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
             print('[ INFO ]: No ODF cache found. Will compute and write out cache.')
             self.createODFCache()
         else:
+            print('[ INFO ]: Loading ODF cache.')
             self.loadODFCache('r')
 
         if self.DataLimit is None:
@@ -201,10 +203,7 @@ class ODFDatasetLoader(torch.utils.data.Dataset):
 class ODFDatasetVisualizer(EaselModule):
     def __init__(self, Data=None, Offset=[0, 0, 0], DataLimit=10000):
         super().__init__()
-        self.isVBOBound = False
-        self.showSphere = False
-        self.RayLength = 0.06
-        self.PointSize = 5.0
+        self.setup()
         self.Offset = Offset
         self.DataLimit = DataLimit # This is number of rays
 
@@ -215,6 +214,12 @@ class ODFDatasetVisualizer(EaselModule):
         else:
             self.nCoords = 6
 
+    def setup(self):
+        self.isVBOBound = False
+        self.showSphere = False
+        self.showNonIntersecting = False
+        self.RayLength = 0.06
+        self.PointSize = 3.0
 
     def init(self, argv=None):
         self.update()
@@ -244,6 +249,7 @@ class ODFDatasetVisualizer(EaselModule):
         self.Depths = np.empty((0, 1), np.float64)
         self.ShapePoints = np.empty((0, 3), np.float64)
         self.RayPoints = np.empty((0, 3), np.float64)
+        self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Loading ODF data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.ODFData) else len(self.ODFData)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
@@ -273,6 +279,24 @@ class ODFDatasetVisualizer(EaselModule):
                 self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
+            else:
+                Ray = np.squeeze(ODFRay[0].numpy())
+                Depth = np.squeeze(ODFRay[1][1].numpy())
+                self.Rays = np.vstack((self.Rays, Ray))
+                self.Depths = np.vstack((self.Depths, Depth))
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
+
+                SpherePoint, _ = o2utils.find_sphere_points(Ray[:3], np.zeros(3), Direction, Radius=DEFAULT_RADIUS)
+
+                self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
+                self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint)) # Unit direction point, updated in VBO update
 
         print('[ INFO ]: Found {} intersecting rays.'.format(len(self.Rays)))
 
@@ -280,17 +304,28 @@ class ODFDatasetVisualizer(EaselModule):
         # VBOs
         self.nPoints = self.ShapePoints.shape[0]
         self.nRayPoints = self.RayPoints.shape[0]
-        if self.nPoints == 0:
-            return
+        self.nNIRayPoints = self.NIRayPoints.shape[0]
+        if self.nPoints != 0:
+            self.VBOPoints = glvbo.VBO(self.ShapePoints)
+        else:
+            self.VBOPoints = None
 
-        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
-        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
-        # print(Norm.shape)
-        Direction /= np.repeat(Norm, 3, axis=1)
-        # print(Direction.shape)
-        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
-        self.VBOPoints = glvbo.VBO(self.ShapePoints)
-        self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        if self.nRayPoints != 0:
+            Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
+            Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
+            # print(Norm.shape)
+            Direction /= np.repeat(Norm, 3, axis=1)
+            # print(Direction.shape)
+            self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
+            self.VBORayPoints = glvbo.VBO(self.RayPoints)
+        else:
+            self.VBORayPoints = None
+
+        if self.nNIRayPoints != 0:
+            self.VBONIRayPoints = glvbo.VBO(self.NIRayPoints)
+        else:
+            self.VBONIRayPoints = None
+
         self.isVBOBound = True
 
     def step(self):
@@ -334,6 +369,14 @@ class ODFDatasetVisualizer(EaselModule):
             gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBORayPoints)
         gl.glDrawArrays(gl.GL_LINES, 0, self.nRayPoints)
 
+        if self.showNonIntersecting:
+            gl.glColor4f(0.6, 0.6, 0.6, 0.9)
+            if self.VBONIRayPoints is not None:
+                self.VBONIRayPoints.bind()
+                gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+                gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBONIRayPoints)
+            gl.glDrawArrays(gl.GL_LINES, 0, self.nNIRayPoints)
+
         gl.glPopAttrib()
 
         gl.glPopMatrix()
@@ -352,7 +395,7 @@ class ODFDatasetVisualizer(EaselModule):
             print('[ INFO ]: Updated ray length: ', self.RayLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_A:
-            if self.PointSize < 20.0:
+            if self.PointSize < 50.0:
                 self.PointSize += 1.0
             print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
 
@@ -361,9 +404,11 @@ class ODFDatasetVisualizer(EaselModule):
                 self.PointSize -= 1.0
             print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
 
-
         if a0.key() == QtCore.Qt.Key_S:
             self.showSphere = not self.showSphere
+        if a0.key() == QtCore.Qt.Key_N:
+            self.showNonIntersecting = not self.showNonIntersecting
+            print('[ INFO ]: Showing non-intersecting rays.', flush=True)
 
 class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
     def __init__(self, coord_type, rays, intersects, depths, Offset=[0, 0, 0], DataLimit=10000):
@@ -379,29 +424,28 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
         self.Intersects = intersects
         self.Depths = depths
 
-        self.isVBOBound = False
-        self.showSphere = False
-        self.RayLength = 0.06
-        self.PointSize = 5.0
+        super().setup()
 
     def init(self, argv=None):
         self.update()
         self.updateVBOs()
 
     def update(self):
-        self.ShapePoints = np.empty((0, 3), np.float64)
-        self.RayPoints = np.empty((0, 3), np.float64)
-        nValidRays = 0
         print('[ INFO ]: Updating live data for visualization.')
         Limit = self.DataLimit if self.DataLimit < len(self.Rays) else len(self.Rays)
+        self.ShapePoints = np.empty((0, 3), np.float64)
+        self.RayPoints = np.empty((0, 3), np.float64)
+        self.NIRayPoints = np.empty((0, 3), np.float64)
         print('[ INFO ]: Limiting visualization to first {} rays.'.format(Limit))
+        nRays = 0
+        nNIRays = 0
         for Idx in tqdm(range(Limit)):
             R = self.Rays[Idx]
             I = self.Intersects[Idx]
             D = self.Depths[Idx]
             isIntersect = torch.sigmoid(I) > SINGLE_MASK_THRESH
             if isIntersect:
-                nValidRays += 1
+                nRays += 1
                 Ray = np.squeeze(R.numpy())
                 Depth = np.squeeze(D.numpy())
                 if self.CoordType == 'points':
@@ -413,28 +457,28 @@ class ODFDatasetLiveVisualizer(ODFDatasetVisualizer):
                 elif self.CoordType == 'direction':
                     Direction = Ray[3:]
                 ShapePoint = np.array(Ray[:3] + (Direction * Depth))
+
                 self.ShapePoints = np.vstack((self.ShapePoints, ShapePoint))
                 self.RayPoints = np.vstack((self.RayPoints, ShapePoint))
-                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction))
+                self.RayPoints = np.vstack((self.RayPoints, ShapePoint - self.RayLength * Direction)) # Unit direction point, updated in VBO update
+            else:
+                nNIRays += 1
+                Ray = np.squeeze(R.numpy())
+                if self.CoordType == 'points':
+                    Direction = (Ray[3:] - Ray[:3])
+                    Norm = np.linalg.norm(Direction)
+                    if Norm == 0.0:
+                        continue
+                    Direction /= Norm
+                elif self.CoordType == 'direction':
+                    Direction = Ray[3:]
 
-        print('[ INFO ]: Found {} intersecting rays.'.format(nValidRays))
+                SpherePoint, _ = o2utils.find_sphere_points(Ray[:3], np.zeros(3), Direction, Radius=DEFAULT_RADIUS)
 
-    def updateVBOs(self):
-        # VBOs
-        self.nPoints = self.ShapePoints.shape[0]
-        self.nRayPoints = self.RayPoints.shape[0]
-        if self.nPoints == 0:
-            return
+                self.NIRayPoints = np.vstack((self.NIRayPoints, Ray[:3]))
+                self.NIRayPoints = np.vstack((self.NIRayPoints, SpherePoint))
 
-        Direction = self.RayPoints[0::2, :] - self.RayPoints[1::2, :]
-        Norm = np.expand_dims(np.linalg.norm(Direction, axis=1), axis=1)
-        # print(Norm.shape)
-        Direction /= np.repeat(Norm, 3, axis=1)
-        # print(Direction.shape)
-        self.RayPoints[1::2, :] = (self.RayPoints[0::2, :] - self.RayLength * Direction)
-        self.VBOPoints = glvbo.VBO(self.ShapePoints)
-        self.VBORayPoints = glvbo.VBO(self.RayPoints)
-        self.isVBOBound = True
+        print('[ INFO ]: Found {} intersecting and {} non-intersecting rays.'.format(nRays, nNIRays))
 
 
 Parser = argparse.ArgumentParser()
