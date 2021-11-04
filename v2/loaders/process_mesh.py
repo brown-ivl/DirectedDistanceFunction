@@ -176,14 +176,15 @@ if __name__ == '__main__':
     Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
     Remesh = trimesh.Trimesh(Revertices, Refaces)
     print('[ INFO ]: Remeshing done.', flush=True)
-    Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
+    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=0.1)
+    Curvature = np.abs(Curvature)
     print(np.min(Curvature), np.max(Curvature))
     # Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid normalization
     Max = np.max(Curvature)
     Min = np.min(Curvature)
     Curvature = (Curvature - Min) / (Max - Min) # Linear normalization
     print(np.min(Curvature), np.max(Curvature))
-    Remesh.visual.vertex_colors = np.tile(1.0 - Curvature, (3, 1)).T
+    Remesh.visual.vertex_colors = np.tile(Curvature, (3, 1)).T
 
     if Args.output is not None:
         Remesh.export(Args.output, include_normals=True, include_color=True, include_texture=True)
