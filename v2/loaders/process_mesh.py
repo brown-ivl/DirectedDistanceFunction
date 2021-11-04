@@ -26,6 +26,8 @@ import odf_v2_utils as o2utils
 from pc_sampler import PC_SAMPLER_THRESH
 from palettable.colorbrewer.qualitative import Dark2_7
 from palettable.cmocean.sequential import Thermal_18, Haline_4
+from palettable.matplotlib import Inferno_20, Plasma_20
+from palettable.mycarta import Cube1_20
 
 class MeshProcessVisualize(EaselModule):
     def __init__(self, TrimeshMeshObject):
@@ -35,8 +37,9 @@ class MeshProcessVisualize(EaselModule):
 
     def setup(self):
         self.isVBOBound = False
-        self.PointSize = 5.0
+        self.PointSize = 10.0
         self.NormalLength = 0.06
+        self.showNormals = False
         self.VBONormalPoints = None
         self.VBOPoints = None
         self.VBOColors = None
@@ -53,7 +56,7 @@ class MeshProcessVisualize(EaselModule):
         self.nPoints = len(self.Mesh.vertices)
         if self.nPoints != 0:
             self.VBOPoints = glvbo.VBO(self.Mesh.vertices)
-            Colors = Haline_4.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
+            Colors = Inferno_20.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
             self.VBOColors = glvbo.VBO(Colors)
         else:
             self.VBOPoints = None
@@ -112,17 +115,18 @@ class MeshProcessVisualize(EaselModule):
 
         gl.glPopAttrib()
 
-        gl.glPushAttrib(gl.GL_LINE_BIT)
+        if self.showNormals:
+            gl.glPushAttrib(gl.GL_LINE_BIT)
 
-        gl.glColor3f(1, 0, 0)
-        if self.VBONormalPoints is not None:
-            self.VBONormalPoints.bind()
-            gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-            gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBONormalPoints)
-            gl.glDrawArrays(gl.GL_LINES, 0, self.nNormalPoints)
-            gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+            gl.glColor3f(1, 0, 0)
+            if self.VBONormalPoints is not None:
+                self.VBONormalPoints.bind()
+                gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+                gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBONormalPoints)
+                gl.glDrawArrays(gl.GL_LINES, 0, self.nNormalPoints)
+                gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
 
-        gl.glPopAttrib()
+            gl.glPopAttrib()
 
         gl.glPopMatrix()
 
@@ -131,23 +135,26 @@ class MeshProcessVisualize(EaselModule):
             if self.NormalLength < 0.95:
                 self.NormalLength += 0.05
                 self.updateVBOs()
-            print('[ INFO ]: Updated ray length: ', self.NormalLength, flush=True)
+            # print('[ INFO ]: Updated normal length: ', self.NormalLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_Minus:
             if self.NormalLength > 0.05:
                 self.NormalLength -= 0.05
                 self.updateVBOs()
-            print('[ INFO ]: Updated ray length: ', self.NormalLength, flush=True)
+            # print('[ INFO ]: Updated normal length: ', self.NormalLength, flush=True)
 
         if a0.key() == QtCore.Qt.Key_A:
             if self.PointSize < 50.0:
                 self.PointSize += 1.0
-            print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
+            # print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
 
         if a0.key() == QtCore.Qt.Key_Z:
             if self.PointSize > 1.0:
                 self.PointSize -= 1.0
-            print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
+            # print('[ INFO ]: Updated point size: ', self.PointSize, flush=True)
+
+        if a0.key() == QtCore.Qt.Key_N:
+            self.showNormals = not self.showNormals
 
 
 Parser = argparse.ArgumentParser()
@@ -166,12 +173,17 @@ if __name__ == '__main__':
     Mesh.vertices = odf_utils.mesh_normalize(Mesh.vertices)
 
     # Subdivide mesh
-    Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=100)
+    Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
     Remesh = trimesh.Trimesh(Revertices, Refaces)
-    Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH) / trimesh.curvature.sphere_ball_intersection(1, PC_SAMPLER_THRESH)
-    Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid
-    # Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=0)
-    Remesh.visual.vertex_colors = np.tile(Curvature, (3, 1)).T
+    print('[ INFO ]: Remeshing done.', flush=True)
+    Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
+    print(np.min(Curvature), np.max(Curvature))
+    # Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid normalization
+    Max = np.max(Curvature)
+    Min = np.min(Curvature)
+    Curvature = (Curvature - Min) / (Max - Min) # Linear normalization
+    print(np.min(Curvature), np.max(Curvature))
+    Remesh.visual.vertex_colors = np.tile(1.0 - Curvature, (3, 1)).T
 
     if Args.output is not None:
         Remesh.export(Args.output, include_normals=True, include_color=True, include_texture=True)
