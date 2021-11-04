@@ -175,11 +175,12 @@ if __name__ == '__main__':
     # Subdivide mesh
     Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
     Remesh = trimesh.Trimesh(Revertices, Refaces)
+    # Remesh = Mesh
     print('[ INFO ]: Remeshing done.', flush=True)
     Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
     Curvature = np.abs(Curvature)
-    print(np.min(Curvature), np.max(Curvature))
+    print(np.min(Curvature), np.max(Curvature), flush=True)
     # Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid normalization
     Max = np.max(Curvature)
     Min = np.min(Curvature)
