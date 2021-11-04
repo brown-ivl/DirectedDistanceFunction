@@ -12,6 +12,8 @@ This repository contains all the code needed to train a network to learn the dir
 - pytorch
 - open3d
 - pickle
+- palettable
+- rtree
 
 More requirements for Srinath's v2:
 
