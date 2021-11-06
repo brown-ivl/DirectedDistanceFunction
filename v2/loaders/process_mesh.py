@@ -32,6 +32,7 @@ from palettable.matplotlib import Inferno_20, Plasma_20
 from palettable.mycarta import Cube1_20
 # from tk3dv.common.trimesh_visualizer import TrimeshVisualizer
 from tk3dv.common import drawing
+import igl
 
 class TrimeshVisualizer(object):
     def __init__(self, TrimeshObject):
@@ -137,9 +138,10 @@ class TrimeshVisualizer(object):
             gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
 
 class MeshProcessVisualize(EaselModule):
-    def __init__(self, TrimeshMeshObject):
+    def __init__(self, TrimeshMeshObject, Curvature=None):
         super().__init__()
         self.Mesh = TrimeshMeshObject
+        self.Curvature = Curvature
         self.MeshVisualizer = TrimeshVisualizer(TrimeshMeshObject)
         self.setup()
 
@@ -166,7 +168,10 @@ class MeshProcessVisualize(EaselModule):
         self.nPoints = len(self.Mesh.vertices)
         if self.nPoints != 0:
             self.VBOPoints = glvbo.VBO(self.Mesh.vertices)
-            Colors = Inferno_20.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
+            if self.Curvature is not None:
+                Colors = Inferno_20.mpl_colormap(self.Curvature)
+            else:
+                Colors = Inferno_20.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
             self.VBOColors = glvbo.VBO(Colors)
         else:
             self.VBOPoints = None
@@ -301,11 +306,12 @@ if __name__ == '__main__':
     print('[ INFO ]: Remeshing done.', flush=True)
     Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*4)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
+    # Curvature = igl.gaussian_curvature(Revertices, Refaces)
     Curvature = np.abs(Curvature)
     Max = np.max(Curvature)
     Min = np.min(Curvature)
     Curvature = (Curvature - Min) / (Max - Min) # Linear normalization
-    Remesh.visual.vertex_colors = np.tile(Curvature, (3, 1)).T
+    Remesh.visual.vertex_colors = np.hstack( (np.tile(Curvature, (3, 1)).T, np.ones((len(Curvature), 1))) )
 
     if Args.output is not None:
         Remesh.export(Args.output, include_normals=True, include_color=True, include_texture=True)
