@@ -299,7 +299,7 @@ if __name__ == '__main__':
     Remesh = trimesh.Trimesh(Revertices, Refaces)
     # Remesh = Mesh
     print('[ INFO ]: Remeshing done.', flush=True)
-    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH)
+    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*4)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
     Curvature = np.abs(Curvature)
     Max = np.max(Curvature)
