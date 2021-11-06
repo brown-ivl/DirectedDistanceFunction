@@ -82,8 +82,8 @@ class TrimeshVisualizer(object):
         self.nPoints = len(self.ReplVertices)
         self.VBOVertices = glvbo.VBO(self.ReplVertices)
         self.VBONormals = glvbo.VBO(self.ReplVertNormals)
-        Div = 255.0 if np.max(self.ReplVertColors) > 1.0 else 1.0
-        self.VBOColors = glvbo.VBO(self.ReplVertColors/Div)
+        Colors = Inferno_20.mpl_colormap(self.ReplVertColors[:, 0]/255)
+        self.VBOColors = glvbo.VBO(Colors)
         self.isVBOBound = True
 
     def draw(self, LineWidth=2.0, isWireFrame=False, isVertColors=False):
@@ -295,19 +295,16 @@ if __name__ == '__main__':
     Mesh.vertices = odf_utils.mesh_normalize(Mesh.vertices)
 
     # # Subdivide mesh
-    # Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
-    # Remesh = trimesh.Trimesh(Revertices, Refaces)
-    Remesh = Mesh
+    Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
+    Remesh = trimesh.Trimesh(Revertices, Refaces)
+    # Remesh = Mesh
     print('[ INFO ]: Remeshing done.', flush=True)
     Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
     Curvature = np.abs(Curvature)
-    print(np.min(Curvature), np.max(Curvature), flush=True)
-    # Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid normalization
     Max = np.max(Curvature)
     Min = np.min(Curvature)
     Curvature = (Curvature - Min) / (Max - Min) # Linear normalization
-    # print(np.min(Curvature), np.max(Curvature))
     Remesh.visual.vertex_colors = np.tile(Curvature, (3, 1)).T
 
     if Args.output is not None:
