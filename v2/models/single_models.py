@@ -107,7 +107,7 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
     This is the autodecoder version
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, latent_size=256, Args=None):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, latent_size=256, training_instances=100, Args=None):
         super().__init__(Args=Args)
 
         # store args
@@ -126,6 +126,9 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
             self.pos_enc_layers = []
 
         self.LatentCode = nn.Parameter()
+
+        #Initialize the latent embeddings for the training examples
+        self.TrainingLatentCodes = nn.Embedding(training_instances, latent_size)
 
         # Define the main network body
         main_layers = []
