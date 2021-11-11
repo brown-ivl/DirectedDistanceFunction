@@ -5,13 +5,14 @@ import sys, os
 import argparse
 import multiprocessing as mp
 
+
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from pc_sampler import PC_SAMPLER_RADIUS
-from single_losses import SingleDepthBCELoss, ADPredLoss, ADRegLoss
+from single_losses import SingleDepthBCELoss, ADPredLoss, ADRegLoss, ADCombinedLoss
 
 from single_models import LF4DSingleAutoDecoder
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
@@ -90,6 +91,7 @@ if __name__ == '__main__':
     )
     # print(f"Loader Shape: {next(iter(TrainDataLoader))}")
 
-    loss = SuperLoss(Losses=[ADPredLoss, ADRegLoss], Weights=[1.0,1.0])
+    # loss = SuperLoss(Losses=[ADPredLoss, ADRegLoss], Weights=[1.0,1.0])
+    loss = ADCombinedLoss
 
     NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
