@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#SBATCH -p 3090-gcondo --gres=gpu:1
+#SBATCH -t 72:00:00
+#SBATCH --mem=128G
+#SBATCH -n 4
+
+module load cuda/11.1.1
+conda activate bodymodel
+python ../v2/train.py --expt-name bunny-10000 --input-dir /gpfs/data/ssrinath/neural-odf/input --output-dir /gpfs/data/ssrinath/neural-odf/output --rays-per-shape 10000 -s 42 --no-posenc --epochs 100 --save-freq 50
