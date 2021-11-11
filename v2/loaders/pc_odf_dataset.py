@@ -30,7 +30,7 @@ from pc_sampler import PointCloudSampler
 
 # PC_DATASET_NAME = 'bunny_dataset'
 PC_DATASET_NAME = 'bunny_100_dataset'
-# PC_DATASET_NAME = 'cow_dataset'
+# PC_DATASET_NAME = 'bunny_cow'
 PC_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + PC_DATASET_NAME + '.zip'
 
 class PCODFDatasetLoader(torch.utils.data.Dataset):
@@ -41,6 +41,7 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         self.PositionalEnc = usePositionalEncoding
         self.Sampler = None
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
+        self.Embeddings = None
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType))
 
         self.init(root, train, download, limit)
@@ -57,6 +58,9 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         data = [item[0] for item in batch]
         target = [item[1] for item in batch]
         return (data, target)
+
+    def addEmbeddings(self, embeddings):
+        self.Embeddings = embeddings
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -120,8 +124,11 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         # if self.Sampler is None: # todo: TEMP for testing with same samples
         self.Sampler = PointCloudSampler(Mesh.vertices, Mesh.vertex_normals, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
-        return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
-
+        #Include latent vector if we are using an AutoDecoder
+        if self.Embeddings is None:
+            return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
+        else:
+            return torch.cat([self.Sampler.Coordinates, self.Embeddings(torch.tensor([idx]*self.Sampler.Coordinates.size()[0]))], dim=1), (self.Sampler.Intersects, self.Sampler.Depths)
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)

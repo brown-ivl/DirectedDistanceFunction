@@ -1,3 +1,4 @@
+from os import remove
 from typing import final
 from matplotlib.pyplot import connect
 import numpy as np
@@ -56,7 +57,7 @@ icosahedron_faces = [
 ]
 
 # mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj"
-mesh_file = "F:\\ivl-data\\sample_data\\stanford_bunny_watertight.obj"
+mesh_file = "F:\\ivl-data\\sample_data\\simple_car_fixed.obj"
 mesh = trimesh.load(mesh_file)
 
 class MeshODF():
@@ -71,10 +72,6 @@ class MeshODF():
         Queries the surface depth from the provided points in the provided directions
         This only uses the first intersection
         '''
-        # for i in range(len(directions)):
-        #     if abs(np.linalg.norm(directions[i]) - 1.0) > 0.0001:
-        #         print(np.linalg.norm(directions[i]))
-        #     assert(abs(np.linalg.norm(directions[i]) - 1.0) > 0.0001)
         points = np.array(points)
         directions = np.array(directions)
         intersect = []
@@ -93,13 +90,6 @@ class MeshODF():
             rot_verts = rasterization.rotate_mesh(self.vertices, start_point, end_point)
             _, depth = rasterization.ray_occ_depth(self.faces, rot_verts, ray_start_depth=ray_length, near_face_threshold=near_face_threshold)
             depth -= np.linalg.norm(points[i] - start_point)
-            # if depth < 0.:
-            #     print("NEG DEPTH")
-            #     lines = np.concatenate([self.faces[:,:2], self.faces[:,1:], self.faces[:,[0,2]]], axis=0)
-            #     visualizer = visualization.RayVisualizer(self.vertices, lines)
-            #     visualizer.add_point(points[i], [1.0,0.0,0.0])
-            #     visualizer.add_ray([points[i], points[i]+directions[i]*0.1], [0., 0., 1.])
-            #     visualizer.display()
             depth = depth if depth > 0. else np.inf
 
             intersect.append(depth < np.inf)
@@ -177,6 +167,8 @@ def large_edge_subdivision(verts, faces, edge_threshold=0.05):
     # divide all edges over a certain threshold
     np_faces = np.array(faces)
     edges = np.concatenate([np_faces[:,:2], np_faces[:,1:], np_faces[:,[0,2]]], axis=0)
+    print(f"Edges shape: {edges.shape}")
+    print(f"Verts shape: {verts.shape}")
     for e in range(edges.shape[0]):
         if (edges[e][0], edges[e][1]) in new_vertex_indices:
             continue
@@ -428,7 +420,27 @@ def pull_back_probes(probes, directions, delta):
     probes = [probes[i]- delta*directions[i] for i in range(len(probes))]
     return probes
 
-def fix_inconsistent_vertices(model, inconsistent_vertices, vertices, vert2vert, new_positions, show_clusters=False, faces=None):
+def get_cluster_bounding_edges(faces, cluster):
+    '''
+    Given mesh faces and a set of vertices in the cluster, returns a set of directed edges that minimally encircle the specified cluster
+    '''
+    faces = np.array(faces)
+    faces_in_cluster = np.any(np.stack([faces==v for v in cluster]), axis=0)
+    relevant_indices = np.sum(faces_in_cluster, axis=1) == 1
+    relevant_faces = faces[relevant_indices]
+    
+    edges = []
+    for f in range(relevant_faces.shape[0]):
+        cluster_index = 0
+        if relevant_faces[f,1] in cluster:
+            cluster_index = 1
+        if relevant_faces[f,2] in cluster:
+            cluster_index = 2
+        edges.append((relevant_faces[f,(cluster_index+1)%3], relevant_faces[f, (cluster_index+2)%3]))
+    return edges
+    
+
+def fix_inconsistent_vertices(model, inconsistent_vertices, vertices, faces, vert2vert, new_positions, show_clusters=False):
     '''
     For each inconsistent vertex, finds the new probe direction, queries it, and updates the vertex in new_points
     '''
@@ -445,45 +457,123 @@ def fix_inconsistent_vertices(model, inconsistent_vertices, vertices, vert2vert,
     # cluster the inconsistent vertices
     clusters = cluster_inconsistent_probes(inconsistent_vertices, vert2vert)
     # get the anchors and calculate the probe directions for each cluster
+    anchors = []
     for c in clusters:
-        anchors, anchor_sum, vert_anchors = cluster_weighted_anchors(c, vert2vert, new_positions)
-        new_probe_directions, new_probe_looks = new_cluster_probes(c, anchors, vert2vert, vertices, new_positions)
-        all_probe_directions.update(new_probe_directions)
+        new_anchors, anchor_sum, vert_anchors = cluster_weighted_anchors(c, vert2vert, new_positions)
+        anchors.append({k:v/anchor_sum for k,v in new_anchors.items()})
+        # new_probe_directions, new_probe_looks = new_cluster_probes(c, anchors, vert2vert, vertices, new_positions)
+        # all_probe_directions.update(new_probe_directions)
+
+        
 
         # visualize the cluster, anchors, and new probe directions
-        if show_clusters:
-            assert(faces is not None)
-            faces = np.array(faces)
-            lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
-            visualizer = visualization.RayVisualizer(gt_verts, gt_lines)
+        # if show_clusters:
+        #     assert(faces is not None)
+        #     faces = np.array(faces)
+        #     lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        #     visualizer = visualization.RayVisualizer(gt_verts, gt_lines)
 
-            for v in new_probe_looks:
-                visualizer.add_ray([vertices[v], new_probe_looks[v]], [0.,0.,1.])
-            for a in anchors:
-                visualizer.add_point(new_positions[a], anchors[a]/anchor_sum*np.array([0.,1.,1.]))
-                visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
-                visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
-            for v in vert_anchors:
-                visualizer.add_ray([vertices[v],vertices[vert_anchors[v]]], [0.,1.,0.])
-            visualizer.display()
+        #     for v in new_probe_looks:
+        #         visualizer.add_ray([vertices[v], new_probe_looks[v]], [0.,0.,1.])
+        #     for a in anchors:
+        #         visualizer.add_point(new_positions[a], anchors[a]/anchor_sum*np.array([0.,1.,1.]))
+        #         visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
+        #         visualizer.add_ray([vertices[a], new_positions[a]], [1., 0., 0.])
+        #     for v in vert_anchors:
+        #         visualizer.add_ray([vertices[v],vertices[vert_anchors[v]]], [0.,1.,0.])
+
+        #     # show the bounding edges of the cluster
+        #     bounding_edges = get_cluster_bounding_edges(faces, c)
+        #     for edge in bounding_edges:
+        #         visualizer.add_ray([vertices[edge[0]], vertices[edge[1]]], [1.,0.,1.])
+        #     visualizer.display()
+
+    vertices, faces, new_probe_indices, new_looks, new_positions = cluster_collapse(vertices, faces, clusters, anchors, new_positions)
+
+    if show_clusters:
+        faces = np.array(faces)
+        lines = np.concatenate([faces[:,:2], faces[:,1:], faces[:,[0,2]]], axis=0)
+        visualizer = visualization.RayVisualizer(gt_verts, gt_lines)
+
+        new_looks = np.array(new_looks)
+
+        for i in range(len(new_probe_indices)):
+            visualizer.add_ray([vertices[new_probe_indices[i]], vertices[new_probe_indices[i]]+new_looks[i]], [0.,0.,1.])
+        
+        visualizer.display()
+
+
 
 
     # query the ODF for the depth from the new probe and direction
-    ordered_inconsistent_verts = [x for x in inconsistent_vertices]
-    probe_locations = np.array([vertices[i] for i in ordered_inconsistent_verts])
-    probe_directions = np.array([all_probe_directions[i] for i in ordered_inconsistent_verts])
-    depths = get_depths(model, probe_locations, probe_directions)
-    depth_dict = {ordered_inconsistent_verts[i]: depths[i] for i in range(len(ordered_inconsistent_verts))}
-    dir_dict = {ordered_inconsistent_verts[i]: probe_directions[i] for i in range(len(ordered_inconsistent_verts))}
-    pos_dict = {i: vertices[i] + depth_dict[i] * dir_dict[i] for i in ordered_inconsistent_verts if depth_dict[i] != np.inf}
+    # ordered_inconsistent_verts = [x for x in inconsistent_vertices]
+    # probe_locations = np.array([vertices[i] for i in ordered_inconsistent_verts])
+    # probe_directions = np.array([all_probe_directions[i] for i in ordered_inconsistent_verts])
+
+
+    depths = get_depths(model, np.array([vertices[i] for i in new_probe_indices]), np.array(new_looks))
+    depth_dict = {new_probe_indices[i]: depths[i] for i in range(len(new_probe_indices))}
+    dir_dict = {new_probe_indices[i]: new_looks[i] for i in range(len(new_probe_indices))}
+    pos_dict = {i: vertices[i] + depth_dict[i] * dir_dict[i] for i in new_probe_indices if depth_dict[i] != np.inf}
     new_positions = [new_positions[i] if i not in pos_dict else pos_dict[i] for i in range(len(new_positions))]
 
-    # TODO: set inconsistent verts not in pos_dict to be linear interpolations of neighbors (weighted?)
-    print("not updated")
-    print(len(set(dir_dict)-set(pos_dict)))
-    not_updated_points = set(dir_dict)-set(pos_dict)
+    # can't import visualization on OSCAR because it uses Open3D and OpenGL
+    # o3d.visualization.draw_geometries([visualization.make_mesh(np.array(new_positions), faces)])
 
-    return new_positions
+    # TODO: set inconsistent verts not in pos_dict to be linear interpolations of neighbors (weighted?)
+    # TODO: requery the non-updated points from a slightly different viewing direction (maintain non-intersecting mesh)
+    print(np.array(new_positions).shape)
+    return np.array(new_positions), np.array(faces, dtype=int)
+
+def cluster_collapse(vertices, faces, clusters, anchors, new_positions):
+    '''
+    Collapses mesh clusters into single points based on the average position of the points in the cluster
+    Returns the new faces and vertices, as well as the probe positions and look vectors for the collapsed clusters
+    '''
+    vertices = np.array(vertices)
+    faces = np.array(faces)
+    new_positions = np.array(new_positions)
+    bounding_edges = [get_cluster_bounding_edges(faces, c) for c in clusters]
+    removed_indices = np.zeros(vertices.shape[0])
+    all_cluster_verts = [v for c in clusters for v in c]
+    removed_indices[all_cluster_verts] = 1
+    
+    #Convert old vertex indices to new indices. Undefined values for vertices which were deleted
+    old_indices_to_new = np.arange(vertices.shape[0]) - np.cumsum(removed_indices)
+
+    # remove faces and vertices
+    new_vertices = vertices[np.logical_not(removed_indices)]
+    new_positions = new_positions[np.logical_not(removed_indices)]
+    new_faces = faces[np.logical_not(np.any(np.any(np.stack([faces==v for v in all_cluster_verts]), axis=0), axis=1))]
+    new_faces = old_indices_to_new[new_faces]
+
+    # add cluster centers as vertices and connect them to their bounding edges
+    new_cluster_vertices = []
+    new_cluster_faces = []
+    new_probe_indices = []
+    new_looks = []
+    for i in range(len(clusters)):
+        new_center = np.mean(vertices[list(clusters[i])], axis=0)
+        new_cluster_vertices.append(new_center)
+        new_probe_indices.append(i + len(new_vertices))
+        new_look_point = np.array([0.,0.,0.])
+        for p, w in anchors[i].items():
+            new_look_point += w*vertices[p]
+        new_looks.append((new_look_point-new_center)/np.linalg.norm(new_look_point-new_center))
+        for edge in bounding_edges[i]:
+            new_cluster_faces.append([old_indices_to_new[edge[0]], old_indices_to_new[edge[1]], new_vertices.shape[0]+i])
+    
+    new_vertices = np.concatenate([new_vertices, new_cluster_vertices])
+    new_faces = np.concatenate([new_faces, new_cluster_faces])
+    new_positions = np.concatenate([new_positions, new_cluster_vertices])
+
+
+
+    return new_vertices, new_faces, new_probe_indices, new_looks, new_positions
+
+
+
+
 
 
 def new_cluster_probes(cluster, anchors, vert2vert, vertices, new_points):
@@ -645,83 +735,7 @@ def get_inconsistent_probes(vertices, faces, probes, probe_directions, odf_depth
 
     return inconsistent_probes
 
-# def step_probe_directions(vertices, new_positions, probe_directions, inconsistent_probes, update_probes, neighbor_weights, probes_offset, alpha):
-#     '''
-#     Steps the probe sampling directions toward valid neighbors
-#     '''
-#     new_probe_directions = []
-#     was_updated = []
-#     for i in range(probes_offset, len(vertices)):
-#         if i in update_probes:
-#             # iterate over all neighbors
-#             new_direction = np.array([0., 0., 0.])
-#             gamma = 0.
-#             for n in neighbor_weights[i]:
-#                 if not n in inconsistent_probes:
-#                     direction = (new_positions[n]-vertices[i])
-#                     direction /= np.linalg.norm(direction)
-#                     new_direction += direction*neighbor_weights[i][n]
-#                     gamma += neighbor_weights[i][n]
-#             if np.linalg.norm(new_direction) > 0.:
-#                 new_direction /= np.linalg.norm(new_direction)
-            
-            
-#             # the new direction is the weighted sum of the original direction and the neighboring directions (using refinement rate hyperparam)
-#             new_direction = (alpha*gamma) * new_direction + (1.- (alpha*gamma)) * probe_directions[i-probes_offset]
-#             new_direction /= np.linalg.norm(new_direction)
 
-#             # if i == 1236:
-#             #     print(f"old direction: {probe_directions[i-probes_offset]}")
-#             #     print(f"new direction: {new_direction}")
-
-#             new_probe_directions.append(new_direction)
-#             was_updated.append(True)
-#         else:
-#             new_probe_directions.append(probe_directions[i-probes_offset])
-#             was_updated.append(False)
-
-#     return new_probe_directions, was_updated
-
-# def get_neighbor_weights(vertices, vert2vert, probes_offset, k):
-#     '''
-#     Returns a dictionary of dictionaries defining the relative weight of each neighboring vertex of each probe point
-
-#     vertices      - vertex positions
-#     vert2vert     - a dictionary mapping each vertex index to the indices of it's neighbors
-#     probes_offset - The number of non-probe points, also the index into vertices at which the probes start
-#     k             - an exponent controlling the relative weights of short vs longer edges (higher k --> shorter edges are more important)
-#     '''
-#     neighbor_weights = {i:{} for i in range(probes_offset, len(vertices))}
-
-#     for i in range(probes_offset, len(vertices)):
-#         individual_weights = {}
-#         for n in vert2vert[i]:
-#             dist = np.linalg.norm(vertices[n] - vertices[i])
-#             individual_weights[n] = dist**(-k)
-
-#         total_weight = sum([individual_weights[x] for x in individual_weights])
-
-#         # no one edge should hold more than 50% of the weight so we don't get stuck with probes that are both inconsistent yet dependent on each other
-#         adjust_weights = False
-#         reallocated_amount = 0.
-#         minority_total = 0.
-#         max_index = -1
-#         for n in vert2vert[i]:
-#             if individual_weights[n] > total_weight/2.:
-#                 adjust_weights = True
-#                 reallocated_amount = individual_weights[n] - total_weight/2.
-#                 minority_total = total_weight - individual_weights[n]
-#                 max_index = n
-#                 individual_weights[n] = total_weight/2.
-#         if adjust_weights:
-#             for n in vert2vert[i]:
-#                 if n != max_index:
-#                     individual_weights[n] = individual_weights[n]/minority_total * reallocated_amount
-
-#         for n in vert2vert[i]:
-#             neighbor_weights[i][n] = individual_weights[n] / total_weight
-
-#     return neighbor_weights
 
         
 
@@ -750,9 +764,10 @@ def update_step(model, vertices, faces, probes, directions, delta, show_clusters
     inconsistent_mask = [True if i+probes_offset in inconsistent_probes else False for i in range(len(probes))]
 
     # TODO: Gradually phase out update probes based on how close they are to the originally inconsistent ones
-    update_probes = [x for x in inconsistent_probes]
+    # update_probes = [x for x in inconsistent_probes]
 
     new_positions = [vertices[i] for i in range(probes_offset)] + [probes[i-probes_offset] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if not i in inconsistent_probes else vertices[i] for i in range(probes_offset, len(vertices))]
+    print(f"Initial new positions: {len(new_positions)}")    
 
     if show_clusters:
         clusters = cluster_inconsistent_probes(inconsistent_probes, vert2vert)
@@ -769,56 +784,13 @@ def update_step(model, vertices, faces, probes, directions, delta, show_clusters
         #     visualizer.display()
             show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, cluster=c)
 
-    new_positions = fix_inconsistent_vertices(model, inconsistent_probes, vertices, vert2vert, new_positions, show_clusters=show_clusters, faces=faces) if len(inconsistent_probes) > 0 else new_positions
+    print(np.array(new_positions).shape)
+    new_positions, faces = fix_inconsistent_vertices(model, inconsistent_probes, vertices, faces, vert2vert, new_positions, show_clusters=show_clusters) if len(inconsistent_probes) > 0 else (new_positions, faces)
+    print(f"FIX INCONSISTENT RESULTS-")
+    print(f"use fix_inc {len(inconsistent_probes) > 0}")
+    print(np.array(new_positions).shape)
 
     return np.array(new_positions), faces
-
-
-    # num_iterations = 0
-    # was_updated = []
-    # while (num_iterations < n_refinements) and len(inconsistent_probes) > 0:
-    #     num_iterations += 1
-    #     print(f"n iterations {num_iterations}")
-    #     print(f"min{np.min(np.linalg.norm(probe_directions, axis=1))}")
-
-
-    #     inconsistent_mask = [True if i+probes_offset in inconsistent_probes else False for i in range(len(probes))]
-    #     # show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, was_updated=was_updated)
-        
-    #     #STEP 2: Calculate updated points for all vertices
-    #     # new_positions = [vertices[i] for i in range(probes_offset)] + [vertices[i] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if probe_depths[i-probes_offset] < np.inf else vertices[i] for i in range(probes_offset, len(vertices))]
-    #     new_positions = [vertices[i] for i in range(probes_offset)] + [vertices[i] + probe_depths[i-probes_offset]*probe_directions[i-probes_offset] if not i in inconsistent_probes else vertices[i] for i in range(probes_offset, len(vertices))]
-
-    #     # show_inconsistent_probes_and_weights(vertices, new_positions, faces, probes, inconsistent_probes, update_probes, directions, neighbor_weights, delta)
-
-
-    #     #STEP 3: Refine sampling direction of inconsistent probes
-    #     # TODO: weight in the directions of static (non-probe) vertices
-    #     probe_directions, was_updated = step_probe_directions(vertices, new_positions, probe_directions, inconsistent_probes, update_probes, neighbor_weights, probes_offset, REFINEMENT_RATE)
-
-    #     if True:
-    #         show_subdivisions_and_probes(vertices, probes, inconsistent_mask, probe_directions, faces, delta, was_updated=was_updated)
-
-    #     # get the new depths for the updated probes
-    #     updated_directions = [probe_directions[i] for i in range(len(probe_directions)) if was_updated[i]]
-    #     corresponding_verts = [vertices[i+probes_offset] for i in range(len(probe_directions)) if was_updated[i]]
-    #     new_probes = pull_back_probes(corresponding_verts, updated_directions, delta)
-    #     new_depths = get_depths(model, new_probes, updated_directions)
-    #     # TODO why is this an ndarray
-    #     new_depths = list(new_depths)
-    #     new_depths.reverse()
-    #     new_probes.reverse()
-    #     probe_depths = [probe_depths[i] if not was_updated[i] else new_depths.pop() for i in range(len(probes))]
-    #     probes = [probes[i] if not was_updated[i] else new_probes.pop() for i in range(len(probes))]
-
-    #     # re-check which probes are inconsistent
-    #     inconsistent_probes = get_inconsistent_probes(vertices, faces, probes, probe_directions, probe_depths, probes_offset)
-
-    # # TODO: hole repair
-
-    # new_vertices = [vertices[i] for i in range(probes_offset)] + [probes[i] + probe_depths[i]*probe_directions[i] if probe_depths[i] != np.inf else vertices[probes_offset + i] for i in range(len(probes))]
-
-    # return new_vertices, faces
 
 
 
@@ -837,6 +809,7 @@ def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_poin
         # can't import visualization on OSCAR because it uses Open3D and OpenGL
         o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
     
+    print(f"iterations: {iterations}")
     for i in range(iterations - 1):
         vertices, faces, probes = large_edge_subdivision(vertices, faces)
         directions = -1. * odf_utils.get_vertex_normals(np.array(vertices), np.array(faces))
@@ -847,9 +820,10 @@ def make_model_mesh(model, initial_tessalation_factor=3, radius=1.25, focal_poin
         probes = pull_back_probes(probes, directions, delta)
         vertices, faces = update_step(model, vertices, faces, probes, directions, delta, show_clusters=show)
 
-        if show:
-            # can't import visualization on OSCAR because it uses Open3D and OpenGL
-            o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
+        # if show:
+        #     # can't import visualization on OSCAR because it uses Open3D and OpenGL
+        #     o3d.visualization.draw_geometries([visualization.make_mesh(np.array(vertices), faces)])
+        print(f"{i+1}/{iterations-1}")
     
     end_time = datetime.now()
 
