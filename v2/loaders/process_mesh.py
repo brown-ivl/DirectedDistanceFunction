@@ -1,3 +1,5 @@
+import math
+
 import trimesh
 import argparse
 import beacon.utils as butils
@@ -28,11 +30,119 @@ from palettable.colorbrewer.qualitative import Dark2_7
 from palettable.cmocean.sequential import Thermal_18, Haline_4
 from palettable.matplotlib import Inferno_20, Plasma_20
 from palettable.mycarta import Cube1_20
+# from tk3dv.common.trimesh_visualizer import TrimeshVisualizer
+from tk3dv.common import drawing
+import igl
+
+class TrimeshVisualizer(object):
+    def __init__(self, TrimeshObject):
+        self.isVBOBound = False
+        self.VBOVertices = None
+        self.VBOColors = None
+        self.VBONormals = None
+
+        self.Trimesh = TrimeshObject
+        self.Vertices = self.Trimesh.vertices
+        self.Normals = self.Trimesh.face_normals
+        self.VertNormals = self.Trimesh.vertex_normals
+        self.Faces = self.Trimesh.faces
+        self.VertColors = self.Trimesh.visual.vertex_colors
+        self.ReplVertices = np.empty((0, 3)) # These are repeated vertices for drawing
+        self.ReplVertNormals = np.empty((0, 3))  # These are repeated vertex normals for drawing
+        self.ReplVertColors = np.empty((0, 4))  # These are repeated vertex colors for drawing
+
+        if len(self.Faces) > 0:
+            # todo: Make this faster using numpy
+            for Face in self.Faces:
+                self.ReplVertices = np.vstack((self.ReplVertices, self.Vertices[Face[0]]))
+                self.ReplVertices = np.vstack((self.ReplVertices, self.Vertices[Face[1]]))
+                self.ReplVertices = np.vstack((self.ReplVertices, self.Vertices[Face[2]]))
+                self.ReplVertNormals = np.vstack((self.ReplVertNormals, self.VertNormals[Face[0]]))
+                self.ReplVertNormals = np.vstack((self.ReplVertNormals, self.VertNormals[Face[1]]))
+                self.ReplVertNormals = np.vstack((self.ReplVertNormals, self.VertNormals[Face[2]]))
+                self.ReplVertColors = np.vstack((self.ReplVertColors, self.VertColors[Face[0]]))
+                self.ReplVertColors = np.vstack((self.ReplVertColors, self.VertColors[Face[1]]))
+                self.ReplVertColors = np.vstack((self.ReplVertColors, self.VertColors[Face[2]]))
+
+        self.update()
+
+    def __del__(self):
+        if self.isVBOBound:
+            if self.VBOVertices is not None:
+                self.VBOVertices.delete()
+            if self.VBONormals is not None:
+                self.VBONormals.delete()
+            if self.VBOColors is not None:
+                self.VBOColors.delete()
+
+    def update(self):
+        self.nPoints = len(self.ReplVertices)
+        if self.nPoints == 0:
+            return
+
+        self.nPoints = len(self.ReplVertices)
+        self.VBOVertices = glvbo.VBO(self.ReplVertices)
+        self.VBONormals = glvbo.VBO(self.ReplVertNormals)
+        Colors = Inferno_20.mpl_colormap(self.ReplVertColors[:, 0]/255)
+        self.VBOColors = glvbo.VBO(Colors)
+        self.isVBOBound = True
+
+    def draw(self, LineWidth=2.0, isWireFrame=False, isVertColors=False):
+        if self.isVBOBound == False:
+            print('[ WARN ]: VBOs not bound. Call update().')
+            return
+
+        if self.VBONormals is not None:
+            self.VBONormals.bind()
+            gl.glEnableClientState(gl.GL_NORMAL_ARRAY)
+            gl.glNormalPointer(gl.GL_DOUBLE, 0, self.VBONormals)
+
+        if self.VBOVertices is not None:
+            self.VBOVertices.bind()
+            gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+            gl.glVertexPointer(3, gl.GL_DOUBLE, 0, self.VBOVertices)
+
+        if self.VBOColors is not None and isVertColors:
+            self.VBOColors.bind()
+            gl.glEnableClientState(gl.GL_COLOR_ARRAY)
+            gl.glColorPointer(4, gl.GL_DOUBLE, 0, self.VBOColors)
+
+        if len(self.Faces) > 0:
+            if isWireFrame:
+                gl.glPushAttrib(gl.GL_LINE_BIT)
+                gl.glLineWidth(LineWidth)
+
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_LINE)
+                gl.glColor4f(0.2, 0.2, 0.2, 0.6)
+                gl.glDrawArrays(gl.GL_TRIANGLES, 0, self.nPoints)
+                gl.glPopAttrib()
+
+            if isVertColors:
+                gl.glColorMaterial(gl.GL_FRONT_AND_BACK, gl.GL_AMBIENT_AND_DIFFUSE)
+                gl.glEnable(gl.GL_COLOR_MATERIAL)
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+                gl.glDrawArrays(gl.GL_TRIANGLES, 0, self.nPoints)
+                gl.glDisable(gl.GL_COLOR_MATERIAL)
+            else:
+                drawing.lightsOn()
+                drawing.enableDefaultMaterial()
+                gl.glPolygonMode(gl.GL_FRONT_AND_BACK, gl.GL_FILL)
+                gl.glDrawArrays(gl.GL_TRIANGLES, 0, self.nPoints)
+                drawing.lightsOff()
+
+        if self.VBOColors is not None:
+            gl.glDisableClientState(gl.GL_COLOR_ARRAY)
+        if self.VBOVertices is not None:
+            gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
+        if self.VBONormals is not None:
+            gl.glDisableClientState(gl.GL_NORMAL_ARRAY)
 
 class MeshProcessVisualize(EaselModule):
-    def __init__(self, TrimeshMeshObject):
+    def __init__(self, TrimeshMeshObject, Curvature=None):
         super().__init__()
         self.Mesh = TrimeshMeshObject
+        self.Curvature = Curvature
+        self.MeshVisualizer = TrimeshVisualizer(TrimeshMeshObject)
         self.setup()
 
     def setup(self):
@@ -40,6 +150,9 @@ class MeshProcessVisualize(EaselModule):
         self.PointSize = 10.0
         self.NormalLength = 0.06
         self.showNormals = False
+        self.showMesh = True
+        self.showWireframe = False
+        self.showVertColor = False
         self.VBONormalPoints = None
         self.VBOPoints = None
         self.VBOColors = None
@@ -52,11 +165,13 @@ class MeshProcessVisualize(EaselModule):
         pass
 
     def updateVBOs(self):
-        # VBOs
         self.nPoints = len(self.Mesh.vertices)
         if self.nPoints != 0:
             self.VBOPoints = glvbo.VBO(self.Mesh.vertices)
-            Colors = Inferno_20.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
+            if self.Curvature is not None:
+                Colors = Inferno_20.mpl_colormap(self.Curvature)
+            else:
+                Colors = Inferno_20.mpl_colormap(self.Mesh.visual.vertex_colors[:, 0])
             self.VBOColors = glvbo.VBO(Colors)
         else:
             self.VBOPoints = None
@@ -94,7 +209,11 @@ class MeshProcessVisualize(EaselModule):
         gl.glPushMatrix()
 
         ScaleFact = 200
+        gl.glEnable(gl.GL_NORMALIZE) # Makes sure normals are not scaled when using glSCale
         gl.glScale(ScaleFact, ScaleFact, ScaleFact)
+
+        if self.showMesh:
+            self.MeshVisualizer.draw(isWireFrame=self.showWireframe, isVertColors=self.showVertColor)
 
         gl.glPushAttrib(gl.GL_POINT_BIT)
 
@@ -156,6 +275,14 @@ class MeshProcessVisualize(EaselModule):
         if a0.key() == QtCore.Qt.Key_N:
             self.showNormals = not self.showNormals
 
+        if a0.key() == QtCore.Qt.Key_M:
+            self.showMesh = not self.showMesh
+
+        if a0.key() == QtCore.Qt.Key_W:
+            self.showWireframe = not self.showWireframe
+
+        if a0.key() == QtCore.Qt.Key_C:
+            self.showVertColor = not self.showVertColor
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-i', '--input', help='Specify the input mesh file name. Any format supported by trimesh.', required=True)
@@ -172,21 +299,19 @@ if __name__ == '__main__':
     Mesh = trimesh.load(Args.input)
     Mesh.vertices = odf_utils.mesh_normalize(Mesh.vertices)
 
-    # Subdivide mesh
+    # # Subdivide mesh
     Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
     Remesh = trimesh.Trimesh(Revertices, Refaces)
     # Remesh = Mesh
     print('[ INFO ]: Remeshing done.', flush=True)
-    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH)
+    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*4)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
+    # Curvature = igl.gaussian_curvature(Revertices, Refaces)
     Curvature = np.abs(Curvature)
-    print(np.min(Curvature), np.max(Curvature), flush=True)
-    # Curvature = 1 / (1 + np.exp(-Curvature)) # Sigmoid normalization
     Max = np.max(Curvature)
     Min = np.min(Curvature)
     Curvature = (Curvature - Min) / (Max - Min) # Linear normalization
-    print(np.min(Curvature), np.max(Curvature))
-    Remesh.visual.vertex_colors = np.tile(Curvature, (3, 1)).T
+    Remesh.visual.vertex_colors = np.hstack( (np.tile(Curvature, (3, 1)).T, np.ones((len(Curvature), 1))) )
 
     if Args.output is not None:
         Remesh.export(Args.output, include_normals=True, include_color=True, include_texture=True)
