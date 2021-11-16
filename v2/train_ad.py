@@ -93,7 +93,7 @@ if __name__ == '__main__':
     )
     # print(f"Loader Shape: {next(iter(TrainDataLoader))}")
 
-    # loss = SuperLoss(Losses=[ADPredLoss, ADRegLoss], Weights=[1.0,1.0])
-    loss = ADCombinedLoss
+    loss = SuperLoss(Losses=[ADPredLoss(), ADRegLoss()], Weights=[1.0,1.0])
+    # loss = ADCombinedLoss()
 
     NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)

@@ -3,6 +3,7 @@ import argparse
 import zipfile
 import glob
 import random
+import sys
 import beacon.utils as butils
 import trimesh
 from tqdm import tqdm
