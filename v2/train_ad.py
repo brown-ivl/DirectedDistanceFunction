@@ -32,6 +32,7 @@ Parser.add_argument('--latent-size', type=int, default=256, help="The size of th
 Parser.add_argument('--latent-stdev', type=float, default=0.001**2, help="The standard deviation of the zero mean gaussian used to initialize latent vectors")
 Parser.add_argument('--lr-decoder', type=float, default=0.00001, help="The baseline learning rate for the decoder weights")
 Parser.add_argument('--lr-latvecs', type=float, default=0.001, help="The learning rate for the latent vectors")
+Parser.add_argument('--use_l2', action="store_true", help="Use L2 loss instead of L1 loss")
 
 
 if __name__ == '__main__':
@@ -91,7 +92,7 @@ if __name__ == '__main__':
     )
     # print(f"Loader Shape: {next(iter(TrainDataLoader))}")
 
-    loss = SuperLoss(Losses=[ADPredLoss(), ADRegLoss()], Weights=[1.0,1.0])
+    loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
     # loss = ADCombinedLoss()
 
     NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
