@@ -5,7 +5,6 @@ import sys, os
 import argparse
 import multiprocessing as mp
 
-
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
@@ -16,6 +15,8 @@ from single_losses import SingleDepthBCELoss, ADPredLoss, ADRegLoss, ADCombinedL
 
 from single_models import LF4DSingleAutoDecoder
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
+
+import odf_v2_utils
 
 Parser = argparse.ArgumentParser(description='Training code for NeuralODF autodecoder.')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
@@ -98,3 +99,4 @@ if __name__ == '__main__':
     # loss = ADCombinedLoss()
 
     NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
+    odf_v2_utils.save_latent_vectors(NeuralODF.Config.Args.output_dir, NeuralODF.Config.Args.expt_name, lat_vecs, NeuralODF.Config.Args.epochs)

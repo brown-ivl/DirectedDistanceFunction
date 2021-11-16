@@ -31,6 +31,7 @@ from pc_sampler import PointCloudSampler
 
 # PC_DATASET_NAME = 'bunny_dataset'
 #PC_DATASET_NAME = 'bunny_100_dataset'
+# PC_DATASET_NAME = 'bunny_100_dataset'
 PC_DATASET_NAME = 'bunny_cow'
 PC_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + PC_DATASET_NAME + '.zip'
 
