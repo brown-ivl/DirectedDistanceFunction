@@ -68,6 +68,8 @@ if __name__ == '__main__':
 
     #TODO: Figure out how to propagate embedding gradients with multiple workers
     TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
+    print(type(next(iter(TrainDataLoader))))
+    print(next(iter(TrainDataLoader))[1])
     if Args.no_val == False:
         ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
     else:

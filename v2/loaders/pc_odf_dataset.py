@@ -128,7 +128,7 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         if self.Embeddings is None:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
-            return torch.cat([self.Sampler.Coordinates, self.Embeddings(torch.tensor([idx]*self.Sampler.Coordinates.size()[0]))], dim=1), (self.Sampler.Intersects, self.Sampler.Depths)
+             return torch.cat([self.Sampler.Coordinates, self.Embeddings(torch.tensor([idx]*self.Sampler.Coordinates.size()[0]))], dim=1), (self.Sampler.Intersects, self.Sampler.Depths)
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)
