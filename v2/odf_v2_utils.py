@@ -1,5 +1,21 @@
 import numpy as np
 import math
+import os
+import torch
+
+def save_latent_vectors(save_directory, experiment_name, latent_vec, epoch):
+    latent_codes_dir = os.path.join(save_directory, f"{experiment_name}___latent_vecs")
+    filename = f"{experiment_name}_{epoch}"
+    if not os.path.exists(latent_codes_dir):
+        os.mkdir(latent_codes_dir)
+
+    all_latents = latent_vec.state_dict()
+
+    torch.save(
+        {"epoch": epoch, "latent_codes": all_latents},
+        os.path.join(latent_codes_dir, filename),
+    )
+
 
 def sample_directions_numpy(nDirs, normal=None, ndim=3):
     vec = np.random.randn(nDirs, ndim)
