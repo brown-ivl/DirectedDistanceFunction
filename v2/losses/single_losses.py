@@ -57,13 +57,14 @@ class ADCombinedLoss(nn.Module):
     Computes the prediction loss for the autodecoder
     '''
 
-    def __init__(self, Thresh=SINGLE_MASK_THRESH, Lambda=SINGLE_L2_LAMBDA, RegLambda=REG_LAMBDA):
+    def __init__(self, Thresh=SINGLE_MASK_THRESH, Lambda=SINGLE_L2_LAMBDA, RegLambda=REG_LAMBDA, use_l2=False):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
         self.Lambda = Lambda
         self.RegLambda = RegLambda
+        self.use_l2 = use_l2
 
     def forward(self, output, target):
         return self.computeLoss(output, target)
@@ -87,8 +88,11 @@ class ADCombinedLoss(nn.Module):
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
-            L1Loss = self.L1(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
-            PredictionLoss = self.Lambda * L1Loss + MaskLoss
+            if not self.use_l2:
+                DepthLoss = self.L1(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            else:
+                DepthLoss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            PredictionLoss = self.Lambda * DepthLoss + MaskLoss
             LatentLoss = REG_LAMBDA * LatentNorms[b]
             Loss += PredictionLoss + LatentLoss
         Loss /= B
@@ -96,14 +100,15 @@ class ADCombinedLoss(nn.Module):
         return Loss
 
     def L1(self, labels, predictions):
-        # print(labels.size())
-        # print(predictions.size())
         Loss = torch.mean(labels - predictions)
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
+        return Loss
 
-        # print(torch.min(labels), torch.max(labels))
-        # print(torch.min(predictions), torch.max(predictions))
+    def L2(self, labels, predictions):
+        Loss = torch.mean(torch.square(labels - predictions))
+        if math.isnan(Loss) or math.isinf(Loss):
+            return torch.tensor(0)
         return Loss
 
 class ADPredLoss(nn.Module):
@@ -111,12 +116,13 @@ class ADPredLoss(nn.Module):
     Computes the prediction loss for the autodecoder
     '''
 
-    def __init__(self, Thresh=SINGLE_MASK_THRESH, Lambda=SINGLE_L2_LAMBDA):
+    def __init__(self, Thresh=SINGLE_MASK_THRESH, Lambda=SINGLE_L2_LAMBDA, use_l2=False):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
         self.Lambda = Lambda
+        self.use_l2 = use_l2
 
     def forward(self, output, target):
         return self.computeLoss(output, target)
@@ -137,22 +143,26 @@ class ADPredLoss(nn.Module):
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
-            L1Loss = self.L1(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
-            PredictionLoss = self.Lambda * L1Loss + MaskLoss
+            if not self.use_l2:
+                DepthLoss = self.L1(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            else:
+                DepthLoss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            PredictionLoss = self.Lambda * DepthLoss + MaskLoss
             Loss += PredictionLoss
         Loss /= B
 
         return Loss
 
     def L1(self, labels, predictions):
-        # print(labels.size())
-        # print(predictions.size())
         Loss = torch.mean(labels - predictions)
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
+        return Loss
 
-        # print(torch.min(labels), torch.max(labels))
-        # print(torch.min(predictions), torch.max(predictions))
+    def L2(self, labels, predictions):
+        Loss = torch.mean(torch.square(labels - predictions))
+        if math.isnan(Loss) or math.isinf(Loss):
+            return torch.tensor(0)
         return Loss
 
 class ADRegLoss(nn.Module):
@@ -179,7 +189,7 @@ class ADRegLoss(nn.Module):
             # Single batch version
             # TODO: Factor in the epoch
             # TODO: How does the stdev of the latent space factor in?
-            LatentLoss = REG_LAMBDA * LatentNorms[b]
+            LatentLoss = self.RegLambda * LatentNorms[b]
             Loss += LatentLoss
         Loss /= B
 
