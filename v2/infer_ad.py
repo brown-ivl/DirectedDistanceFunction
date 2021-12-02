@@ -26,7 +26,7 @@ from single_models import LF4DSingleAutoDecoder
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from odf_dataset import ODFDatasetLoader as ODL
 
-def infer(Network, ValDataLoader, Objective, Device, Limit):
+def infer(Network, ValDataLoader, Objective, Device, Limit, OtherParameters):
     Network.eval()  # switch to evaluation mode
     ValLosses = []
     Tic = butils.getCurrentEpochTime()
@@ -43,19 +43,16 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
         DataTD = butils.sendToDevice(Data, Device)
         TargetsTD = butils.sendToDevice(Targets, Device)
 
-        Output = Network.forward(DataTD)
+        Output = Network.forward(DataTD, OtherParameters)
         Loss = Objective(Output, TargetsTD)
         ValLosses.append(Loss.item())
 
         for b in range(len(Output)):
-            Coords.append(Data[b].detach().cpu())
+            Coords.append(Data[b][0].detach().cpu())
             GTIntersects.append(Targets[b][0])
             GTDepths.append(Targets[b][1])
-            print("OUTPU B")
-            print(Output[b][0])
-            print(len(Output[b][0]))
-            PredIntersects.append(Output[b][0].detach().cpu())
-            PredDepths.append(Output[b][1].detach().cpu())
+            PredIntersects.append(Output[b][0][0].detach().cpu())
+            PredDepths.append(Output[b][0][1].detach().cpu())
 
         # Print stats
         Toc = butils.getCurrentEpochTime()
@@ -101,26 +98,28 @@ if __name__ == '__main__':
         NeuralODF = LF4DSingleAutoDecoder(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, latent_size=Args.latent_size)
 
 
-    Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    NeuralODF.setupCheckpoint(Device)
+    Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')    
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc, ad=True)
 
-    lat_vecs = torch.nn.Embedding(len(ValData.LoadedOBJs), Args.latent_size, max_norm=8*Args.latent_stdev)
-    load_latent_vectors(NeuralODF.Config.Args.output_dir, NeuralODF.Config.Args.expt_name, lat_vecs)
+    # lat_vecs = torch.nn.Embedding(len(ValData.LoadedOBJs), Args.latent_size, max_norm=8*Args.latent_stdev)
+    lat_vecs = torch.nn.Embedding(len(ValData.LoadedOBJs), Args.latent_size)
+    lat_vecs = lat_vecs.to(Device)
+    OtherParameters = [lat_vecs]
+    OtherParameterNames = ["Latent Vectors"]
+    OtherParamDict = {OtherParameterNames[i]: OtherParameters[i] for i in range(len(OtherParameters))}
+    NeuralODF.setupCheckpoint(Device, OtherParameters=OtherParameters, OtherParameterNames=OtherParameterNames)
 
-    if Args.force_test_on_train:
-        ValData.addEmbeddings(lat_vecs)
     if ValLimit < 0:
         ValLimit = len(ValData)
-    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
+    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=nCores, collate_fn=PCDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
     loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
 
-    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, loss, Device, ValLimit)
+    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, loss, Device, ValLimit, OtherParamDict)
 
     # if usePosEnc:
     #     Rays = []
@@ -130,14 +129,15 @@ if __name__ == '__main__':
     #     Rays = torch.cat(Rays, dim=0)
 
     app = QApplication(sys.argv)
+
     VizIdx = 0
 
     GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
-                             intersects=GTIntersects[VizIdx], depths=GTDepths[VizIdx],
-                             DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
+                            intersects=GTIntersects[VizIdx], depths=GTDepths[VizIdx],
+                            DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
     PredViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
-                             intersects=PredIntersects[VizIdx], depths=PredDepths[VizIdx],
-                             DataLimit=Args.viz_limit, Offset=[1, 0, 0])
+                            intersects=PredIntersects[VizIdx], depths=PredDepths[VizIdx],
+                            DataLimit=Args.viz_limit, Offset=[1, 0, 0])
     CompareViz = Easel([GTViz, PredViz], sys.argv[1:])
     CompareViz.show()
     sys.exit(app.exec_())

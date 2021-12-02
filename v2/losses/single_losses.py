@@ -5,7 +5,8 @@ import math
 SINGLE_MASK_THRESH = 0.7
 SINGLE_L2_LAMBDA = 5.0
 SINGLE_L1_LAMBDA = 5.0
-REG_LAMBDA = 1e-4
+# REG_LAMBDA = 1e-4
+REG_LAMBDA = 1e-1
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH
@@ -145,10 +146,13 @@ class ADPredLoss(nn.Module):
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
 
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
+            print(f"Total intersecting: {torch.sum(ValidRaysIdx)}")
             if not self.use_l2:
                 DepthLoss = self.L1(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
             else:
                 DepthLoss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            print(f"Depth Loss: {DepthLoss}")
+            print(f"Mask Loss: {MaskLoss}")
             PredictionLoss = self.Lambda * DepthLoss + MaskLoss
             Loss += PredictionLoss
         Loss /= B
@@ -156,7 +160,7 @@ class ADPredLoss(nn.Module):
         return Loss
 
     def L1(self, labels, predictions):
-        Loss = torch.mean(labels - predictions)
+        Loss = torch.mean(torch.abs(labels - predictions))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
         return Loss
@@ -171,11 +175,10 @@ class ADRegLoss(nn.Module):
     '''
     Computes the regularization loss for the autoencoder
     '''
-    def __init__(self, Thresh=SINGLE_MASK_THRESH, RegLambda=REG_LAMBDA):
+    def __init__(self, RegLambda=REG_LAMBDA):
         super().__init__()
         self.MaskLoss = nn.BCELoss(reduction='mean')
         self.Sigmoid = nn.Sigmoid()
-        self.Thresh = Thresh
         self.RegLambda = RegLambda
 
     def forward(self, output, target):
@@ -194,5 +197,5 @@ class ADRegLoss(nn.Module):
             LatentLoss = self.RegLambda * torch.mean(torch.norm(LatentVectors[b], dim=-1))
             Loss += LatentLoss
         Loss /= B
-
+        print(f"Reg Loss: {Loss}")
         return Loss

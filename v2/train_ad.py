@@ -53,7 +53,7 @@ if __name__ == '__main__':
     TrainData = PCDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc, ad=True)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=usePosEnc)
+    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=usePosEnc, ad=True)
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 
@@ -67,11 +67,9 @@ if __name__ == '__main__':
     )
 
     #TODO: Figure out how to propagate embedding gradients with multiple workers
-    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
-    print(type(next(iter(TrainDataLoader))))
-    print(next(iter(TrainDataLoader))[1])
+    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=nCores, collate_fn=PCDL.collate_fn)
     if Args.no_val == False:
-        ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
+        ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=nCores, collate_fn=PCDL.collate_fn)
     else:
         print('[ WARN ]: Not validating during training. This should be used for debugging purposes only.')
         ValDataLoader = None
@@ -91,9 +89,8 @@ if __name__ == '__main__':
             },
         ]
     )
-    # print(f"Loader Shape: {next(iter(TrainDataLoader))}")
 
-    loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
+    loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Names=["Reconstruction Loss", "Latent Vector Regularization"], Weights=[1.0,1.0])
     # loss = ADCombinedLoss()
 
     NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader, OtherParameterNames=["Latent Vectors"], OtherParameters=[lat_vecs])
