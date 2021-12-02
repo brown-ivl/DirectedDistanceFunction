@@ -16,6 +16,17 @@ def save_latent_vectors(save_directory, experiment_name, latent_vec, epoch):
         os.path.join(latent_codes_dir, filename),
     )
 
+def load_latent_vectors(save_directory, experiment_name, lat_vecs):
+    latent_codes_dir = os.path.join(save_directory, f"{experiment_name}___latent_vecs")
+    filename = os.listdir(latent_codes_dir)[0]
+    full_filename = os.path.join(latent_codes_dir, filename)
+
+    data = torch.load(full_filename)
+
+    for i, lat_vec in enumerate(data["latent_codes"]["weight"]):
+        print(f"VEC: {i+1}")
+        print(lat_vec)
+        lat_vecs.weight.data[i, :] = lat_vec
 
 def sample_directions_numpy(nDirs, normal=None, ndim=3):
     vec = np.random.randn(nDirs, ndim)

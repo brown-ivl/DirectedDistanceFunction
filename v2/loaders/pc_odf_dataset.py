@@ -35,14 +35,14 @@ PC_DATASET_NAME = 'bunny_cow'
 PC_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + PC_DATASET_NAME + '.zip'
 
 class PCODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction'):
+    def __init__(self, root, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False):
         self.FileName = PC_DATASET_NAME + '.zip'
         self.DataURL = PC_DATASET_URL
         self.nTargetSamples = target_samples # Per shape
         self.PositionalEnc = usePositionalEncoding
         self.Sampler = None
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
-        self.Embeddings = None
+        self.ad = ad #autodecoder
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType))
 
         self.init(root, train, download, limit)
@@ -59,9 +59,6 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         data = [item[0] for item in batch]
         target = [item[1] for item in batch]
         return (data, target)
-
-    def addEmbeddings(self, embeddings):
-        self.Embeddings = embeddings
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -126,10 +123,10 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         self.Sampler = PointCloudSampler(Mesh.vertices, Mesh.vertex_normals, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
         #Include latent vector if we are using an AutoDecoder
-        if self.Embeddings is None:
+        if not self.ad:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
-            return torch.cat([self.Sampler.Coordinates, self.Embeddings(torch.tensor([idx]*self.Sampler.Coordinates.size()[0]))], dim=1), (self.Sampler.Intersects, self.Sampler.Depths)
+            return (self.Sampler.Coordinates, torch.tensor([idx]*self.Sampler.Coordinates.size()[0])), (self.Sampler.Intersects, self.Sampler.Depths)
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)

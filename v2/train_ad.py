@@ -31,7 +31,7 @@ Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.'
 Parser.set_defaults(no_posenc=True) # DEBUG. todo: fix this
 Parser.add_argument('--latent-size', type=int, default=256, help="The size of the latent vector for the autodecoder")
 Parser.add_argument('--latent-stdev', type=float, default=0.001**2, help="The standard deviation of the zero mean gaussian used to initialize latent vectors")
-Parser.add_argument('--lr-decoder', type=float, default=0.00001, help="The baseline learning rate for the decoder weights")
+Parser.add_argument('--lr-decoder', type=float, default=0.0001, help="The baseline learning rate for the decoder weights")
 Parser.add_argument('--lr-latvecs', type=float, default=0.001, help="The learning rate for the latent vectors")
 Parser.add_argument('--use_l2', action="store_true", help="Use L2 loss instead of L1 loss")
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
 
     TrainDevice = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     # TrainDevice = "cpu"
-    TrainData = PCDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+    TrainData = PCDL(root=NeuralODF.Config.Args.input_dir, train=True, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc, ad=True)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
     ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=usePosEnc)
@@ -58,15 +58,13 @@ if __name__ == '__main__':
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 
      # Initialize embeddings for the training examples
-    lat_vecs = torch.nn.Embedding(len(TrainData.LoadedOBJs), Args.latent_size, max_norm=8*Args.latent_stdev)
+    lat_vecs = torch.nn.Embedding(len(TrainData.LoadedOBJs), Args.latent_size)
     torch.nn.init.normal_(
         lat_vecs.weight.data,
         0.0,
         # get_spec_with_default(specs, "CodeInitStdDev", 1.0) / math.sqrt(latent_size),
         Args.latent_stdev
     )
-    TrainData.addEmbeddings(lat_vecs)
-    ValData.addEmbeddings(lat_vecs)
 
     #TODO: Figure out how to propagate embedding gradients with multiple workers
     TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
@@ -96,5 +94,5 @@ if __name__ == '__main__':
     loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
     # loss = ADCombinedLoss()
 
-    NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
+    NeuralODF.fit(TrainDataLoader, Objective=loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader, OtherParameterNames=["Latent Vectors"], OtherParameters=[lat_vecs])
     odf_v2_utils.save_latent_vectors(NeuralODF.Config.Args.output_dir, NeuralODF.Config.Args.expt_name, lat_vecs, NeuralODF.Config.Args.epochs)

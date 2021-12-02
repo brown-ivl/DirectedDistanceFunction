@@ -21,6 +21,8 @@ class SingleDepthBCELoss(nn.Module):
         return self.computeLoss(output, target)
 
     def computeLoss(self, output, target):
+        print(f"output type: {type(output)}")
+        print(output)
         assert isinstance(output, list) # For custom collate
         B = len(target) # Number of batches with custom collate
         Loss = 0
@@ -181,15 +183,15 @@ class ADRegLoss(nn.Module):
         return self.computeLoss(output, target)
 
     def computeLoss(self, output, target):
-        LatentNorms = output[1]
-        assert isinstance(LatentNorms, list) # For custom collate
+        LatentVectors = output[1]
+        assert isinstance(LatentVectors, list) # For custom collate
         B = len(output) # Number of batches with custom collate
         Loss = 0
         for b in range(B):
             # Single batch version
             # TODO: Factor in the epoch
             # TODO: How does the stdev of the latent space factor in?
-            LatentLoss = self.RegLambda * LatentNorms[b]
+            LatentLoss = self.RegLambda * torch.mean(torch.norm(LatentVectors[b], dim=-1))
             Loss += LatentLoss
         Loss /= B
 

@@ -126,8 +126,6 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
         else:
             self.pos_enc_layers = []
 
-        self.LatentCode = nn.Parameter()
-
         # Define the main network body
         main_layers = []
         main_layers.append(nn.Linear(self.InputSize, hidden_size))
@@ -159,8 +157,12 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
         # No layernorm for now
         # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
-    def forward(self, input):
-        print(f"Input on cuda: {input[0].is_cuda}")
+    def forward(self, input, otherParameters):
+        if(isinstance(input[0], tuple)):
+            print(f"Input on cuda: {input[0][0].is_cuda}")
+        else:
+            print(f"Input on cuda: {input[0].is_cuda}")
+        assert("Latent Vectors" in otherParameters)
         Input = input
         assert isinstance(input, list)
         B = len(Input)
@@ -168,9 +170,11 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
         BIntersects = [None] * B
         BDepths = [None] * B
         CollateList = [None] * B
-        LatentNorms = [None] * B
+        LatentVectors = [None] * B
         for b in range(B):
-            x = Input[b]
+            coords, indices = Input[b]
+            x = torch.cat([coords, otherParameters["Latent Vectors"](indices)], dim=1)
+            LatentVectors[b] = otherParameters["Latent Vectors"](indices)
             BInput = Input[b]
             for i in range(len(self.network)):
                 if i + 1 in self.pos_enc_layers:
@@ -202,7 +206,5 @@ class LF4DSingleAutoDecoder(supernet.SuperNet):
             BIntersects[b] = intersections
             BDepths[b] = depths
             CollateList[b] = (intersections, depths)
-            LatentNorms[b] = torch.mean(torch.norm(Input[b][:,-self.LatentSize:], dim=1))
-        return CollateList, LatentNorms
+        return CollateList, LatentVectors
         # return BIntersects, BDepths
-

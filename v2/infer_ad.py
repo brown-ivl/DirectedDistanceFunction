@@ -1,5 +1,7 @@
+from numpy.lib.npyio import load
 import torch
 from beacon import utils as butils
+from beacon.supernet import SuperLoss
 import argparse
 import math
 
@@ -10,6 +12,8 @@ from Easel import Easel
 from tqdm import tqdm
 import multiprocessing as mp
 
+from odf_v2_utils import load_latent_vectors
+
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
@@ -17,8 +21,8 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 from pc_sampler import PC_SAMPLER_RADIUS
-from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import LF4DSingle
+from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH, ADPredLoss, ADRegLoss
+from single_models import LF4DSingleAutoDecoder
 from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from odf_dataset import ODFDatasetLoader as ODL
 
@@ -47,6 +51,9 @@ def infer(Network, ValDataLoader, Objective, Device, Limit):
             Coords.append(Data[b].detach().cpu())
             GTIntersects.append(Targets[b][0])
             GTDepths.append(Targets[b][1])
+            print("OUTPU B")
+            print(Output[b][0])
+            print(len(Output[b][0]))
             PredIntersects.append(Output[b][0].detach().cpu())
             PredDepths.append(Output[b][1].detach().cpu())
 
@@ -73,6 +80,10 @@ Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.'
 Parser.set_defaults(no_posenc=True) # Debug, fix this
 Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 Parser.add_argument('-l', '--val-limit', help='Limit validation samples.', required=False, type=int, default=-1)
+Parser.add_argument('--latent-size', type=int, default=256, help="The size of the latent vector for the autodecoder")
+Parser.add_argument('--latent-stdev', type=float, default=0.001**2, help="The standard deviation of the zero mean gaussian used to initialize latent vectors")
+Parser.add_argument('--use_l2', action="store_true", help="Use L2 loss instead of L1 loss")
+
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
@@ -87,20 +98,29 @@ if __name__ == '__main__':
     ValLimit = Args.val_limit
     print('[ INFO ]: Using positional encoding:', usePosEnc)
     if Args.arch == 'standard':
-        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
+        NeuralODF = LF4DSingleAutoDecoder(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, latent_size=Args.latent_size)
+
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
     ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
+
+    lat_vecs = torch.nn.Embedding(len(ValData.LoadedOBJs), Args.latent_size, max_norm=8*Args.latent_stdev)
+    load_latent_vectors(NeuralODF.Config.Args.output_dir, NeuralODF.Config.Args.expt_name, lat_vecs)
+
+    if Args.force_test_on_train:
+        ValData.addEmbeddings(lat_vecs)
     if ValLimit < 0:
         ValLimit = len(ValData)
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
-    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, SingleDepthBCELoss(), Device, ValLimit)
+    loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
+
+    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, loss, Device, ValLimit)
 
     # if usePosEnc:
     #     Rays = []
