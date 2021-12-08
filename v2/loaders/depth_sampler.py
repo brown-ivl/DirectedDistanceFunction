@@ -43,6 +43,7 @@ class DepthMapSampler():
         self.sample(self.nTargetRays)
 
     def sample(self, TargetRays, RatioPositive=DEPTH_SAMPLER_POS_RATIO):
+        print(self.NPData)
         AllEndPoints = self.NPData['unprojected_normalized_pts']
         StartPoint = self.NPData['viewpoint'] # There is only 1 start point, the camera center
         AllStartPoints = np.tile(StartPoint, (AllEndPoints.shape[0], 1))
@@ -56,18 +57,19 @@ class DepthMapSampler():
         NegShuffleIdx = np.random.permutation(len(AllNegIdx))
 
         SampledPosEndPts = AllEndPoints[AllPosIdx[PosShuffleIdx[:nPosTargetRays]]]
-        SampledNegEndPts = AllEndPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
         SampledPosStartPts = AllStartPoints[AllPosIdx[PosShuffleIdx[:nPosTargetRays]]]
-        SampledNegStartPts = AllStartPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
         SampledPosDir = SampledPosEndPts - SampledPosStartPts
         SampledPosDirNorm = np.linalg.norm(SampledPosDir, axis=1)
         SampledPosDir /= SampledPosDirNorm[:, np.newaxis]
-        SampledNegDir = SampledNegEndPts - SampledNegStartPts
-        SampledNegDirNorm = np.linalg.norm(SampledPosDir, axis=1)
-        SampledNegDir /= SampledNegDirNorm[:, np.newaxis]
         SampledPosDepths = np.linalg.norm(SampledPosEndPts - SampledPosStartPts, axis=1)
-        SampledNegDepths = np.linalg.norm(SampledNegEndPts - SampledNegStartPts, axis=1)
         SampledPosIntersects = np.ones((nPosTargetRays, 1))
+
+        SampledNegEndPts = AllEndPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
+        SampledNegStartPts = AllStartPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
+        SampledNegDir = SampledNegEndPts - SampledNegStartPts
+        SampledNegDirNorm = np.linalg.norm(SampledNegDir, axis=1)
+        SampledNegDir /= SampledNegDirNorm[:, np.newaxis]
+        SampledNegDepths = np.zeros(nNegTargetRays)
         SampledNegIntersects = np.zeros((nNegTargetRays, 1))
 
         Coordinates = np.vstack((np.hstack((SampledPosStartPts, SampledPosDir)), np.hstack((SampledNegStartPts, SampledNegDir))))
