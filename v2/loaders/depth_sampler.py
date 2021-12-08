@@ -59,12 +59,14 @@ class DepthMapSampler():
         SampledNegEndPts = AllEndPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
         SampledPosStartPts = AllStartPoints[AllPosIdx[PosShuffleIdx[:nPosTargetRays]]]
         SampledNegStartPts = AllStartPoints[AllNegIdx[NegShuffleIdx[:nNegTargetRays]]]
+        SampledPosDir = SampledPosEndPts - SampledPosStartPts
+        SampledNegDir = SampledNegEndPts - SampledNegStartPts
         SampledPosDepths = np.linalg.norm(SampledPosEndPts - SampledPosStartPts, axis=1)
         SampledNegDepths = np.linalg.norm(SampledNegEndPts - SampledNegStartPts, axis=1)
         SampledPosIntersects = np.ones((nPosTargetRays, 1))
         SampledNegIntersects = np.zeros((nNegTargetRays, 1))
 
-        Coordinates = np.vstack((SampledPosStartPts, SampledNegStartPts))
+        Coordinates = np.vstack((np.hstack((SampledPosStartPts, SampledPosDir)), np.hstack((SampledNegStartPts, SampledNegDir))))
         Intersects = np.vstack((SampledPosIntersects, SampledNegIntersects))
         Depths = np.expand_dims(np.concatenate((SampledPosDepths, SampledNegDepths)), axis=1)
 

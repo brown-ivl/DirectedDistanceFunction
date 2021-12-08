@@ -107,10 +107,6 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
 
         self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
-        print(self.Sampler.Coordinates.size())
-        print(self.Sampler.Intersects.size())
-        print(self.Sampler.Depths.size())
-
         #Include latent vector if we are using an AutoDecoder
         if not self.ad:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
@@ -133,12 +129,16 @@ if __name__ == '__main__':
     usePoseEnc = not Args.no_posenc
 
     Data = DepthODFDatasetLoader(root=Args.data_dir, train=True, download=True, target_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
-    LoadedData = Data[0]
+
+    ODFVizList = []
+    for i in range(10):
+        LoadedData = Data[i]
+        ODFVizList.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
+                                  intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
+                                  DataLimit=Args.viz_limit))
 
     app = QApplication(sys.argv)
 
-    mainWindow = Easel([ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
-                                                 intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
-                                                 DataLimit=Args.viz_limit)], sys.argv[1:])
+    mainWindow = Easel(ODFVizList, sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())
