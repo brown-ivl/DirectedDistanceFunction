@@ -29,7 +29,7 @@ import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
 from depth_sampler import DepthMapSampler
 
-DEPTH_DATASET_NAME = 'teapot'
+DEPTH_DATASET_NAME = 'lucy'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
@@ -75,11 +75,9 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
                 print('[ INFO ]: Unzipping.')
                 File2Unzip.extractall(butils.expandTilde(self.DataDir))
 
-        # TEMP
-        FilesPath = DatasetDir # TEMP for testing
-        # FilesPath = os.path.join(DatasetDir, 'val/depth/')
-        # if self.isTrainData:
-        #     FilesPath = os.path.join(DatasetDir, 'train/depth/')
+        FilesPath = os.path.join(DatasetDir, 'depth/val')
+        if self.isTrainData:
+            FilesPath = os.path.join(DatasetDir, 'depth/train')
 
         self.BaseDirPath = FilesPath
 
