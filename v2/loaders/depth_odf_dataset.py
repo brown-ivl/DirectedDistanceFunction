@@ -98,7 +98,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
             self.LoadedDepths.append(DepthData)
 
     def __len__(self):
-        return (len(self.OBJList))
+        return (len(self.DepthList))
 
     def __getitem__(self, idx, PosEnc=None):
         DepthData = self.LoadedDepths[idx]
