@@ -33,6 +33,8 @@ from palettable.mycarta import Cube1_20
 # from tk3dv.common.trimesh_visualizer import TrimeshVisualizer
 from tk3dv.common import drawing
 import igl
+from meshplot import plot, subplot, interact
+import meshplot
 
 class TrimeshVisualizer(object):
     def __init__(self, TrimeshObject):
@@ -303,10 +305,16 @@ if __name__ == '__main__':
     Revertices, Refaces = trimesh.remesh.subdivide_to_size(Mesh.vertices, Mesh.faces, max_edge=PC_SAMPLER_THRESH, max_iter=10)
     Remesh = trimesh.Trimesh(Revertices, Refaces)
     # Remesh = Mesh
-    print('[ INFO ]: Remeshing done.', flush=True)
-    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*4)
+    # Revertices = Remesh.vertices
+    # Refaces = Remesh.faces
+    print('[ INFO ]: Remeshing done. New mesh has {} vertices compared to old {}.'.format(len(Revertices), len(Mesh.vertices)), flush=True)
+    Curvature = trimesh.curvature.discrete_mean_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH)
     # Curvature = trimesh.curvature.discrete_gaussian_curvature_measure(Remesh, Remesh.vertices, radius=PC_SAMPLER_THRESH*10)
     # Curvature = igl.gaussian_curvature(Revertices, Refaces)
+    # meshplot.offlne()
+    # plot(Revertices, Refaces, Curvature)
+    # exit()
+
     Curvature = np.abs(Curvature)
     Max = np.max(Curvature)
     Min = np.min(Curvature)

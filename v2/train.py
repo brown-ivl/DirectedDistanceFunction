@@ -29,6 +29,8 @@ Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=in
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.set_defaults(no_posenc=False)
 
+import faulthandler; faulthandler.enable()
+
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
