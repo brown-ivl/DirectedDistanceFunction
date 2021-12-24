@@ -124,6 +124,7 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
         self.Sampler = PointCloudSampler(Mesh.vertices, Mesh.vertex_normals, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
         #Include latent vector if we are using an AutoDecoder
+        # TODO: assign index based on file name so that the dataset can still be shuffled
         if not self.ad:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
