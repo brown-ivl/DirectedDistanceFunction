@@ -22,8 +22,8 @@ class SingleDepthBCELoss(nn.Module):
         return self.computeLoss(output, target)
 
     def computeLoss(self, output, target):
-        print(f"output type: {type(output)}")
-        print(output)
+        # print(f"output type: {type(output)}")
+        # print(output)
         assert isinstance(output, list) # For custom collate
         B = len(target) # Number of batches with custom collate
         Loss = 0

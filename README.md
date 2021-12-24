@@ -14,6 +14,7 @@ This repository contains all the code needed to train a network to learn the dir
 - pickle
 - palettable
 - rtree
+- igl
 
 More requirements for Srinath's v2:
 

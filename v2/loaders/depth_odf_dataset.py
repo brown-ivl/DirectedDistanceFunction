@@ -27,24 +27,21 @@ sys.path.append(os.path.join(FileDirPath, '../../'))
 import odf_utils
 import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
-from pc_sampler import PointCloudSampler
+from depth_sampler import DepthMapSampler
 
-# PC_DATASET_NAME = 'bunny_dataset'
-#PC_DATASET_NAME = 'bunny_100_dataset'
-# PC_DATASET_NAME = 'bunny_100_dataset'
-PC_DATASET_NAME = 'bunny_cow'
-PC_DATASET_URL = 'https://neuralodf.s3.us-east-2.amazonaws.com/' + PC_DATASET_NAME + '.zip'
+DEPTH_DATASET_NAME = 'lucy'
+DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
-class PCODFDatasetLoader(torch.utils.data.Dataset):
+class DepthODFDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, root, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False):
-        self.FileName = PC_DATASET_NAME + '.zip'
-        self.DataURL = PC_DATASET_URL
-        self.nTargetSamples = target_samples # Per shape
+        self.FileName = DEPTH_DATASET_NAME + '.zip'
+        self.DataURL = DEPTH_DATASET_URL
+        self.nTargetSamples = target_samples # Per image
         self.PositionalEnc = usePositionalEncoding
         self.Sampler = None
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
         self.ad = ad #autodecoder
-        print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType))
+        print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}, Autodecoder: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType, self.ad))
 
         self.init(root, train, download, limit)
         self.loadData()
@@ -78,52 +75,37 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
                 print('[ INFO ]: Unzipping.')
                 File2Unzip.extractall(butils.expandTilde(self.DataDir))
 
-        FilesPath = os.path.join(DatasetDir, 'val/mesh/')
+        FilesPath = os.path.join(DatasetDir, 'depth/val')
         if self.isTrainData:
-            FilesPath = os.path.join(DatasetDir, 'train/mesh/')
+            FilesPath = os.path.join(DatasetDir, 'depth/train')
 
         self.BaseDirPath = FilesPath
 
-        self.OBJList = (glob.glob(FilesPath + '*.obj')) # Only OBJ supported
-        self.OBJList.sort()
+        self.DepthList = (glob.glob(FilesPath + '/*.npy')) # Only npy supported
+        self.DepthList.sort()
 
-        if len(self.OBJList) == 0 or self.OBJList is None:
-            raise RuntimeError('[ ERR ]: No files found during data loading.')
+        if len(self.DepthList) == 0 or self.DepthList is None:
+            raise RuntimeError('[ ERR ]: No depth image files found during data loading.')
 
         if self.DataLimit is None:
-            self.DataLimit = len(self.OBJList)
-        DatasetLength = self.DataLimit if self.DataLimit < len(self.OBJList) else len(self.OBJList)
-        self.OBJList = self.OBJList[:DatasetLength]
+            self.DataLimit = len(self.DepthList)
+        DatasetLength = self.DataLimit if self.DataLimit < len(self.DepthList) else len(self.DepthList)
+        self.DepthList = self.DepthList[:DatasetLength]
 
-        self.LoadedOBJs = []
-        for OBJFileName in self.OBJList:
-            Mesh = trimesh.load(OBJFileName)
-            Verts = Mesh.vertices
-            Verts = odf_utils.mesh_normalize(Verts)
-            VertNormals = Mesh.vertex_normals.copy()
-            Norm = np.linalg.norm(VertNormals, axis=1)
-            VertNormals /= Norm[:, None]
-            Mesh.vertices = Verts
-            Mesh.vertex_normals = VertNormals
+        self.LoadedDepths = []
+        for FileName in self.DepthList:
+            DepthData = np.load(FileName, allow_pickle=True).item()
+            self.LoadedDepths.append(DepthData)
 
-            self.LoadedOBJs.append(Mesh)
     def __len__(self):
-        return (len(self.OBJList))
+        return (len(self.DepthList))
 
     def __getitem__(self, idx, PosEnc=None):
-        # Mesh = trimesh.load(self.OBJList[idx])
-        # Verts = Mesh.vertices
-        # Verts = odf_utils.mesh_normalize(Verts)
-        # VertNormals = Mesh.vertex_normals.copy()
-        # Norm = np.linalg.norm(VertNormals, axis=1)
-        # VertNormals /= Norm[:, None]
-        Mesh = self.LoadedOBJs[idx]
+        DepthData = self.LoadedDepths[idx]
 
-        # if self.Sampler is None: # todo: TEMP for testing with same samples
-        self.Sampler = PointCloudSampler(Mesh.vertices, Mesh.vertex_normals, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
+        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
         #Include latent vector if we are using an AutoDecoder
-        # TODO: assign index based on file name so that the dataset can still be shuffled
         if not self.ad:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
@@ -132,7 +114,7 @@ class PCODFDatasetLoader(torch.utils.data.Dataset):
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
-Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to aim to sample per shape.', required=False, type=int, default=1000)
+Parser.add_argument('-n', '--nsamples', help='How many rays of ODF to aim to sample per image.', required=False, type=int, default=1000)
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.set_defaults(no_posenc=False)
@@ -144,13 +126,17 @@ if __name__ == '__main__':
     butils.seedRandom(Args.seed)
     usePoseEnc = not Args.no_posenc
 
-    Data = PCODFDatasetLoader(root=Args.data_dir, train=True, download=True, target_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
-    LoadedData = Data[0]
+    Data = DepthODFDatasetLoader(root=Args.data_dir, train=True, download=True, target_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
+
+    ODFVizList = []
+    for i in range(10):
+        LoadedData = Data[i]
+        ODFVizList.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
+                                  intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
+                                  DataLimit=Args.viz_limit))
 
     app = QApplication(sys.argv)
 
-    mainWindow = Easel([ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
-                                                 intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
-                                                 DataLimit=Args.viz_limit)], sys.argv[1:])
+    mainWindow = Easel(ODFVizList, sys.argv[1:])
     mainWindow.show()
     sys.exit(app.exec_())
