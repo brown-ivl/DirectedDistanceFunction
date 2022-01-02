@@ -16,10 +16,12 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
-from pc_sampler import PC_SAMPLER_RADIUS
+# from pc_sampler import PC_SAMPLER_RADIUS
+from depth_sampler import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
 from single_models import LF4DSingle
-from pc_odf_dataset import PCODFDatasetLoader as PCDL
+# from pc_odf_dataset import PCODFDatasetLoader as PCDL
+from depth_odf_dataset import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
 import odf_v2_utils as o2utils
 
@@ -92,16 +94,16 @@ if __name__ == '__main__':
     ValLimit = Args.val_limit
     print('[ INFO ]: Using positional encoding:', usePosEnc)
     if Args.arch == 'standard':
-        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=PC_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
+        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     NeuralODF.setupCheckpoint(Device)
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = PCDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=False) # NOTE: We pass the positional encoding flag to infer function
+    ValData = DDL(root=NeuralODF.Config.Args.input_dir, train=Args.force_test_on_train, download=True, target_samples=Args.rays_per_shape, usePositionalEncoding=False) # NOTE: We pass the positional encoding flag to infer function
     if ValLimit < 0:
         ValLimit = len(ValData)
-    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=PCDL.collate_fn)
+    ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
@@ -115,14 +117,17 @@ if __name__ == '__main__':
     #     Rays = torch.cat(Rays, dim=0)
 
     app = QApplication(sys.argv)
-    VizIdx = 0
+    VizIdx = [0, 1, 2, 3, 4]
 
-    GTViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
-                             intersects=GTIntersects[VizIdx], depths=GTDepths[VizIdx],
-                             DataLimit=Args.viz_limit, Offset=[-1, 0, 0])
-    PredViz = ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[VizIdx],
-                             intersects=PredIntersects[VizIdx], depths=PredDepths[VizIdx],
-                             DataLimit=Args.viz_limit, Offset=[1, 0, 0])
-    CompareViz = Easel([GTViz, PredViz], sys.argv[1:])
+    GTViz = []
+    PredViz = []
+    for vidx in VizIdx:
+        GTViz.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[vidx],
+                                 intersects=GTIntersects[vidx], depths=GTDepths[vidx],
+                                 DataLimit=Args.viz_limit, Offset=[-1, 0, 0]))
+        PredViz.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=Coords[vidx],
+                                 intersects=PredIntersects[vidx], depths=PredDepths[vidx],
+                                 DataLimit=Args.viz_limit, Offset=[1, 0, 0]))
+    CompareViz = Easel(GTViz + PredViz, sys.argv[1:])
     CompareViz.show()
     sys.exit(app.exec_())

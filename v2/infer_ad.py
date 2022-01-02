@@ -43,6 +43,8 @@ def infer(Network, ValDataLoader, Objective, Device, Limit, OtherParameters):
         DataTD = butils.sendToDevice(Data, Device)
         TargetsTD = butils.sendToDevice(Targets, Device)
 
+        print("LEN of data in infere ***********************")
+        print(len(DataTD))
         Output = Network.forward(DataTD, OtherParameters)
         Loss = Objective(Output, TargetsTD)
         ValLosses.append(Loss.item())
@@ -66,6 +68,52 @@ def infer(Network, ValDataLoader, Objective, Device, Limit, OtherParameters):
 
     return ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths
 
+def infer_instance(Network, ValData, Objective, Device, Limit, OtherParameters, idx=0):
+    Network.eval()  # switch to evaluation mode
+    ValLosses = []
+    Tic = butils.getCurrentEpochTime()
+    Network.to(Device)
+    # print('Val length:', len(ValDataLoader))
+    Coords = []
+    PredIntersects = []
+    PredDepths = []
+    GTIntersects = []
+    GTDepths = []
+    # for i, (Data, Targets) in enumerate(ValDataLoader, 0):  # Get each batch
+    Data, Targets = ValData[idx]
+    # TODO: issue using batch size of one. Probably a squeeze somewhere
+    Data = [Data, Data]
+    Targets = [Targets, Targets]
+
+    DataTD = butils.sendToDevice(Data, Device)
+    TargetsTD = butils.sendToDevice(Targets, Device)
+
+    print("LEN of data in infere_instance ***********************")
+    print(len(DataTD))
+
+    Output = Network.forward(DataTD, OtherParameters)
+    Loss = Objective(Output, TargetsTD)
+    ValLosses.append(Loss.item())
+
+    for b in range(len(Output)):
+        Coords.append(Data[b][0].detach().cpu())
+        GTIntersects.append(Targets[b][0])
+        GTDepths.append(Targets[b][1])
+        PredIntersects.append(Output[b][0][0].detach().cpu())
+        PredDepths.append(Output[b][0][1].detach().cpu())
+
+    # Print stats
+    Toc = butils.getCurrentEpochTime()
+    Elapsed = math.floor((Toc - Tic) * 1e-6)
+    # done = int(50 * (i + 1) / len(ValDataLoader))
+    # sys.stdout.write(('\r[{}>{}] val loss - {:.8f}, elapsed - {}')
+    #                     .format('+' * done, '-' * (50 - done), np.mean(np.asarray(ValLosses)),
+    #                             butils.getTimeDur(Elapsed)))
+    sys.stdout.flush()
+    sys.stdout.write('\n')
+
+    return ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths
+
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs autodecoder.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
@@ -80,6 +128,7 @@ Parser.add_argument('-l', '--val-limit', help='Limit validation samples.', requi
 Parser.add_argument('--latent-size', type=int, default=256, help="The size of the latent vector for the autodecoder")
 Parser.add_argument('--latent-stdev', type=float, default=0.001**2, help="The standard deviation of the zero mean gaussian used to initialize latent vectors")
 Parser.add_argument('--use_l2', action="store_true", help="Use L2 loss instead of L1 loss")
+Parser.add_argument('--viz-idx', type=int, default=0, help="The dataset index to visualize")
 
 
 if __name__ == '__main__':
@@ -113,13 +162,16 @@ if __name__ == '__main__':
 
     if ValLimit < 0:
         ValLimit = len(ValData)
+    print(f"LEN ValData: {len(ValData)}")
+    # print(ValData[0])
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=NeuralODF.Config.Args.batch_size, shuffle=False, num_workers=nCores, collate_fn=PCDL.collate_fn)
 
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.rays_per_shape))
 
     loss = SuperLoss(Losses=[ADPredLoss(use_l2=Args.use_l2), ADRegLoss()], Weights=[1.0,1.0])
 
-    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, loss, Device, ValLimit, OtherParamDict)
+    # ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer(NeuralODF, ValDataLoader, loss, Device, ValLimit, OtherParamDict)
+    ValLosses, Coords, GTIntersects, GTDepths, PredIntersects, PredDepths = infer_instance(NeuralODF, ValData, loss, Device, ValLimit, OtherParamDict, idx=Args.viz_idx)
 
     # if usePosEnc:
     #     Rays = []
