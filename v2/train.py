@@ -10,11 +10,11 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 # from pc_sampler import PC_SAMPLER_RADIUS
-from depth_sampler import DEPTH_SAMPLER_RADIUS
+from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss
 from single_models import LF4DSingle
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
-from depth_odf_dataset import DepthODFDatasetLoader as DDL
+from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 
 Parser = argparse.ArgumentParser(description='Training code for NeuralODFs.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard'], default='standard')

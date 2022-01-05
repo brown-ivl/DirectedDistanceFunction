@@ -27,9 +27,9 @@ sys.path.append(os.path.join(FileDirPath, '../../'))
 import odf_utils
 import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
-from depth_sampler import DepthMapSampler
+from depth_sampler_5d import DepthMapSampler
 
-DEPTH_DATASET_NAME = 'lucy'
+DEPTH_DATASET_NAME = 'armadillo'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
