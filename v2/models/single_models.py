@@ -56,8 +56,9 @@ class LF4DSingle(supernet.SuperNet):
         # No layernorm for now
         # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
-    def forward(self, input):
+    def forward(self, input, otherParameters):
         Input = input
+
         assert isinstance(input, list)
         B = len(Input)
 

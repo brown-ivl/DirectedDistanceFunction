@@ -46,7 +46,7 @@ def infer(Network, ValDataLoader, Objective, Device, Limit, UsePosEnc):
         DataTD = butils.sendToDevice(DataPosEnc, Device)
         TargetsTD = butils.sendToDevice(Targets, Device)
 
-        Output = Network.forward(DataTD)
+        Output = Network.forward(DataTD, {})
         Loss = Objective(Output, TargetsTD)
         ValLosses.append(Loss.item())
 
