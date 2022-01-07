@@ -11,7 +11,7 @@ This repository contains all the code needed to train a network to learn the dir
 - matplotlib
 - pytorch
 - open3d
-- pickle
+- pickle (part of standard Python)
 - palettable
 - rtree
 - igl
