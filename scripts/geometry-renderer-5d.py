@@ -320,13 +320,14 @@ all_obj_files = glob.glob(os.path.join(common_objects_data_path, '*.obj'))
 data_save_dir = 'F:\\ivl-data\\common-3d-test-models\\rendered-data-5d\\'
 for obj_file in all_obj_files:
     obj_name = os.path.basename(obj_file).split('.')[0]
-    print(obj_name, "obj_name")
-    mesh_vertices, mesh_faces, obj_mesh = load_object(obj_name + '.obj')
-    is_watertight = len(trimesh.repair.broken_faces(obj_mesh)) == 0
-    if not is_watertight:
-        print(f"Skipping {obj_name}.obj because it is not watertight")
-    else:
-        main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir)
+    if obj_name in ["tetrahedron"]:
+        print(obj_name, "obj_name")
+        mesh_vertices, mesh_faces, obj_mesh = load_object(obj_name + '.obj')
+        is_watertight = len(trimesh.repair.broken_faces(obj_mesh)) == 0
+        if not is_watertight:
+            print(f"Skipping {obj_name}.obj because it is not watertight")
+        else:
+            main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir)
 
 
 # import numpy as np
