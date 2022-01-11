@@ -10,6 +10,7 @@ from Easel import Easel
 from tqdm import tqdm
 import multiprocessing as mp
 
+
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
@@ -17,11 +18,11 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 # from pc_sampler import PC_SAMPLER_RADIUS
-from depth_sampler import DEPTH_SAMPLER_RADIUS
+from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import LF4DSingle
+from single_models import ODFSingleV3
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
-from depth_odf_dataset import DepthODFDatasetLoader as DDL
+from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
 import odf_v2_utils as o2utils
 
@@ -57,6 +58,7 @@ def infer(Network, ValDataLoader, Objective, Device, Limit, UsePosEnc):
             PredIntersects.append(Output[b][0].detach().cpu())
             PredDepths.append(Output[b][1].detach().cpu())
 
+        # print(PredDepths)
         # Print stats
         Toc = butils.getCurrentEpochTime()
         Elapsed = math.floor((Toc - Tic) * 1e-6)
@@ -94,7 +96,7 @@ if __name__ == '__main__':
     ValLimit = Args.val_limit
     print('[ INFO ]: Using positional encoding:', usePosEnc)
     if Args.arch == 'standard':
-        NeuralODF = LF4DSingle(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc)
+        NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     NeuralODF.setupCheckpoint(Device)
