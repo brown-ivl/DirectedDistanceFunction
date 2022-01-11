@@ -18,12 +18,12 @@ class SingleDepthBCELoss(nn.Module):
         self.Thresh = Thresh
         self.Lambda = Lambda
 
-    def forward(self, output, target):
+    def forward(self, output, target, otherInputs={}):
         return self.computeLoss(output, target)
 
     def computeLoss(self, output, target):
         # print(f"output type: {type(output)}")
-        # print(output)
+        # print(output[0][1])
         assert isinstance(output, list) # For custom collate
         B = len(target) # Number of batches with custom collate
         Loss = 0
@@ -54,6 +54,52 @@ class SingleDepthBCELoss(nn.Module):
         # print(torch.min(labels), torch.max(labels))
         # print(torch.min(predictions), torch.max(predictions))
         return Loss
+
+class DepthFieldRegularizingLoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.GradientLoss = nn.MSELoss()
+        
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target, otherInputs=otherInputs)
+    
+    def computeLoss(self, output, target, otherInputs={}):
+        assert("model" in otherInputs)
+        assert("data" in otherInputs)
+        data = otherInputs["data"]
+        model = otherInputs["model"]
+
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+
+        for b in range(B):
+            # Single batch version
+            Coords = data[b]
+            instance_loss = 0.
+
+            # The size of the jacobian is input x output, so we get CUDA OOM if our batch is too large
+            jacobian_batch_size = 40
+            n_jacobian_batches = math.ceil(Coords.shape[0]/jacobian_batch_size)
+            for jacobian_batch_number in range(n_jacobian_batches):
+                curr_coords = Coords[jacobian_batch_number*jacobian_batch_size:(jacobian_batch_number+1)*jacobian_batch_size,:]
+                jacobian = torch.autograd.functional.jacobian(lambda x: model([x], {})[0][1], curr_coords, create_graph=True, vectorize=True)
+                directional_gradients = jacobian[torch.arange(jacobian.shape[0]),0,torch.arange(jacobian.shape[2]), 3:]
+                # print("+++++++++++++++++++++")
+                # print(Coords[...,3:].shape)
+                # print(directional_gradients.shape)
+                gradient_dots = torch.sum(curr_coords[...,3:]*directional_gradients, dim=-1)
+                # The dots of the viewing directions and their gradients should be -1
+                mse = torch.square(gradient_dots+1.)
+                instance_loss += torch.sum(mse)
+            
+            Loss += instance_loss/Coords.shape[0]
+        Loss /= B
+
+        return Loss
+
+
 
 class ADCombinedLoss(nn.Module):
     '''

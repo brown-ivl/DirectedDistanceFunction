@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#SBATCH -p 3090-gcondo --gres=gpu:1
+#SBATCH -t 72:00:00
+#SBATCH --mem=128G
+#SBATCH -n 4
+
+module load cuda/11.1.1
+conda activate bodymodel
+
+python ../v2/train.py --input-dir /gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/rendered_data_new/ --output-dir /gpfs/data/ssrinath/neural-odf/output/ --expt-name jan02_01 --no-posenc

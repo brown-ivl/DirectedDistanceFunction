@@ -29,7 +29,7 @@ import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
 from depth_sampler_5d import DepthMapSampler
 
-DEPTH_DATASET_NAME = 'armadillo'
+DEPTH_DATASET_NAME = 'torus'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
@@ -80,7 +80,6 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
             FilesPath = os.path.join(DatasetDir, 'depth', 'train')
 
         self.BaseDirPath = FilesPath
-
         self.DepthList = (glob.glob(os.path.join(FilesPath, '*.npy'))) # Only npy supported
         self.DepthList.sort()
 
