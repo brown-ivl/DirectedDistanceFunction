@@ -50,7 +50,7 @@ def z_align_vector(vec):
 
 def max_edge(verts, faces, padding=1.001):
     '''
-    Finds the minimum edge length within the mesh
+    Finds the maximum edge length within the mesh
     '''
     a = verts[faces][:,0]
     b = verts[faces][:,1]

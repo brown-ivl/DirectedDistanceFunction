@@ -96,7 +96,7 @@ class PyrenderCamera():
         _, depth_map = r.render(scene, flags=pyrender.constants.RenderFlags.SKIP_CULL_FACES)
 
         if inside_mesh:
-            print("INSIDE GT MESH")
+            # print("INSIDE GT MESH")
             depth_map = -1. * depth_map
             # flip to account for not negating the right vector in the reverse camera matrix
             depth_map = np.flip(depth_map, axis=1)
@@ -145,8 +145,10 @@ class ODFCamera():
         Returns a list of rays ( [start point, end point] ), where each ray intersects one pixel. The start point of each ray is the camera center.
         Rays are returned top to bottom, left to right.
         '''
-        u_steps = np.linspace(-self.sensor_size[0], self.sensor_size[0], num=self.sensor_resolution[0])
-        v_steps = np.linspace(-self.sensor_size[1], self.sensor_size[1], num=self.sensor_resolution[1])
+        u_steps, u_step_size = np.linspace(-self.sensor_size[0], self.sensor_size[0], num=self.sensor_resolution[0], endpoint=False, retstep=True)
+        u_steps += u_step_size/2.
+        v_steps, v_step_size = np.linspace(-self.sensor_size[1], self.sensor_size[1], num=self.sensor_resolution[1], endpoint=False, retstep=True)
+        v_steps += v_step_size/2.
         us, vs = np.meshgrid(u_steps, v_steps)
         us = us.flatten()
         vs = vs.flatten()
@@ -158,7 +160,6 @@ class ODFCamera():
         '''
         Returns an intersection map and a depthmap from a learned model from the camera's perspective
         '''
-        print("DEVICE ", device)
         rays = self.generate_rays()
         odf=odf.eval()
         # rays_in_scene_mask = np.array([True if ray != None else False for ray in rays])
@@ -169,8 +170,8 @@ class ODFCamera():
                 # encoded_rays = torch.tensor([[x for val in list(ray[0]) + list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for x in odf_utils.positional_encoding(val)] for ray in rays_in_scene]).to(device)
                 input_rays = torch.tensor([list(ray[0]) + list((ray[1]-ray[0])/np.linalg.norm(ray[1]-ray[0])) for ray in rays_in_scene]).float().to(device)
                 intersect, depth = odf([input_rays], {})[0]
-                intersect = intersect.cpu().squeeze()
-                model_depths = depth.cpu().squeeze()
+                intersect = intersect.cpu().flatten()
+                model_depths = depth.cpu().flatten()
             # intersection_mask = rays_in_scene_mask.astype(float)
             # intersection_mask[rays_in_scene_mask] = intersect
             intersection_mask = intersect.reshape(self.sensor_resolution)
@@ -251,7 +252,7 @@ def save_video(rendered_views_model, rendered_views_mesh, file_name):
         axes[1].imshow(model_views[num])
         axes[1].set_title("Predicted")
 
-    depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views_mesh, rendered_views_mesh, all_axes),
+    depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(rendered_views_mesh, rendered_views_model, all_axes),
                                    interval=50)
     depthmap_ani.save(file_name, writer=writer)
 
@@ -273,8 +274,7 @@ def equatorial_video(output_dir, expt_name, model, mesh_vertices, mesh_faces, ob
     z_vals = [np.cos(angle_increment*i)*cam_radius for i in range(n_frames)]
     x_vals = [np.sin(angle_increment*i)*cam_radius for i in range(n_frames)]
     circle_cameras_odf = [ODFCamera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_frames)]
-    ODFCamera(center=[0.4,0.,1.], direction=[-0.4,0.,-1.])
-    circle_cameras_pyrender = [PyrenderCamera(center=[x_vals[i],0.0,z_vals[i]], direction=[-x_vals[i],0.0,-z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_frames)]
+    circle_cameras_pyrender = [PyrenderCamera(center=[x_vals[i],0.0,z_vals[i]], direction=[x_vals[i],0.0,z_vals[i]], focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_frames)]
     rendered_views_model = [cam.odf_depths(model) for cam in tqdm(circle_cameras_odf)]
     rendered_views_mesh = [cam.render_mesh(mesh_vertices, mesh_faces, obj_mesh) for cam in tqdm(circle_cameras_pyrender)]
 
@@ -282,6 +282,103 @@ def equatorial_video(output_dir, expt_name, model, mesh_vertices, mesh_faces, ob
     rendered_views_mesh = [depths_to_img(depths, intersects, min_depth=vmin, max_depth=vmax) for intersects, depths in rendered_views_mesh]
 
     save_video(rendered_views_model, rendered_views_mesh, os.path.join(video_dir, f'equatorial_video_{expt_name}.mp4'))
+
+def linear_video(output_dir, expt_name, model, mesh_vertices, mesh_faces, obj_mesh, resolution=256, n_frames=50):
+
+    video_dir = os.path.join(output_dir, expt_name, "videos")
+    if not os.path.exists(video_dir):
+        os.mkdir(video_dir)
+
+    start_pos = np.array([1.,0.,0.])
+    end_pos = np.array([-1.,0.,0.])
+    direction = end_pos-start_pos
+    unit_direction = direction / np.linalg.norm(direction)
+
+    # these are the normalization bounds for coloring in the video
+    vmin = -2. * max(np.linalg.norm(start_pos), np.linalg.norm(end_pos))
+    vmax = -vmin
+    fl = 1.0
+    sensor_size = [1.0,1.0]
+    resolution = [resolution,resolution]
+
+    z_vals = [start_pos[2]+direction[2]*i/n_frames for i in range(n_frames)]
+    y_vals = [start_pos[1]+direction[1]*i/n_frames for i in range(n_frames)]
+    x_vals = [start_pos[0]+direction[0]*i/n_frames for i in range(n_frames)]
+    linear_cameras_odf = [ODFCamera(center=[x_vals[i],y_vals[i],z_vals[i]], direction=unit_direction, focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_frames)]
+    linear_cameras_pyrender = [PyrenderCamera(center=[x_vals[i],y_vals[i],z_vals[i]], direction=-1.*unit_direction, focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_frames)]
+    rendered_views_model = [cam.odf_depths(model) for cam in tqdm(linear_cameras_odf)]
+    rendered_views_mesh = [cam.render_mesh(mesh_vertices, mesh_faces, obj_mesh) for cam in tqdm(linear_cameras_pyrender)]
+
+    rendered_views_model = [depths_to_img(depths, intersects, min_depth=vmin, max_depth=vmax) for intersects, depths in rendered_views_model]
+    rendered_views_mesh = [depths_to_img(depths, intersects, min_depth=vmin, max_depth=vmax) for intersects, depths in rendered_views_mesh]
+
+    save_video(rendered_views_model, rendered_views_mesh, os.path.join(video_dir, f'linear_video_{expt_name}.mp4'))
+
+def gradient(inputs, outputs):
+    # TODO: put in utils
+    d_points = torch.ones_like(outputs, requires_grad=False, device=outputs.device)
+    points_grad = torch.autograd.grad(
+        outputs=outputs,
+        inputs=inputs,
+        grad_outputs=d_points,
+        create_graph=True,
+        retain_graph=True)
+        # [0][:, -3:]
+    # print("GRADIENT INFO")
+    # print(inputs.shape)
+    # print(outputs.shape)
+    # print(len(points_grad))
+    # print(points_grad)
+    # # print(points_grad.shape)
+    # print("=============")
+    return points_grad
+
+def viz_1d(model, obj_mesh, mesh_vertices, mesh_faces, start_pos, end_pos, n_steps=100, device="cpu"):
+    direction = end_pos-start_pos
+    unit_direction = direction / np.linalg.norm(direction)
+    distances = [np.linalg.norm(direction)*i/n_steps for i in range(n_steps)]
+
+    fl = 1.0
+    sensor_size = [1.0,1.0]
+    resolution = [3,3]
+
+    z_vals = [start_pos[2]+direction[2]*i/n_steps for i in range(n_steps)]
+    y_vals = [start_pos[1]+direction[1]*i/n_steps for i in range(n_steps)]
+    x_vals = [start_pos[0]+direction[0]*i/n_steps for i in range(n_steps)]
+    linear_cameras_odf = [ODFCamera(center=[x_vals[i],y_vals[i],z_vals[i]], direction=unit_direction, focal_length=fl, sensor_size=sensor_size, sensor_resolution=resolution) for i in range(n_steps)]
+    linear_cameras_pyrender = [PyrenderCamera(center=[x_vals[i],y_vals[i],z_vals[i]], direction=-1.*unit_direction, focal_length=fl, sensor_size=sensor_size, sensor_resolution=[3,3]) for i in range(n_steps)]
+    model_outputs = [cam.odf_depths(model) for cam in tqdm(linear_cameras_odf)]
+    model_intersections = [x[0].flatten()[4] for x in model_outputs]
+    model_depths = [x[1].flatten()[4] for x in model_outputs]
+    gt_depths = [cam.render_mesh(mesh_vertices, mesh_faces, obj_mesh)[1].flatten()[4] for cam in tqdm(linear_cameras_pyrender)]
+
+    positions = torch.tensor([start_pos + direction*i/n_steps for i in range(n_steps)], dtype=torch.float32)
+    view_dirs = torch.tensor([unit_direction for _ in range(n_steps)], dtype=torch.float32)
+    coords = torch.cat([positions, view_dirs], axis=-1).to(device)
+    coords.requires_grad_()
+    intersections, depths = model([coords], {})[0]
+    intersections = intersections.squeeze()
+    # print(len(predictions))
+    # print(predictions[0].shape)
+    # print(predictions[1].shape)
+    # loss = ((torch.linalg.norm(X_pred, dim=-1) - 1) ** 2).mean()
+
+    x_grads = gradient(coords, depths)[0][...,:3]
+    # gradient_norm_mse = torch.mean(torch.square(torch.linalg.norm(x_grads, axis=-1) - 1.))
+
+    # Loss += gradient_norm_mse
+
+    odf_gradient_directions = coords[:,3:]
+
+    dots = torch.sum(x_grads*odf_gradient_directions, dim=-1).cpu().detach().numpy()
+
+    ax = plt.subplot(111)
+    ax.plot(distances, gt_depths, label="GT Depths")
+    ax.plot(distances, model_depths, label="Predicted Depths")
+    ax.plot(distances, dots, label="Directional Derivative")
+    ax.legend()
+    plt.show()
+
 
         
 
@@ -312,21 +409,24 @@ if __name__ == "__main__":
     mesh_vertices, mesh_faces, obj_mesh = load_object(Args.object + ".obj", Args.mesh_dir)
     gt_intersects, gt_depths = GTCam.render_mesh(mesh_vertices, mesh_faces, obj_mesh)
 
-    max_depth = max(np.max(gt_depths), np.max(depths))
-    min_depth = min(np.min(gt_depths), np.min(depths))
+    # max_depth = max(np.max(gt_depths), np.max(depths))
+    # min_depth = min(np.min(gt_depths), np.min(depths))
 
-    img = depths_to_img(depths, intersects, min_depth=min_depth, max_depth=max_depth)
-    gt_img = depths_to_img(gt_depths, gt_intersects, min_depth=min_depth, max_depth=max_depth)
+    # img = depths_to_img(depths, intersects, min_depth=min_depth, max_depth=max_depth)
+    # gt_img = depths_to_img(gt_depths, gt_intersects, min_depth=min_depth, max_depth=max_depth)
     
-    # f = plt.figure()
-    ax = plt.subplot(121)
-    ax.imshow(img)
-    ax.set_title("Predicted")
-    ax2 = plt.subplot(122)
-    ax2.imshow(gt_img)
-    ax2.set_title("Ground Truth")
-    plt.show()
+    # # f = plt.figure()
+    # ax = plt.subplot(121)
+    # ax.imshow(img)
+    # ax.set_title("Predicted")
+    # ax2 = plt.subplot(122)
+    # ax2.imshow(gt_img)
+    # ax2.set_title("Ground Truth")
+    # plt.show()
 
+    viz_1d(odf, obj_mesh, mesh_vertices, mesh_faces, np.array([1.2,0.,0.]), np.array([-1.2,0.,0.]), n_steps=100, device=Device)
+
+    linear_video(Args.output_dir, Args.expt_name, odf, mesh_vertices, mesh_faces, obj_mesh)
     equatorial_video(Args.output_dir, Args.expt_name, odf, mesh_vertices, mesh_faces, obj_mesh)
 
 

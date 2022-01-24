@@ -199,3 +199,51 @@ def get_positional_enc(in_array, L = 10):
 
     return out_array
 
+
+# uniform sampling of sphere volume: https://stackoverflow.com/questions/5408276/sampling-uniformly-distributed-random-points-inside-a-spherical-volume
+def sphere_interior_sampler(num_points, radius=1.25):
+    phi = np.random.uniform(0,2*np.pi,size=num_points)
+    costheta = np.random.uniform(-1,1,size=num_points)
+    theta = np.arccos(costheta)
+    u = np.random.uniform(0,1,size=num_points)
+    r = radius * np.cbrt(u)
+
+    x = r * np.sin( theta) * np.cos( phi )
+    y = r * np.sin( theta) * np.sin( phi )
+    z = r * np.cos( theta )
+    return np.concatenate((x[:,None], y[:,None], z[:,None]), axis=-1)
+
+# uniform sampling from sphere surface by drawing from normal distribution
+def sphere_surface_sampler(num_points, radius=1.00):
+    normal_samples = np.random.normal(size=(num_points,3))
+    surface_samples = normal_samples / np.stack((np.linalg.norm(normal_samples,axis=1),)*3, axis=1) * radius
+    return surface_samples
+
+def odf_domain_sampler(n_points, radius=1.25):
+    '''
+    Samples points uniformly at random from an ODF input domain
+    '''
+    # sample viewpoints on sphere
+    sampled_positions = sphere_interior_sampler(n_points, radius=radius)
+    sampled_directions = sphere_surface_sampler(n_points)
+
+    coords = np.concatenate([sampled_positions, sampled_directions], axis=-1)
+    return coords
+
+def positional_encoding(val, L=10):
+    '''
+    val - the value to apply the encoding to
+    L   - controls the size of the encoding (size = 2*L  - see paper for details)
+    Implements the positional encoding described in section 5.1 of NeRF
+    https://arxiv.org/pdf/2003.08934.pdf
+    '''
+    return [x for i in range(L) for x in [math.sin(2**(i)*math.pi*val), math.cos(2**(i)*math.pi*val)]]
+
+
+def positional_encoding_tensor(coords, L=10):
+    assert(len(coords.shape)==2)
+    columns = []
+    for i in range(coords.shape[1]):
+        columns += [x for j in range(L) for x in [torch.sin(2**i*math.pi*coords[:,i]), torch.cos(2**(i)*math.pi*coords[:,i])]]
+    pos_encodings = torch.stack(columns, dim=-1)
+    return pos_encodings

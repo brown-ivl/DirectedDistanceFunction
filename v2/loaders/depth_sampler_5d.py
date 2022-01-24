@@ -66,10 +66,7 @@ class DepthMapSampler():
         SampledPosDirNorm = np.linalg.norm(SampledPosDir, axis=1)
         SampledPosDir /= SampledPosDirNorm[:, np.newaxis]
         SampledPosDepths = np.linalg.norm(SampledPosEndPts - SampledPosStartPts, axis=1)
-        if self.Interior:
-            print("======="*20)
-            print(self.NPData["depth_map"].flatten()[AllPosIdx[PosShuffleIdx[:nPosTargetRays]]])
-            print(SampledPosDepths)
+
         SampledPosIntersects = np.ones((nPosTargetRays, 1))
         if self.Interior:
             SampledPosDir = -1. * SampledPosDir

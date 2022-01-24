@@ -1,12 +1,33 @@
 import torch
 import torch.nn as nn
 import math
+import odf_v2_utils as o2utils
 
 SINGLE_MASK_THRESH = 0.7
 SINGLE_L2_LAMBDA = 5.0
 SINGLE_L1_LAMBDA = 5.0
 # REG_LAMBDA = 1e-4
 REG_LAMBDA = 1e-1
+
+def gradient(inputs, outputs):
+    d_points = torch.ones_like(outputs, requires_grad=False, device=outputs.device)
+    points_grad = torch.autograd.grad(
+        outputs=outputs,
+        inputs=inputs,
+        grad_outputs=d_points,
+        create_graph=True,
+        retain_graph=True)
+        # [0][:, -3:]
+    # print("GRADIENT INFO")
+    # print(inputs.shape)
+    # print(outputs.shape)
+    # print(len(points_grad))
+    # print(points_grad)
+    # # print(points_grad.shape)
+    # print("=============")
+    return points_grad
+
+
 
 class SingleDepthBCELoss(nn.Module):
     Thresh = SINGLE_MASK_THRESH
@@ -55,7 +76,7 @@ class SingleDepthBCELoss(nn.Module):
         # print(torch.min(predictions), torch.max(predictions))
         return Loss
 
-class DepthFieldRegularizingLoss(nn.Module):
+class DepthFieldRegularizingLossJacobian(nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -77,6 +98,7 @@ class DepthFieldRegularizingLoss(nn.Module):
         for b in range(B):
             # Single batch version
             Coords = data[b]
+            Coords = Coords[:5, ...]
             instance_loss = 0.
 
             # The size of the jacobian is input x output, so we get CUDA OOM if our batch is too large
@@ -85,16 +107,84 @@ class DepthFieldRegularizingLoss(nn.Module):
             for jacobian_batch_number in range(n_jacobian_batches):
                 curr_coords = Coords[jacobian_batch_number*jacobian_batch_size:(jacobian_batch_number+1)*jacobian_batch_size,:]
                 jacobian = torch.autograd.functional.jacobian(lambda x: model([x], {})[0][1], curr_coords, create_graph=True, vectorize=True)
-                directional_gradients = jacobian[torch.arange(jacobian.shape[0]),0,torch.arange(jacobian.shape[2]), 3:]
+                directional_gradients = jacobian[torch.arange(jacobian.shape[0]),0,torch.arange(jacobian.shape[2]), :3]
                 # print("+++++++++++++++++++++")
                 # print(Coords[...,3:].shape)
-                # print(directional_gradients.shape)
                 gradient_dots = torch.sum(curr_coords[...,3:]*directional_gradients, dim=-1)
+                # gradient_norm = torch.linalg.norm(directional_gradients, dim=-1)
                 # The dots of the viewing directions and their gradients should be -1
-                mse = torch.square(gradient_dots+1.)
-                instance_loss += torch.sum(mse)
+                mse_dots = torch.square(gradient_dots+1.)
+                # mse_norm = torch.square(gradient_norm-1.)
+                instance_loss += torch.sum(mse_dots)
             
             Loss += instance_loss/Coords.shape[0]
+        Loss /= B
+
+        return Loss
+
+class DepthFieldRegularizingLossGrad(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.GradientLoss = nn.MSELoss()
+        
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target, otherInputs=otherInputs)
+    
+    def computeLoss(self, output, target, otherInputs={}):
+        assert("model" in otherInputs)
+        assert("data" in otherInputs)
+        data = otherInputs["data"]
+        model = otherInputs["model"]
+
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+
+        for b in range(B):
+            # Single batch version
+            TrainCoords = data[b]
+            OtherCoords = torch.tensor(o2utils.odf_domain_sampler(TrainCoords.shape[0]), dtype=torch.float32).to(TrainCoords.device)
+            Coords = torch.cat([TrainCoords, OtherCoords], dim=0)
+
+            Coords.requires_grad_()
+            intersections, depths = model([Coords], {})[0]
+            intersections = intersections.squeeze()
+            # print(len(predictions))
+            # print(predictions[0].shape)
+            # print(predictions[1].shape)
+            # loss = ((torch.linalg.norm(X_pred, dim=-1) - 1) ** 2).mean()
+
+            x_grads = gradient(Coords, depths)[0][...,:3]
+            # gradient_norm_mse = torch.mean(torch.square(torch.linalg.norm(x_grads, axis=-1) - 1.))
+
+            # Loss += gradient_norm_mse
+
+            odf_gradient_directions = Coords[:,3:]
+
+            # print("GT Dirs")
+            # print(odf_gradient_directions[:3,...])
+            # print("Network Grads")
+            # print(x_grads[:3,...])
+            # print("Difference")
+            # print((odf_gradient_directions[:3,...]-x_grads[:3,...]).abs())
+            # print("Norm of Diff")
+            # print(torch.linalg.norm((odf_gradient_directions - x_grads).abs(), dim=-1)[:3,...])
+            # print("\n\n\n")
+
+            if torch.sum(intersections > 0.5) != 0.:
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
+            else:
+                grad_dir_loss = torch.tensor(0.)
+            # print(odf_gradient_directions[intersections>0.5].shape)
+            # print(grad_dir_loss)
+            # if torch.sum(intersections > 0.5) == 0.:
+            #     print(grad_dir_loss)
+                    # normals_loss = ((mnfld_grad - normals).abs()).norm(2, dim=1).mean()
+            Loss += 1.0 * grad_dir_loss
+
         Loss /= B
 
         return Loss

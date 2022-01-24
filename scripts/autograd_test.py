@@ -30,25 +30,26 @@ class SimpleModel(nn.Module):
 
 model = SimpleModel()
 X = torch.tensor([[2.,3.,4.], [5.,6.,7.], [10.,11.,12.], [13.,14.,15.]])
+X = torch.tensor([[1.,1.,1.], [2.,2.,2.]])
 
-jacobian = torch.autograd.functional.jacobian(model, X, create_graph=True)
-print("Jacobian Shape:")
-print(jacobian.shape)
-print("Input Shape:")
-print(X.shape)
-print("Output Shape:")
-print(model(X).shape)
-print("Jacobian-")
-print(jacobian,"\n\n")
-# print(jacobian[np.arange(jacobian.shape[0]),0,np.arange(jacobian.shape[-2]), :])
-jacobian = jacobian[np.arange(jacobian.shape[0]),0,np.arange(jacobian.shape[-2]), :]
+# jacobian = torch.autograd.functional.jacobian(model, X, create_graph=True)
+# print("Jacobian Shape:")
+# print(jacobian.shape)
+# print("Input Shape:")
+# print(X.shape)
+# print("Output Shape:")
+# print(model(X).shape)
+# print("Jacobian-")
+# print(jacobian,"\n\n")
+# # print(jacobian[np.arange(jacobian.shape[0]),0,np.arange(jacobian.shape[-2]), :])
+# jacobian = jacobian[np.arange(jacobian.shape[0]),0,np.arange(jacobian.shape[-2]), :]
 
-grad_norm = torch.linalg.norm(jacobian, axis=-1)
-grad_norm_mean = torch.mean(grad_norm)
-print(grad_norm)
-grad_norm_mean.backward()
-print("Layer Gradient w.r.t. Jacobian Norm-")
-print(model.layer.weight.grad)
+# grad_norm = torch.linalg.norm(jacobian, axis=-1)
+# grad_norm_mean = torch.mean(grad_norm)
+# print(grad_norm)
+# grad_norm_mean.backward()
+# print("Layer Gradient w.r.t. Jacobian Norm-")
+# print(model.layer.weight.grad)
 
 # Gradients wrt Jacobian Norm should all be 0.577
 # d/dx  sqrt(x^2 + 2)  = x / sqrt(x^2 + 2)
@@ -74,14 +75,31 @@ print(model.layer.weight.grad)
 # mnfld_grad = gradient(mnfld_pnts, mnfld_pred)
 # nonmnfld_grad = gradient(nonmnfld_pnts, nonmnfld_pred)
 
-X.requires_grad_()
-X_pred = model(X)
-loss = ((torch.linalg.norm(X_pred, dim=-1) - 1) ** 2).mean()
 
-x_grads = gradient(X, loss)[0]
+X.requires_grad_()
+print(X.requires_grad)
+print(X.grad)
+X_pred = model(X)
+# loss = ((torch.linalg.norm(X_pred, dim=-1) - 1) ** 2).mean()
+
+x_grads = gradient(X, X_pred)[0]
+print("X Grads: ")
 print(x_grads.shape)
 print(x_grads)
 
-loss.backward()
+gradient_norm = torch.sum(torch.linalg.norm(x_grads, axis=-1))
+# gradient_norm = torch.sum(x_grads)
+gradient_norm.backward()
 print(X.grad)
 print(model.layer.weight.grad)
+
+Z = torch.tensor([[1.,1.,1.]])
+Z.requires_grad_()
+Z_pred = model(Z)
+z_grads = gradient(Z, Z_pred)[0]
+z_norm = torch.sum(torch.linalg.norm(z_grads, axis=-1))
+z_norm.backward()
+
+print(model.layer.weight.grad)
+
+

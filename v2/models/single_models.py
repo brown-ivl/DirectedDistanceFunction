@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import beacon.supernet as supernet
 import sys
+import odf_v2_utils as o2utils
 
 class ODFSingleV3(supernet.SuperNet):
     # class LF4D(nn.Module):
@@ -22,6 +23,7 @@ class ODFSingleV3(supernet.SuperNet):
         # set which layers (aside from the first) should have the positional encoding passed in
         if self.pos_enc:
             self.pos_enc_layers = [4]
+            input_size = 120
         else:
             self.pos_enc_layers = []
 
@@ -66,8 +68,12 @@ class ODFSingleV3(supernet.SuperNet):
         BDepths = [None] * B
         CollateList = [None] * B
         for b in range(B):
-            x = Input[b]
-            BInput = Input[b]
+            if not self.pos_enc:
+                x = Input[b]
+                BInput = Input[b]
+            else:
+                x = o2utils.positional_encoding_tensor(Input[b], L=10)
+                BInput = o2utils.positional_encoding_tensor(Input[b], L=10)
             for i in range(len(self.network)):
                 if i + 1 in self.pos_enc_layers:
                     x = self.network[i](torch.cat([BInput, x], dim=1))
