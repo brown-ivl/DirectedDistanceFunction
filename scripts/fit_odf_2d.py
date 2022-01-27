@@ -1,5 +1,3 @@
-from networkx.algorithms import boundary
-from sklearn.decomposition import LatentDirichletAllocation
 import torch
 import numpy as np
 import math
@@ -216,7 +214,7 @@ class ODF2DV2(torch.nn.Module):
         constant_mask = self.relu(constant_mask)
         constant_mask = self.constant_mask_head[1](constant_mask)
 
-        return (intersections, depths, constants, constant_mask)
+        return (intersections, depths, constant_mask, constants)
 
 
 
@@ -237,10 +235,13 @@ class DepthLoss(torch.nn.Module):
         gt_mask, gt_depth = target
         if len(output) == 2:
             pred_mask, pred_depth = output
+            pred_mask = pred_mask.flatten()
+            pred_depth = pred_depth.flatten()
         else:
-            pred_mask, pred_depth = output[:2]
-        pred_mask = pred_mask.flatten()
-        pred_depth = pred_depth.flatten()
+            pred_mask, pred_depth, constant_mask, constants = output
+            pred_mask = pred_mask.flatten()
+            pred_depth = pred_depth.flatten()
+            pred_depth += self.sigmoid(constant_mask.flatten())*constants.flatten()
         pred_mask_confidence = self.sigmoid(pred_mask)
         # valid_rays = pred_mask_confidence > self.thresh
         valid_rays = gt_mask > self.thresh
@@ -286,10 +287,7 @@ class DepthFieldRegularizingLoss(torch.nn.Module):
 
         coords.requires_grad_()
         output = model(coords)
-        if len(output) == 2:
-            intersections, depths = output[:2]
-        else:
-            intersections, depths = output[:2]
+        intersections, depths = output[:2]
         intersections = intersections.flatten()
         depths = depths.flatten()
 
@@ -301,19 +299,6 @@ class DepthFieldRegularizingLoss(torch.nn.Module):
         # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < thresh)
 
         if torch.sum(dfr_mask) != 0.:
-            # print("GRAD/DIR Dims:")
-            # print(odf_gradient_directions[intersections>0.5][:3])
-            # print(x_grads[intersections>0.5][:3])
-            # print("Product Dims:")
-            # print((odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5])[:3])
-            # print("Reduction Dims:")
-            # print(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1)[:3])
-            # print("Inner Dims:")
-            # print(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.)[:3])
-            # print("Final Dims:")
-            # print(torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.)))
-            # print("\n\n\n")
-            # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < 1.5)
             grad_dir_loss = torch.mean(torch.abs(torch.sum(odf_gradient_directions[dfr_mask]*x_grads[dfr_mask], dim=-1) + 1.))
             # grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
         else:
@@ -328,8 +313,6 @@ class DepthFieldRegularizingLoss(torch.nn.Module):
         #     large_grad_loss = torch.sum(torch.reciprocal(large_grad_loss)*start_loss)
         #     grad_dir_loss += large_grad_loss
 
-        # print(grad_dir_loss)
-        # grad_dir_loss = torch.tensor(0.)
         return grad_dir_loss
 
 class ConstantRegularizingLoss(torch.nn.Module):
@@ -345,50 +328,23 @@ class ConstantRegularizingLoss(torch.nn.Module):
         coords.requires_grad_()
         output = model(coords)
         assert(len(output) > 2)
-        if len(output) == 2:
-            intersections, depths = output[:2]
-        else:
-            intersections, depths = output[:2]
-        intersections = intersections.flatten()
-        depths = depths.flatten()
+        constant_mask, constants = output[2:]
+        constant_mask = constant_mask.flatten()
+        constants = constants.flatten()
 
-        x_grads = gradient(coords, depths)[0][...,:2]
-        odf_gradient_directions = coords[:, 2:]
+        x_grads = gradient(coords, constants)[0][...,:2]
+        view_dirs = coords[:, 2:]
+        # orthogonal_dirs = torch.stack([view_dirs[:,1], -1.*view_dirs[:,0]], dim=-1)
 
-        dfr_mask = intersections > 0.5
+        dfr_mask = constant_mask > 0.5
         # thresh = 1.5
         # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < thresh)
 
         if torch.sum(dfr_mask) != 0.:
-            # print("GRAD/DIR Dims:")
-            # print(odf_gradient_directions[intersections>0.5][:3])
-            # print(x_grads[intersections>0.5][:3])
-            # print("Product Dims:")
-            # print((odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5])[:3])
-            # print("Reduction Dims:")
-            # print(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1)[:3])
-            # print("Inner Dims:")
-            # print(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.)[:3])
-            # print("Final Dims:")
-            # print(torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.)))
-            # print("\n\n\n")
-            # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < 1.5)
-            grad_dir_loss = torch.mean(torch.abs(torch.sum(odf_gradient_directions[dfr_mask]*x_grads[dfr_mask], dim=-1) + 1.))
-            # grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
+            grad_dir_loss = torch.mean(torch.abs(torch.sum(view_dirs[dfr_mask]*x_grads[dfr_mask], dim=-1)))
         else:
             grad_dir_loss = torch.tensor(0.)
 
-        # promote increasing large gradients
-        # large_grad_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) >= thresh)
-        # if torch.sum(large_grad_mask) != 0.:
-        #     large_grad_loss = torch.sum(odf_gradient_directions[dfr_mask]*x_grads[dfr_mask], dim=-1)
-        #     start_loss = thresh + 1.
-        #     large_grad_loss -= (thresh-1.)
-        #     large_grad_loss = torch.sum(torch.reciprocal(large_grad_loss)*start_loss)
-        #     grad_dir_loss += large_grad_loss
-
-        # print(grad_dir_loss)
-        # grad_dir_loss = torch.tensor(0.)
         return grad_dir_loss
 
 class InfiniteSurfaceGradientLoss(torch.nn.Module):
@@ -417,6 +373,25 @@ class InfiniteSurfaceGradientLoss(torch.nn.Module):
 
 
 # ######################## VIZUALIZATION ########################
+
+def get_depth_cmap(vmin, vmax):
+    #middle is the 0-1 value that 0.0 maps to after normalization
+    middle = (0.-vmin)/(vmax-vmin)
+    cdict = {
+        'red': [[0.0, 217./255., 217./255.],
+                [middle, 232./255, 173./255.],
+                [1.0, 2./255., 2./255.]],
+        'green': [[0.0, 114./255., 114./255.],
+                [middle, 196./255., 196./255.],
+                [1.0, 10./255., 10./255.]],
+        'blue': [[0.0, 4./255., 4./255.],
+                [middle, 158./255., 247./255.],
+                [1.0, 94./255., 94./255.]],
+    }
+
+    depth_cmap = matplotlib.colors.LinearSegmentedColormap('depth_cmap', segmentdata=cdict, N=256)
+
+    return depth_cmap
 
 def show_data(size=10):
     positions = sample_position(size)
@@ -475,7 +450,7 @@ def show_gradient_histogram(model, n_points=100000, device="cpu"):
     coords = np.concatenate([positions, directions], axis=-1)
     torch_coords = torch.tensor(coords).float().to(device)
     torch_coords.requires_grad_()
-    masks, depths = model(torch_coords)
+    masks, depths = model(torch_coords)[:2]
     masks = masks.detach().cpu().numpy().flatten()
     masks = masks > MASK_THRESH
     depths = depths.flatten()
@@ -501,28 +476,28 @@ def grid_positions(resolution, bounds=MAX_RADIUS):
     coords = np.stack([xs,ys], axis=-1)
     return torch.tensor(coords, dtype=torch.float)
 
-def color_in_odf(masks, depths, resolution, bounds=MAX_RADIUS):
-    max_depth = 1.*MAX_RADIUS
-    min_depth = -1.*MAX_RADIUS
-    max_pos_color = np.array([2./255., 10./255., 94./255.]).reshape((1,-1))
-    min_pos_color = np.array([173./255., 224./255., 247./255.]).reshape((1,-1))
-    max_neg_color = np.array([217./255., 114./255., 4./255.]).reshape((1,-1))
-    min_neg_color = np.array([232./255., 196./255., 158./255.]).reshape((1,-1))
+# def color_in_odf(masks, depths, resolution, bounds=MAX_RADIUS):
+#     max_depth = 1.*MAX_RADIUS
+#     min_depth = -1.*MAX_RADIUS
+#     max_pos_color = np.array([2./255., 10./255., 94./255.]).reshape((1,-1))
+#     min_pos_color = np.array([173./255., 196./255., 247./255.]).reshape((1,-1))
+#     max_neg_color = np.array([217./255., 114./255., 4./255.]).reshape((1,-1))
+#     min_neg_color = np.array([232./255., 196./255., 158./255.]).reshape((1,-1))
 
-    img = np.ones((resolution * resolution, 3))
-    positive_indices = np.logical_and(masks, depths > 0.0)
-    negative_indices = np.logical_and(masks, depths < 0.0)
-    zero_indices = np.logical_and(masks, depths == 0.0)
-    img[zero_indices, :] = min_pos_color
-    depth_pos_frac = np.clip((depths/max_depth).reshape((-1,1)), 0., 1.)
-    depth_pos_colors = np.matmul(depth_pos_frac,max_pos_color) + np.matmul(-1.*depth_pos_frac+1., min_pos_color)
-    img[positive_indices, :] = depth_pos_colors[positive_indices, :]
-    depth_neg_frac = np.clip((depths/min_depth).reshape((-1,1)), 0., 1.)
-    # print(np.max(depth_neg_frac))
-    # depth_neg_frac = (depths/min_depth).reshape((-1,1))
-    depth_neg_colors = np.matmul(depth_neg_frac,max_neg_color) + np.matmul(-1.*depth_neg_frac+1., min_neg_color)
-    img[negative_indices, :] = depth_neg_colors[negative_indices, :]
-    return img.reshape((resolution, resolution, 3))
+#     img = np.ones((resolution * resolution, 3))
+#     positive_indices = np.logical_and(masks, depths > 0.0)
+#     negative_indices = np.logical_and(masks, depths < 0.0)
+#     zero_indices = np.logical_and(masks, depths == 0.0)
+#     img[zero_indices, :] = min_pos_color
+#     depth_pos_frac = np.clip((depths/max_depth).reshape((-1,1)), 0., 1.)
+#     depth_pos_colors = np.matmul(depth_pos_frac,max_pos_color) + np.matmul(-1.*depth_pos_frac+1., min_pos_color)
+#     img[positive_indices, :] = depth_pos_colors[positive_indices, :]
+#     depth_neg_frac = np.clip((depths/min_depth).reshape((-1,1)), 0., 1.)
+#     # print(np.max(depth_neg_frac))
+#     # depth_neg_frac = (depths/min_depth).reshape((-1,1))
+#     depth_neg_colors = np.matmul(depth_neg_frac,max_neg_color) + np.matmul(-1.*depth_neg_frac+1., min_neg_color)
+#     img[negative_indices, :] = depth_neg_colors[negative_indices, :]
+#     return img.reshape((resolution, resolution, 3))
 
 def show_gradient_vectors(ax, model, coordinates, resolution, stride=32, device="cpu"):
     gradient_coordinates = []
@@ -532,7 +507,7 @@ def show_gradient_vectors(ax, model, coordinates, resolution, stride=32, device=
     gradient_coordinates = np.array(gradient_coordinates)
     torch_gradient_coordinates = torch.tensor(gradient_coordinates).float().to(device)
     torch_gradient_coordinates.requires_grad_()
-    intersections, depths = model(torch_gradient_coordinates)
+    intersections, depths = model(torch_gradient_coordinates)[:2]
     intersections = intersections.flatten()
     depths = depths.flatten()
 
@@ -573,13 +548,29 @@ def show_odf(model, direction=[0.,1.], resolution=512, device="cpu"):
     coords = grid_positions(resolution)
     coords = np.concatenate([coords, np.repeat(direction[None,:], coords.shape[0], axis=0)], axis=1)
     torch_coords = torch.tensor(coords).float().to(device)
-    masks, depths = model(torch_coords)
+    sigmoid = torch.nn.Sigmoid()
+    outputs = model(torch_coords)
+    if len(outputs) == 2:
+        masks, depths = outputs
+        depths = depths.detach().cpu().numpy().flatten()
+    else:
+        masks, depths, constant_mask, constants = outputs
+        constant_mask = sigmoid(constant_mask)
+        constant_mask = constant_mask > MASK_THRESH
+        constant_mask = constant_mask.detach().cpu().numpy().flatten()
+        constants = constants.detach().cpu().numpy().flatten()
+        depths = depths.detach().cpu().numpy().flatten()
+        depths += constant_mask*constants
+
     masks = masks.detach().cpu().numpy().flatten()
     masks = masks > MASK_THRESH
-    depths = depths.detach().cpu().numpy().flatten()
-    odf_img = color_in_odf(masks, depths, resolution)
+    depths = np.ma.masked_where(np.logical_not(masks), depths)
     fig, ax = plt.subplots()
-    ax.imshow(odf_img, extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+    vmin = np.min(depths)
+    vmax = np.max(depths)
+    cmap=get_depth_cmap(vmin, vmax)
+    ax.imshow(depths, extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+    fig.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=True), cmap=cmap))
     # ax.plot([0,10], [0,10])
     show_gradient_vectors(ax, model, coords, resolution, stride=64, device=device)
     plt.show()
@@ -596,7 +587,7 @@ def show_gradients(model, direction=[0.,1.], resolution=512, device="cpu"):
     for i in range(0, coords.shape[0], batch_size):
         batch_coords = torch_coords[i:i+batch_size,...]
         batch_coords.requires_grad_()
-        intersections, depths = model(batch_coords)
+        intersections, depths = model(batch_coords)[:2]
         intersections = intersections.detach().cpu().numpy().flatten()
         depths = depths.flatten()
         x_grads = gradient(batch_coords, depths)[0][...,:2].detach().cpu().numpy()
@@ -627,14 +618,25 @@ def render_video(name, save_dir):
         print("Can't render video because no video frames have been rendered to disk")
 
     odf_frames = []
+    mask_frames = []
     gradient_frames = []
+    ground_truth_frames = []
+    constant_frames = []
+    constant_mask_frames = []
+    baseline_depth_frames = []
     for frame_file in all_frame_files:
         # frame_file = os.path.join(save_dir, name, "video", "frames", f"{name}_video_frame_{(i+1):03}.npy")
         frame_data = np.load(frame_file, allow_pickle=True).item()
         odf_frames.append(frame_data["odf"])
         gradient_frames.append(frame_data["gradients"])
+        mask_frames.append(frame_data["mask"])
+        ground_truth_frames.append(frame_data["ground_truth"])
+        if "constants" in frame_data:
+            constant_frames.append(frame_data["constants"])
+            constant_mask_frames.append(frame_data["constant_mask"])
+            baseline_depth_frames.append(frame_data["original_depths"])
     
-    min_grad, max_grad = -10.,10.
+    min_grad, max_grad = -5.,5.
     gradient_frames = [np.clip(frame, min_grad, max_grad) for frame in gradient_frames]
     
     
@@ -654,10 +656,19 @@ def render_video(name, save_dir):
 
 
 
+    if len(constant_frames) > 0:
+        f, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2,3)
+        f.set_size_inches(18.,12.)
+        all_axes = [ax1,ax2,ax3,ax4,ax5,ax6]
+    else:
+        f, ((ax1,ax3), (ax4, ax2)) = plt.subplots(2,2)
+        f.set_size_inches(12.,12.)
+        all_axes = [ax1,ax2,ax3,ax4]
+    # f, ((ax1, ax2)) = plt.subplots(1,2)
+    vmin = -1.*MAX_RADIUS
+    vmax = 1.*MAX_RADIUS
+    cmap=get_depth_cmap(vmin, vmax)
 
-    f, ((ax1, ax2)) = plt.subplots(1,2)
-    f.set_size_inches(12.,6.)
-    all_axes = [ax1,ax2]
 
     # display first view
     # gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[0]
@@ -665,11 +676,34 @@ def render_video(name, save_dir):
     for ax in all_axes:
         ax.clear()
     f.suptitle(f"Epoch 1")
-    ax1.imshow(odf_frames[0])
-    ax1.set_title("Learned ODF")
-    ax2.imshow(gradient_frames[0], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True))
-    ax2.set_title("Directional Gradients")
-    f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), cmap="viridis"))
+
+    ax1.set_title("Ground Truth ODF")
+    ax1.imshow(ground_truth_frames[0], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+    f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=True), cmap=cmap), ax=ax1)
+
+    ax2.set_title("Learned Mask")
+    ax2.imshow(mask_frames[0], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+    f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=0.0, vmax=1.0, clip=True), cmap="viridis"), ax=ax2)
+
+    ax3.set_title("Directional Gradients")
+    ax3.imshow(gradient_frames[0], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+    f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), cmap="viridis"), ax=ax3)
+
+    ax4.set_title("Learned ODF")
+    ax4.imshow(odf_frames[0], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+    f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=True), cmap=cmap), ax=ax4)
+
+    if len(constant_frames) > 0:
+        ax6.set_title("Learned Constant")
+        ax6.imshow(np.ma.masked_where(constant_mask_frames[0] < MASK_THRESH, constant_frames[0]), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+        f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=True), cmap=cmap), ax=ax6)
+
+        ax5.set_title("Baseline Depth")
+        ax5.imshow(baseline_depth_frames[0], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+        f.colorbar(cm.ScalarMappable(norm=matplotlib.colors.Normalize(vmin=vmin, vmax=vmax, clip=True), cmap=cmap), ax=ax5)
+
+
+    
 
     # Set up formatting for movie files
     Writer = animation.writers['ffmpeg']
@@ -681,10 +715,28 @@ def render_video(name, save_dir):
         # gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[num]
         # odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
         f.suptitle(f"Epoch {num}")
-        axes[0].imshow(odf_frames[num])
-        axes[0].set_title("Learned ODF")
-        axes[1].imshow(gradient_frames[num], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True))
-        axes[1].set_title("Directional Gradients")
+        # axes[0].imshow(odf_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+        # axes[0].set_title("Learned ODF")
+        # axes[1].imshow(gradient_frames[num], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+        # axes[1].set_title("Directional Gradients")
+        if len(axes) ==4:
+            ax1, ax2, ax3, ax4 = axes
+        else:
+            ax1,ax2,ax3,ax4,ax5,ax6 = axes
+        ax1.set_title("Ground Truth ODF")
+        ax1.imshow(ground_truth_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+        ax2.set_title("Learned Mask")
+        ax2.imshow(mask_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+        ax3.set_title("Directional Gradients")
+        ax3.imshow(gradient_frames[num], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
+        ax4.set_title("Learned ODF")
+        ax4.imshow(odf_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+        if len(constant_frames) > 0:
+            ax6.set_title("Learned Constant")
+            ax6.imshow(np.ma.masked_where(constant_mask_frames[num] < MASK_THRESH, constant_frames[num]), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
+
+            ax5.set_title("Baseline Depth")
+            ax5.imshow(baseline_depth_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
 
     depthmap_ani = animation.FuncAnimation(f, update_depthmap, n_frames, fargs=(odf_frames, gradient_frames, all_axes),
                                    interval=50)
@@ -734,34 +786,54 @@ def save_epoch(name, save_dir, epoch_losses):
     plt.close()
     np.save(loss_file, loss_history)
 
-def save_video_frames(model, direction=[0.,1.], resolution=512, device="cpu"):
+def save_video_frames(model, direction=[0.,1.], resolution=256, device="cpu"):
     model.eval()
     direction = np.array(direction) / np.linalg.norm(direction)
     coords = grid_positions(resolution)
     coords = np.concatenate([coords, np.repeat(direction[None,:], coords.shape[0], axis=0)], axis=1)
+    gt_mask, gt_depths = torus_depth(coords[...,:2], coords[...,2:])
+    gt_depths = np.ma.masked_where(np.logical_not(gt_mask > MASK_THRESH), gt_depths)
+    gt_depths = gt_depths.reshape((resolution, resolution))
     torch_coords = torch.tensor(coords).float().to(device)
-    masks, depths = model(torch_coords)
+    sigmoid = torch.nn.Sigmoid()
+
+    # TODO: batch this part too??
+    output = model(torch_coords)
+
+    if len(output) == 2:
+        masks, depths = output
+        depths = depths.detach().cpu().numpy().flatten()
+    else:
+        masks, depths, constant_mask, constants = output
+        constant_mask = sigmoid(constant_mask)
+        # constant_mask = constant_mask > MASK_THRESH
+        constant_mask = constant_mask.detach().cpu().numpy().flatten()
+        constants = constants.detach().cpu().numpy().flatten()
+        depths = depths.detach().cpu().numpy().flatten()
+        original_depths = np.copy(depths)
+        depths += constant_mask*constants
     masks = masks.detach().cpu().numpy().flatten()
     masks = masks > MASK_THRESH
-    depths = depths.detach().cpu().numpy().flatten()
-    odf_img = color_in_odf(masks, depths, resolution)
+    # np.save("F:\\sample_frame.npy", (masks*depths).reshape((resolution, resolution)))
+    depths = np.ma.masked_where(np.logical_not(masks), depths)
 
     gradients = []
-    masks = []
-    batch_size = 100000
+    grad_masks = []
+    batch_size = 10000
     for i in range(0, coords.shape[0], batch_size):
         batch_coords = torch_coords[i:i+batch_size,...]
         batch_coords.requires_grad_()
-        intersections, depths = model(batch_coords)
+        output=model(batch_coords)
+        intersections, grad_depths = output[:2]
         intersections = intersections.detach().cpu().numpy().flatten()
-        depths = depths.flatten()
-        x_grads = gradient(batch_coords, depths)[0][...,:2].detach().cpu().numpy()
+        grad_depths = grad_depths.flatten()
+        x_grads = gradient(batch_coords, grad_depths)[0][...,:2].detach().cpu().numpy()
         directional_gradients = np.sum(x_grads * coords[i:i+batch_size,2:], axis=-1)
         gradients.append(directional_gradients)
-        masks.append(intersections > MASK_THRESH)
+        grad_masks.append(intersections > MASK_THRESH)
     gradients = np.concatenate(gradients)
-    masks = np.concatenate(masks)
-    gradients = gradients * masks
+    grad_masks = np.concatenate(grad_masks)
+    gradients = gradients * grad_masks
     gradients = gradients.reshape((resolution, resolution))
 
     if not os.path.exists(os.path.join(save_dir, name, "video")):
@@ -773,8 +845,14 @@ def save_video_frames(model, direction=[0.,1.], resolution=512, device="cpu"):
 
     frame_file = os.path.join(save_dir, name, "video", "frames", f"{name}_video_frame_{epoch:03}.npy")
     frames_data = {}
-    frames_data["odf"] = odf_img
+    frames_data["odf"] = depths.reshape((resolution, resolution))
     frames_data["gradients"] = gradients
+    frames_data["ground_truth"] = gt_depths
+    frames_data["mask"] = masks.reshape((resolution, resolution))
+    if len(output) > 2:
+        frames_data["constants"] = constants.reshape((resolution, resolution))
+        frames_data["constant_mask"] = constant_mask.reshape((resolution, resolution))
+        frames_data["original_depths"] = original_depths.reshape((resolution, resolution))
     np.save(frame_file, frames_data)
 
 def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D", device="cpu"):
@@ -788,6 +866,7 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
     depth_loss = DepthLoss()
     reg_loss = DepthFieldRegularizingLoss()
+    const_reg_loss = ConstantRegularizingLoss()
     inf_grad_loss = InfiniteSurfaceGradientLoss(batch_size=batch_size, device=device)
     best_val_loss = np.inf
     
@@ -797,8 +876,10 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
         epoch_train_loss = 0.
         epoch_losses = {}
         # train_losses = ["train_main", "train_depth", "train_dfr", "train_boundary"]
-        train_losses = ["train_main", "train_depth", "train_boundary"]
+        # train_losses = ["train_main", "train_depth", "train_dfr", "train_const"]
+        train_losses = ["train_main", "train_depth"]
         val_losses = ["val_main"]
+        # TODO: zip names and losses to make changes easier --> and weights?
         for ln in train_losses+val_losses:
             epoch_losses[ln] = 0.
         model.train()
@@ -806,24 +887,26 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
             coords = coords.to(device)
             masks = masks.to(device)
             depths = depths.to(device)
-            if not residuals:
-                optimizer.zero_grad()
-                output = model(coords)
-                d_loss = depth_loss(output, (masks, depths))
-                loss = d_loss
-                # regularization_loss = reg_loss(coords, model)
-                # loss += regularization_loss * 0.1
-                boundary_loss = inf_grad_loss(model)
-                loss += boundary_loss
-                loss.backward()
-                optimizer.step()
+            
+            optimizer.zero_grad()
+            output = model(coords)
+            d_loss = depth_loss(output, (masks, depths))
+            loss = d_loss
+            # regularization_loss = reg_loss(coords, model)
+            # loss += regularization_loss
+            # constant_regularization_loss = const_reg_loss(coords, model)
+            # loss += constant_regularization_loss
+            # boundary_loss = inf_grad_loss(model)
+            # loss += boundary_loss
+            loss.backward()
+            optimizer.step()
 
-                epoch_train_loss += loss.detach().cpu()
-                epoch_losses["train_depth"] += d_loss.detach().cpu().numpy()
-                # epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
-                epoch_losses["train_boundary"] += boundary_loss.detach().cpu().numpy()
-            else:
-                (intersections, depths, constants, constant_mask)
+            epoch_train_loss += loss.detach().cpu()
+            epoch_losses["train_depth"] += d_loss.detach().cpu().numpy()
+            # epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
+            # epoch_losses["train_const"] += constant_regularization_loss.detach().cpu().numpy()
+            # epoch_losses["train_boundary"] += boundary_loss.detach().cpu().numpy()
+
 
         print(f"Train Loss: {epoch_train_loss/len(train_dataloader)}")
         epoch_losses["train_main"] = epoch_train_loss.numpy()
@@ -841,8 +924,9 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
             output = model(coords)
             loss = depth_loss(output, (masks, depths))
-            # loss += reg_loss(coords, model) * 0.1
-            loss += inf_grad_loss(model)
+            # loss += reg_loss(coords, model)
+            # loss += const_reg_loss(coords, model)
+            # loss += inf_grad_loss(model)
 
             epoch_val_loss += loss.detach().cpu()
         print(f"Validation Loss: {epoch_val_loss/len(val_dataloader)}")
@@ -861,7 +945,7 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
 
 if __name__ == "__main__":
-    name = "jan20_boundary_only_exp"
+    name = "jan27_baseline"
     save_dir = "F:\\ivl-data\\ODF2D"
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = load_model(name, save_dir, last_checkpoint=True, device=device)
