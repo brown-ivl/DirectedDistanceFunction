@@ -603,14 +603,15 @@ def show_gradients(model, direction=[0.,1.], resolution=512, device="cpu"):
     ax.imshow(gradients, extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
     plt.show()
 
-def render_video(name, save_dir):
+def render_video(name, save_dir, multiview=False):
     print("Rendering Video...")
-    frames_dir = os.path.join(save_dir, name, "video", "frames")
-    video_file = os.path.join(save_dir, name, "video", f"{name}_video.mp4")
+    vid_dir = "video" if not multiview else "multiview_video"
+    frames_dir = os.path.join(save_dir, name, vid_dir, "frames")
+    video_file = os.path.join(save_dir, name, vid_dir, f"{name}_video.mp4")
     if not os.path.exists(frames_dir):
         print(f"Video frame direction doesn't exist: {frames_dir}")
 
-    all_frame_files = (glob.glob(os.path.join(save_dir, name, "video", "frames", '*.npy')))
+    all_frame_files = (glob.glob(os.path.join(save_dir, name, vid_dir, "frames", '*.npy')))
     n_frames = len(all_frame_files)
     all_frame_files.sort()
 
@@ -625,7 +626,7 @@ def render_video(name, save_dir):
     constant_mask_frames = []
     baseline_depth_frames = []
     for frame_file in all_frame_files:
-        # frame_file = os.path.join(save_dir, name, "video", "frames", f"{name}_video_frame_{(i+1):03}.npy")
+        # frame_file = os.path.join(save_dir, name, vid_dir, "frames", f"{name}_video_frame_{(i+1):03}.npy")
         frame_data = np.load(frame_file, allow_pickle=True).item()
         odf_frames.append(frame_data["odf"])
         gradient_frames.append(frame_data["gradients"])
@@ -649,10 +650,10 @@ def render_video(name, save_dir):
     # gradient_frames = frames_data["gradients"]
 
 
-    # all_frame_files = (glob.glob(os.path.join(save_dir, name, "video", "frames", '*.npy')))
+    # all_frame_files = (glob.glob(os.path.join(save_dir, name, vid_dir, "frames", '*.npy')))
     # epoch = len(all_frame_files)+1
 
-    # frame_file = os.path.join(save_dir, name, "video", "frames", f"{name}_video_frame_{epoch:03}.npy")
+    # frame_file = os.path.join(save_dir, name, vid_dir, "frames", f"{name}_video_frame_{epoch:03}.npy")
 
 
 
@@ -675,7 +676,8 @@ def render_video(name, save_dir):
     # odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
     for ax in all_axes:
         ax.clear()
-    f.suptitle(f"Epoch 1")
+    if not multiview:
+        f.suptitle(f"Epoch 1")
 
     ax1.set_title("Ground Truth ODF")
     ax1.imshow(ground_truth_frames[0], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
@@ -714,7 +716,8 @@ def render_video(name, save_dir):
             ax.clear()
         # gt_intersect, gt_depth, learned_intersect, learned_depth = rendered_views[num]
         # odf_utils.show_depth_data(gt_intersect, gt_depth, learned_intersect, learned_depth, all_axes, vmin, vmax)
-        f.suptitle(f"Epoch {num}")
+        if not multiview:
+            f.suptitle(f"Epoch {num}")
         # axes[0].imshow(odf_frames[num], extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS), cmap=cmap)
         # axes[0].set_title("Learned ODF")
         # axes[1].imshow(gradient_frames[num], norm=matplotlib.colors.Normalize(vmin=min_grad, vmax=max_grad, clip=True), extent=(-MAX_RADIUS, MAX_RADIUS, -MAX_RADIUS, MAX_RADIUS))
@@ -742,6 +745,13 @@ def render_video(name, save_dir):
                                    interval=50)
     depthmap_ani.save(video_file, writer=writer)
 
+def make_multiview_video(model, name, save_dir, frames=100, device="cpu"):
+    for i in tqdm(range(0, frames)):
+        theta = i*2*math.pi/frames
+        save_video_frames(model, direction=[math.cos(theta), math.sin(theta)], resolution=256, device=device, multiview=True)
+    render_video(name, save_dir, multiview=True)
+
+
 
 # ######################## TRAINING ########################
 
@@ -751,7 +761,7 @@ def load_model(name, save_dir, last_checkpoint=True, device="cpu"):
         os.mkdir(experiment_dir)
     model_file = f"{name}_last.pt" if last_checkpoint else f"{name}_best.pt"
     model_path = os.path.join(experiment_dir, model_file)
-    model = ODF2D().to(device)
+    model = ODF2DV2().to(device)
     if os.path.exists(model_path):
         model.load_state_dict(torch.load(model_path, map_location=torch.device(device)))
     return model
@@ -786,7 +796,7 @@ def save_epoch(name, save_dir, epoch_losses):
     plt.close()
     np.save(loss_file, loss_history)
 
-def save_video_frames(model, direction=[0.,1.], resolution=256, device="cpu"):
+def save_video_frames(model, direction=[0.,1.], resolution=256, device="cpu", multiview=False):
     model.eval()
     direction = np.array(direction) / np.linalg.norm(direction)
     coords = grid_positions(resolution)
@@ -836,14 +846,15 @@ def save_video_frames(model, direction=[0.,1.], resolution=256, device="cpu"):
     gradients = gradients * grad_masks
     gradients = gradients.reshape((resolution, resolution))
 
-    if not os.path.exists(os.path.join(save_dir, name, "video")):
-        os.mkdir(os.path.join(save_dir, name, "video"))
-    if not os.path.exists(os.path.join(save_dir, name, "video", "frames")):
-        os.mkdir(os.path.join(save_dir, name, "video", "frames"))
-    all_frame_files = (glob.glob(os.path.join(save_dir, name, "video", "frames", '*.npy')))
+    vid_dir = "video" if not multiview else "multiview_video"
+    if not os.path.exists(os.path.join(save_dir, name, vid_dir)):
+        os.mkdir(os.path.join(save_dir, name, vid_dir))
+    if not os.path.exists(os.path.join(save_dir, name, vid_dir, "frames")):
+        os.mkdir(os.path.join(save_dir, name, vid_dir, "frames"))
+    all_frame_files = (glob.glob(os.path.join(save_dir, name, vid_dir, "frames", '*.npy')))
     epoch = len(all_frame_files)+1
 
-    frame_file = os.path.join(save_dir, name, "video", "frames", f"{name}_video_frame_{epoch:03}.npy")
+    frame_file = os.path.join(save_dir, name, vid_dir, "frames", f"{name}_video_frame_{epoch:03}.npy")
     frames_data = {}
     frames_data["odf"] = depths.reshape((resolution, resolution))
     frames_data["gradients"] = gradients
@@ -877,7 +888,7 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
         epoch_losses = {}
         # train_losses = ["train_main", "train_depth", "train_dfr", "train_boundary"]
         # train_losses = ["train_main", "train_depth", "train_dfr", "train_const"]
-        train_losses = ["train_main", "train_depth"]
+        train_losses = ["train_main", "train_depth", "train_dfr"]
         val_losses = ["val_main"]
         # TODO: zip names and losses to make changes easier --> and weights?
         for ln in train_losses+val_losses:
@@ -892,8 +903,8 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
             output = model(coords)
             d_loss = depth_loss(output, (masks, depths))
             loss = d_loss
-            # regularization_loss = reg_loss(coords, model)
-            # loss += regularization_loss
+            regularization_loss = reg_loss(coords, model)
+            loss += regularization_loss
             # constant_regularization_loss = const_reg_loss(coords, model)
             # loss += constant_regularization_loss
             # boundary_loss = inf_grad_loss(model)
@@ -903,7 +914,7 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
             epoch_train_loss += loss.detach().cpu()
             epoch_losses["train_depth"] += d_loss.detach().cpu().numpy()
-            # epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
+            epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
             # epoch_losses["train_const"] += constant_regularization_loss.detach().cpu().numpy()
             # epoch_losses["train_boundary"] += boundary_loss.detach().cpu().numpy()
 
@@ -924,7 +935,7 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
             output = model(coords)
             loss = depth_loss(output, (masks, depths))
-            # loss += reg_loss(coords, model)
+            loss += reg_loss(coords, model)
             # loss += const_reg_loss(coords, model)
             # loss += inf_grad_loss(model)
 
@@ -945,15 +956,16 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
 
 if __name__ == "__main__":
-    name = "jan27_baseline"
+    name = "jan27_reg_const"
     save_dir = "F:\\ivl-data\\ODF2D"
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = load_model(name, save_dir, last_checkpoint=True, device=device)
 
     # show_surface_points()
     # show_gradients(model, device=device)
-    train(model,name, epochs=50, save_dir=save_dir, device=device)
+    # train(model,name, epochs=50, save_dir=save_dir, device=device)
     # show_odf(model, device=device)
-    render_video(name, save_dir)
+    # render_video(name, save_dir)
     # show_gradient_histogram(model, device=device)
     # show_data()
+    make_multiview_video(model, name, save_dir, frames=100, device=device)
