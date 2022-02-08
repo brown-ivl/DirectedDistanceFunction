@@ -8,6 +8,7 @@ import os
 import glob
 from matplotlib import cm
 import matplotlib
+from sklearn.metrics import confusion_matrix
 
 np.random.seed(42)
 # torch.manual_seed(42)
@@ -220,7 +221,7 @@ class ODF2DV2(torch.nn.Module):
 
 # ######################## LOSSES ########################
 
-MASK_THRESH = 0.5
+MASK_THRESH = 0.8
 DEPTH_LAMBDA = 5.0
 class DepthLoss(torch.nn.Module):
 
@@ -370,6 +371,60 @@ class InfiniteSurfaceGradientLoss(torch.nn.Module):
         grad_dir_loss = torch.mean(torch.reciprocal(torch.exp(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1))))
         return grad_dir_loss
 
+class BinarizingLoss(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, output, epoch):
+        # pos_mask = pre_sigmoid_masks > 0.0
+        # loss = torch.tensor(0.).to(pre_sigmoid_masks.device)
+        # count = torch.tensor(0.).to(pre_sigmoid_masks.device)
+        # if sum(pos_mask) > 0:
+        #     loss += torch.mean(torch.exp([]))
+        _, _, constant_mask, _ = output
+        multiplier = math.sqrt(max(0, epoch-10))*0.2
+        return torch.mean(torch.exp(-torch.abs(constant_mask)))*epoch*multiplier
+
+class MVCLoss(torch.nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input, model):
+        train_coords = input
+        additional_coords = torch.cat([torch.tensor(sample_position(train_coords.shape[0])), torch.tensor(sample_direction(train_coords.shape[0]))], axis=-1).to(train_coords.device)
+        coords = torch.cat([train_coords, additional_coords], axis=0).float()
+
+        coords.requires_grad_()
+        output = model(coords)
+        intersections, depths = output[:2]
+        intersections = intersections.flatten()
+        depths = depths.flatten()
+
+        if torch.sum(intersections > MASK_THRESH) == 0:
+            mvc_loss = torch.tensor(0.)
+        else:
+                
+
+            x_grads = gradient(coords, depths)[0]
+
+
+            intersecting_grads = x_grads[intersections > MASK_THRESH]
+            intersecting_depths = depths[intersections > MASK_THRESH]
+            intersecting_directions = coords[:,2:][intersections > MASK_THRESH]
+            direction_signs = (depths / torch.abs(depths))[intersections > MASK_THRESH]
+            intersecting_directions = intersecting_directions * torch.stack([direction_signs]*2, dim=-1)
+
+            position_direction = torch.stack([intersecting_directions[:,1], -intersecting_directions[:,0]], axis=-1)
+            viewdir_direction = torch.stack([1./torch.abs(intersecting_depths),]*2, dim=-1) * (-1.*position_direction)
+            directions = torch.cat([position_direction, viewdir_direction], dim=1)
+            directional_derivatives = torch.sum(intersecting_grads*directions, dim=1)
+
+            mvc_loss = torch.mean(torch.abs(directional_derivatives))
+
+        return mvc_loss
+        
 
 
 # ######################## VIZUALIZATION ########################
@@ -879,6 +934,8 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
     reg_loss = DepthFieldRegularizingLoss()
     const_reg_loss = ConstantRegularizingLoss()
     inf_grad_loss = InfiniteSurfaceGradientLoss(batch_size=batch_size, device=device)
+    bin_loss = BinarizingLoss()
+    mvc_loss = MVCLoss()
     best_val_loss = np.inf
     
     for e in range(epochs):
@@ -887,8 +944,8 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
         epoch_train_loss = 0.
         epoch_losses = {}
         # train_losses = ["train_main", "train_depth", "train_dfr", "train_boundary"]
-        # train_losses = ["train_main", "train_depth", "train_dfr", "train_const"]
-        train_losses = ["train_main", "train_depth", "train_dfr"]
+        # train_losses = ["train_main", "train_depth", "train_dfr", "train_const", "train_binarizing"]
+        train_losses = ["train_main", "train_depth", "train_mvc"]
         val_losses = ["val_main"]
         # TODO: zip names and losses to make changes easier --> and weights?
         for ln in train_losses+val_losses:
@@ -903,10 +960,14 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
             output = model(coords)
             d_loss = depth_loss(output, (masks, depths))
             loss = d_loss
-            regularization_loss = reg_loss(coords, model)
-            loss += regularization_loss
+            # regularization_loss = reg_loss(coords, model)
+            # loss += regularization_loss
             # constant_regularization_loss = const_reg_loss(coords, model)
             # loss += constant_regularization_loss
+            multiview_loss = mvc_loss(coords, model)
+            loss += multiview_loss
+            # binarizing_loss = bin_loss(output, e)
+            # loss += binarizing_loss
             # boundary_loss = inf_grad_loss(model)
             # loss += boundary_loss
             loss.backward()
@@ -914,10 +975,11 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
             epoch_train_loss += loss.detach().cpu()
             epoch_losses["train_depth"] += d_loss.detach().cpu().numpy()
-            epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
+            # epoch_losses["train_dfr"] += regularization_loss.detach().cpu().numpy()
             # epoch_losses["train_const"] += constant_regularization_loss.detach().cpu().numpy()
+            # epoch_losses["train_binarizing"] += binarizing_loss.detach().cpu().numpy()
             # epoch_losses["train_boundary"] += boundary_loss.detach().cpu().numpy()
-
+            epoch_losses["train_mvc"] += multiview_loss.detach().cpu().numpy()
 
         print(f"Train Loss: {epoch_train_loss/len(train_dataloader)}")
         epoch_losses["train_main"] = epoch_train_loss.numpy()
@@ -935,8 +997,10 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
 
             output = model(coords)
             loss = depth_loss(output, (masks, depths))
-            loss += reg_loss(coords, model)
+            # loss += reg_loss(coords, model)
             # loss += const_reg_loss(coords, model)
+            # loss += bin_loss(output, e)
+            loss += mvc_loss(coords, model)
             # loss += inf_grad_loss(model)
 
             epoch_val_loss += loss.detach().cpu()
@@ -952,6 +1016,101 @@ def train(model, name, batch_size=32, epochs=100, save_dir="F:\\ivl-data\\ODF2D"
         save_epoch(name, save_dir, epoch_losses)
         save_video_frames(model, device=device)
 
+# ######################## TESTING ########################
+
+# TODO
+# mask confusion matrix
+# average depth error using gt mask
+# average depth error using both masks
+
+def praf1(cf):
+    # show the precision, recall, accurayc, and f1 from a confusion matrix
+    tn, fp, fn, tp = cf.ravel()
+    precision = tp / (tp+fp)
+    recall = tp / (tp + fn)
+    accuracy = (tn + tp) / (tp + tn + fp + fn)
+    f1 = 2 * (precision * recall) / (precision + recall)
+    print(f"Precision: {precision:.2f}")
+    print(f"Recall: {recall:.2f}")
+    print(f"F1: {f1:.2f}")
+    print(f"Accuracy: {accuracy*100:.2f}%")
+
+def confusion_matrix_masks(model, n_dirs=20, resolution=100, device="cpu"):
+
+    model.eval()
+
+    angles = [i*2.*math.pi/n_dirs for i in range(n_dirs)]
+    x_dir = [math.cos(angle) for angle in angles]
+    y_dir = [math.sin(angle) for angle in angles]
+    x_dir = np.repeat(x_dir, resolution*resolution)
+    y_dir = np.repeat(y_dir, resolution*resolution)
+    view_dirs = np.stack([x_dir, y_dir], axis=-1)
+    positions = grid_positions(resolution)
+    positions = np.concatenate([positions,]*n_dirs, axis=0)
+    coords = np.concatenate([positions, view_dirs], axis=1)
+    torch_coords = torch.tensor(coords).float().to(device)
+
+    gt_mask, gt_depths = torus_depth(positions, view_dirs)
+    gt_interior = gt_depths < 0.0
+
+    sigmoid = torch.nn.Sigmoid()
+
+
+    output = model(torch_coords)
+    if len(output) == 2:
+        intersections, depths = output
+        depths = depths.detach().cpu().numpy().flatten()
+    else:
+        intersections, depths, constant_mask, constants = output
+        constant_mask = sigmoid(constant_mask)
+        constant_mask = constant_mask > MASK_THRESH
+        constant_mask = constant_mask.detach().cpu().numpy().flatten()
+        constants = constants.detach().cpu().numpy().flatten()
+        depths = depths.detach().cpu().numpy().flatten()
+        original_depths = np.copy(depths)
+        depths += constant_mask*constants
+    # intersections, depths = output[:2]
+    intersections = intersections.detach().flatten().cpu().numpy()
+    intersections = intersections > MASK_THRESH
+    # depths = depths.detach().flatten().cpu().numpy()
+    pred_interior = depths < 0.0
+
+
+
+    # Intersection Mask
+    confusion_matrix_intersection = confusion_matrix(gt_mask, intersections)
+    print("Confusion Matrix Intersections:")
+    print(confusion_matrix_intersection)
+    praf1(confusion_matrix_intersection)
+    print("\n\n")
+
+    # Interior Mask
+    joint_mask = np.logical_and(gt_mask, intersections)
+    # confusion_mat_gt = confusion_matrix(gt_interior[gt_mask], pred_interior[gt_mask])
+    confusion_matrix_interior_joint = confusion_matrix(gt_interior[joint_mask], pred_interior[joint_mask])
+    # print("Confusion Matrix (GT Mask):")
+    # print(confusion_mat_gt)
+    print("\n\nConfusion Matrix Object Interior:")
+    print(confusion_matrix_interior_joint)
+    praf1(confusion_matrix_interior_joint)
+    print("\n\n")
+
+    # Show Average Depth Error
+    depth_differences = depths[joint_mask] - gt_depths[joint_mask]
+    mean_diff = np.mean(np.abs(depth_differences))
+    print(f"Average Depth Difference: {mean_diff:.2f}")
+    
+
+
+
+# TODO's
+# CONSTANT MODEL
+# 1) Try pushing the away from intermediate sigmoid values as training progresses
+# 2) Test more constants on more complex shapes
+# NEW REGULARIZATION
+# 3) Implement it
+# 4) Visualize it for this shape and for more complex shapes
+
 
 
 
@@ -963,9 +1122,13 @@ if __name__ == "__main__":
 
     # show_surface_points()
     # show_gradients(model, device=device)
-    # train(model,name, epochs=50, save_dir=save_dir, device=device)
+    # train(model,name, epochs=40, save_dir=save_dir, device=device)
     # show_odf(model, device=device)
     # render_video(name, save_dir)
     # show_gradient_histogram(model, device=device)
     # show_data()
-    make_multiview_video(model, name, save_dir, frames=100, device=device)
+    # make_multiview_video(model, name, save_dir, frames=100, device=device)
+
+
+    # Testing
+    confusion_matrix_masks(model, device=device)

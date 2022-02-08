@@ -29,7 +29,7 @@ import odf_v2_utils as o2utils
 from odf_dataset import ODFDatasetLiveVisualizer
 from depth_sampler import DepthMapSampler
 
-DEPTH_DATASET_NAME = 'lucy'
+DEPTH_DATASET_NAME = 'torus'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
