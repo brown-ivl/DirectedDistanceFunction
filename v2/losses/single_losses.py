@@ -51,7 +51,13 @@ class SingleDepthBCELoss(nn.Module):
         for b in range(B):
             # Single batch version
             GTMask, GTDepth = target[b]
-            PredMaskConf, PredDepth = output[b]
+
+            if len(output[b]) == 2:
+                PredMaskConf, PredDepth = output[b]
+            else:
+                PredMaskConf, PredDepth, PredMaskConst, PredConst = output[b]
+                PredDepth += self.Sigmoid(PredMaskConst)*PredConst
+
 
             PredMaskConfSig = self.Sigmoid(PredMaskConf)
             PredMaskMaxConfVal = PredMaskConfSig
