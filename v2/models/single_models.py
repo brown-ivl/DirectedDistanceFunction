@@ -64,8 +64,8 @@ class ODFSingleV3(supernet.SuperNet):
         assert isinstance(input, list)
         B = len(Input)
 
-        BIntersects = [None] * B
-        BDepths = [None] * B
+        # BIntersects = [None] * B
+        # BDepths = [None] * B
         CollateList = [None] * B
         for b in range(B):
             if not self.pos_enc:
@@ -101,8 +101,8 @@ class ODFSingleV3(supernet.SuperNet):
             # depths = torch.cumsum(depths, dim=1)
             if len(depths.size()) == 3:
                 depths = torch.squeeze(depths, dim=1)
-            BIntersects[b] = intersections
-            BDepths[b] = depths
+            # BIntersects[b] = intersections
+            # BDepths[b] = depths
             CollateList[b] = (intersections, depths)
 
         return CollateList
@@ -173,8 +173,8 @@ class ODFSingleV3Constant(supernet.SuperNet):
         assert isinstance(input, list)
         B = len(Input)
 
-        BIntersects = [None] * B
-        BDepths = [None] * B
+        # BIntersects = [None] * B
+        # BDepths = [None] * B
         CollateList = [None] * B
         for b in range(B):
             if not self.pos_enc:
@@ -215,8 +215,8 @@ class ODFSingleV3Constant(supernet.SuperNet):
 
             if len(depths.size()) == 3:
                 depths = torch.squeeze(depths, dim=1)
-            BIntersects[b] = intersections
-            BDepths[b] = depths
+            # BIntersects[b] = intersections
+            # BDepths[b] = depths
             CollateList[b] = (intersections, depths, constant_mask, constants)
 
         return CollateList
