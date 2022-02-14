@@ -96,8 +96,8 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
             DepthData = np.load(FileName, allow_pickle=True).item()
             self.LoadedDepths.append(DepthData)
         
-        for i in range(100):
-            self.Sampler = DepthMapSampler(self.LoadedDepths[i], TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
+        # for i in range(100):
+        #     self.Sampler = DepthMapSampler(self.LoadedDepths[i], TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
 
     def __len__(self):

@@ -51,7 +51,13 @@ class SingleDepthBCELoss(nn.Module):
         for b in range(B):
             # Single batch version
             GTMask, GTDepth = target[b]
-            PredMaskConf, PredDepth = output[b]
+
+            if len(output[b]) == 2:
+                PredMaskConf, PredDepth = output[b]
+            else:
+                PredMaskConf, PredDepth, PredMaskConst, PredConst = output[b]
+                PredDepth += self.Sigmoid(PredMaskConst)*PredConst
+
 
             PredMaskConfSig = self.Sigmoid(PredMaskConf)
             PredMaskMaxConfVal = PredMaskConfSig
@@ -75,6 +81,130 @@ class SingleDepthBCELoss(nn.Module):
         # print(torch.min(labels), torch.max(labels))
         # print(torch.min(predictions), torch.max(predictions))
         return Loss
+
+
+class DepthFieldRegularizingLossGrad(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.GradientLoss = nn.MSELoss()
+        self.Sigmoid = nn.Sigmoid()
+
+        
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target, otherInputs=otherInputs)
+    
+    def computeLoss(self, output, target, otherInputs={}):
+        assert("model" in otherInputs)
+        assert("data" in otherInputs)
+        data = otherInputs["data"]
+        model = otherInputs["model"]
+
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+
+        for b in range(B):
+            # Single batch version
+            TrainCoords = data[b]
+            OtherCoords = torch.tensor(o2utils.odf_domain_sampler(TrainCoords.shape[0]), dtype=torch.float32).to(TrainCoords.device)
+            Coords = torch.cat([TrainCoords, OtherCoords], dim=0)
+
+            Coords.requires_grad_()
+            # intersections, depths = model([Coords], {})[0]
+            # intersections = intersections.squeeze()
+            output = model([Coords], {})[0]
+            if len(output) == 2:
+                PredMaskConf, PredDepth = output
+            else:
+                PredMaskConf, PredDepth, _, _ = output
+            intersections = PredMaskConf.squeeze()
+            depths = PredDepth
+
+            x_grads = gradient(Coords, depths)[0][...,:3]
+            # gradient_norm_mse = torch.mean(torch.square(torch.linalg.norm(x_grads, axis=-1) - 1.))
+
+            # Loss += gradient_norm_mse
+
+            odf_gradient_directions = Coords[:,3:]
+
+
+            if torch.sum(intersections > 0.5) != 0.:
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
+            else:
+                grad_dir_loss = torch.tensor(0.).to(TrainCoords.device)
+            # print(odf_gradient_directions[intersections>0.5].shape)
+            # print(grad_dir_loss)
+            # if torch.sum(intersections > 0.5) == 0.:
+            #     print(grad_dir_loss)
+                    # normals_loss = ((mnfld_grad - normals).abs()).norm(2, dim=1).mean()
+            Loss += 1.0 * grad_dir_loss
+
+        Loss /= B
+
+        return Loss
+
+
+class ConstantRegularizingLoss(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.GradientLoss = nn.MSELoss()
+        self.Sigmoid = nn.Sigmoid()
+        
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target, otherInputs=otherInputs)
+    
+    def computeLoss(self, output, target, otherInputs={}):
+        assert("model" in otherInputs)
+        assert("data" in otherInputs)
+        data = otherInputs["data"]
+        model = otherInputs["model"]
+
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+
+        for b in range(B):
+            # Single batch version
+            TrainCoords = data[b]
+            OtherCoords = torch.tensor(o2utils.odf_domain_sampler(TrainCoords.shape[0]), dtype=torch.float32).to(TrainCoords.device)
+            Coords = torch.cat([TrainCoords, OtherCoords], dim=0)
+
+            Coords.requires_grad_()
+            output = model([Coords], {})[0]
+            assert(len(output) > 2)
+            PredMaskConf, PredDepth, PredMaskConst, PredConst = output
+            constant_mask = PredMaskConf.squeeze()
+            constant = PredConst
+
+            x_grads = gradient(Coords, constant)[0][...,:3]
+            # gradient_norm_mse = torch.mean(torch.square(torch.linalg.norm(x_grads, axis=-1) - 1.))
+
+            # Loss += gradient_norm_mse
+
+            odf_gradient_directions = Coords[:,3:]
+
+
+            if torch.sum(constant_mask > 0.5) != 0.:
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
+                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[constant_mask>0.5]*x_grads[constant_mask>0.5], dim=-1)))
+            else:
+                grad_dir_loss = torch.tensor(0.).to(TrainCoords.device)
+            # print(odf_gradient_directions[intersections>0.5].shape)
+            # print(grad_dir_loss)
+            # if torch.sum(intersections > 0.5) == 0.:
+            #     print(grad_dir_loss)
+                    # normals_loss = ((mnfld_grad - normals).abs()).norm(2, dim=1).mean()
+            Loss += 1.0 * grad_dir_loss
+
+        Loss /= B
+
+        return Loss
+
 
 class DepthFieldRegularizingLossJacobian(nn.Module):
 
@@ -122,72 +252,6 @@ class DepthFieldRegularizingLossJacobian(nn.Module):
 
         return Loss
 
-class DepthFieldRegularizingLossGrad(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-        self.GradientLoss = nn.MSELoss()
-        
-    def forward(self, output, target, otherInputs={}):
-        return self.computeLoss(output, target, otherInputs=otherInputs)
-    
-    def computeLoss(self, output, target, otherInputs={}):
-        assert("model" in otherInputs)
-        assert("data" in otherInputs)
-        data = otherInputs["data"]
-        model = otherInputs["model"]
-
-        assert isinstance(output, list) # For custom collate
-        B = len(target) # Number of batches with custom collate
-        Loss = 0
-
-        for b in range(B):
-            # Single batch version
-            TrainCoords = data[b]
-            OtherCoords = torch.tensor(o2utils.odf_domain_sampler(TrainCoords.shape[0]), dtype=torch.float32).to(TrainCoords.device)
-            Coords = torch.cat([TrainCoords, OtherCoords], dim=0)
-
-            Coords.requires_grad_()
-            intersections, depths = model([Coords], {})[0]
-            intersections = intersections.squeeze()
-            # print(len(predictions))
-            # print(predictions[0].shape)
-            # print(predictions[1].shape)
-            # loss = ((torch.linalg.norm(X_pred, dim=-1) - 1) ** 2).mean()
-
-            x_grads = gradient(Coords, depths)[0][...,:3]
-            # gradient_norm_mse = torch.mean(torch.square(torch.linalg.norm(x_grads, axis=-1) - 1.))
-
-            # Loss += gradient_norm_mse
-
-            odf_gradient_directions = Coords[:,3:]
-
-            # print("GT Dirs")
-            # print(odf_gradient_directions[:3,...])
-            # print("Network Grads")
-            # print(x_grads[:3,...])
-            # print("Difference")
-            # print((odf_gradient_directions[:3,...]-x_grads[:3,...]).abs())
-            # print("Norm of Diff")
-            # print(torch.linalg.norm((odf_gradient_directions - x_grads).abs(), dim=-1)[:3,...])
-            # print("\n\n\n")
-
-            if torch.sum(intersections > 0.5) != 0.:
-                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
-                # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
-                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
-            else:
-                grad_dir_loss = torch.tensor(0.)
-            # print(odf_gradient_directions[intersections>0.5].shape)
-            # print(grad_dir_loss)
-            # if torch.sum(intersections > 0.5) == 0.:
-            #     print(grad_dir_loss)
-                    # normals_loss = ((mnfld_grad - normals).abs()).norm(2, dim=1).mean()
-            Loss += 1.0 * grad_dir_loss
-
-        Loss /= B
-
-        return Loss
 
 
 
