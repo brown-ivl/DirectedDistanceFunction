@@ -14,8 +14,8 @@ import trimesh
 import matplotlib.pyplot as plt
 
 # MASK_THRESH = 0.995
-MASK_THRESH = 0.622
-# MASK_THRESH = 0.995
+# MASK_THRESH = 0.80
+MASK_THRESH = 0.995
 
 MESH_RADIUS = 1.0
 
@@ -107,8 +107,6 @@ def run_inference(Network, Device, coordinates):
     all_depths = []
     all_masks = []
 
-    print(coordinates.shape)
-
     sigmoid = torch.nn.Sigmoid()
 
     batch_size = 5000
@@ -165,12 +163,12 @@ def run_inference(Network, Device, coordinates):
 #     return depths, masks
 
 def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resolution, ground_truth):
-    # thresholds = [0.01,0.05,0.1,0.3,0.5,0.7,0.9,0.95,0.99]
-    thresholds = [0.1,0.5,0.9]
+    thresholds = [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
+    # thresholds = [0.1,0.5,0.9]
     pred_to_gt_dists = []
     gt_to_pred_dists = []
 
-    for thresh in thresholds:
+    for thresh in tqdm(thresholds):
         all_final_depths = []
         for i in range(len(depths)):
             final_depths = np.ones(bounds_masks[i].shape, dtype=float)
@@ -201,8 +199,6 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
         pred_to_gt_dists.append(np.mean(np.abs(trimesh.proximity.signed_distance(ground_truth, predicted_mesh.vertices))))
         gt_to_pred_dists.append(np.mean(np.abs(trimesh.proximity.signed_distance(predicted_mesh, ground_truth.vertices))))
 
-    print(pred_to_gt_dists)
-
 
 
 
@@ -212,9 +208,11 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
                 # final_depths[valid_mask] = depths
                 # final_depths = final_depths.reshape((resolution, resolution, resolution))
     f, ax = plt.subplots()
-    ax.plot(thresholds, pred_to_gt_dists)
-    ax.plot(thresholds, gt_to_pred_dists)
+    ax.plot(thresholds, pred_to_gt_dists, label="Predicted to GT")
+    ax.plot(thresholds, gt_to_pred_dists, label="GT to Predicted")
+    ax.plot(thresholds, [(pred_to_gt_dists[i]+gt_to_pred_dists[i])/2. for i in range(len(pred_to_gt_dists))], label="Mean")
     ax.set_title("Mesh Reconstruction Error by Intersection Mask Threshold")
+    ax.legend()
     plt.show()
 
 
@@ -230,23 +228,23 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     #               [0.,0.,-1.]]
 
 
-    # directions = [[1.,0.,0.],
-    #               [-1.,0.,0.],
-    #               [0.,1.,0.],
-    #               [0.,-1.,0.],
-    #               [0.,0.,1.],
-    #               [0.,0.,-1.],
-    #               [1.,1.,1.],
-    #               [1.,1.,-1.],
-    #               [1.,-1.,1.],
-    #               [-1.,1.,1.],
-    #               [1.,-1.,-1.],
-    #               [-1.,-1.,1.],
-    #               [-1.,1.,-1.],
-    #               [-1.,-1.,-1.],
-    #               ]
+    directions = [[1.,0.,0.],
+                  [-1.,0.,0.],
+                  [0.,1.,0.],
+                  [0.,-1.,0.],
+                  [0.,0.,1.],
+                  [0.,0.,-1.],
+                  [1.,1.,1.],
+                  [1.,1.,-1.],
+                  [1.,-1.,1.],
+                  [-1.,1.,1.],
+                  [1.,-1.,-1.],
+                  [-1.,-1.,1.],
+                  [-1.,1.,-1.],
+                  [-1.,-1.,-1.],
+                  ]
 
-    directions = [[1.,0.,0.]]
+    # directions = [[1.,0.,0.]]
 
     # n_dirs = 100
     # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
@@ -277,9 +275,9 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
         all_depths.append(depths)
         all_intersection_masks.append(intersection_mask)
 
-    if ground_truth is not None:
-        print("Calculating distances")
-        show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
+    # if ground_truth is not None:
+    #     print("Calculating distances")
+    #     show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
 
     all_final_depths = []
     for i in range(len(all_depths)):
