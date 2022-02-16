@@ -280,6 +280,7 @@ class DepthFieldRegularizingLoss(torch.nn.Module):
 
     def __init__(self):
         super().__init__()
+        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, input, model):
         train_coords = input
@@ -295,7 +296,7 @@ class DepthFieldRegularizingLoss(torch.nn.Module):
         x_grads = gradient(coords, depths)[0][...,:2]
         odf_gradient_directions = coords[:, 2:]
 
-        dfr_mask = intersections > 0.5
+        dfr_mask = self.sigmoid(intersections) > 0.5
         # thresh = 1.5
         # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < thresh)
 
@@ -320,6 +321,7 @@ class ConstantRegularizingLoss(torch.nn.Module):
 
     def __init__(self):
         super().__init__()
+        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, input, model):
         train_coords = input
@@ -337,7 +339,7 @@ class ConstantRegularizingLoss(torch.nn.Module):
         view_dirs = coords[:, 2:]
         # orthogonal_dirs = torch.stack([view_dirs[:,1], -1.*view_dirs[:,0]], dim=-1)
 
-        dfr_mask = constant_mask > 0.5
+        dfr_mask = self.sigmoid(constant_mask) > 0.5
         # thresh = 1.5
         # dfr_mask = torch.logical_and(intersections > 0.5, torch.sum(odf_gradient_directions*x_grads, dim=-1) < thresh)
 
@@ -616,7 +618,7 @@ def show_odf(model, direction=[0.,1.], resolution=512, device="cpu"):
         constants = constants.detach().cpu().numpy().flatten()
         depths = depths.detach().cpu().numpy().flatten()
         depths += constant_mask*constants
-
+    masks = sigmoid(masks)
     masks = masks.detach().cpu().numpy().flatten()
     masks = masks > MASK_THRESH
     depths = np.ma.masked_where(np.logical_not(masks), depths)
@@ -877,6 +879,7 @@ def save_video_frames(model, direction=[0.,1.], resolution=256, device="cpu", mu
         depths = depths.detach().cpu().numpy().flatten()
         original_depths = np.copy(depths)
         depths += constant_mask*constants
+    masks = sigmoid(masks)
     masks = masks.detach().cpu().numpy().flatten()
     masks = masks > MASK_THRESH
     # np.save("F:\\sample_frame.npy", (masks*depths).reshape((resolution, resolution)))
@@ -1063,6 +1066,7 @@ def confusion_matrix_masks(model, n_dirs=20, resolution=100, device="cpu"):
     else:
         intersections, depths, constant_mask, constants = output
         constant_mask = sigmoid(constant_mask)
+        intersections = sigmoid(intersections)
         constant_mask = constant_mask > MASK_THRESH
         constant_mask = constant_mask.detach().cpu().numpy().flatten()
         constants = constants.detach().cpu().numpy().flatten()
