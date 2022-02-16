@@ -63,13 +63,8 @@ if __name__ == '__main__':
         print('[ WARN ]: Not validating during training. This should be used for debugging purposes only.')
         ValDataLoader = None
 
-<<<<<<< HEAD
-    # Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0, 0.5], Names=["Depth BCE", "DFR"], CustomLosses=[DepthFieldRegularizingLossGrad()])
-    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0], Names=["Depth BCE"], CustomLosses=[])
-=======
-    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0, 1.0, 1.0], Names=["Depth BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
+    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[5.0, 1.0, 1.0], Names=["Depth BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
     # Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0], Names=["Depth BCE"], CustomLosses=[])
->>>>>>> 3b474aa241c883cffce7ff5d2a9278b1da5f328e
 
 
     NeuralODF.fit(TrainDataLoader, Objective=Loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
