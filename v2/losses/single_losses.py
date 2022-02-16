@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 import odf_v2_utils as o2utils
 
-SINGLE_MASK_THRESH = 0.7
+SINGLE_MASK_THRESH = 0.5
 SINGLE_L2_LAMBDA = 5.0
 SINGLE_L1_LAMBDA = 5.0
 # REG_LAMBDA = 1e-4
@@ -63,7 +63,7 @@ class SingleDepthBCELoss(nn.Module):
             PredMaskMaxConfVal = PredMaskConfSig
             ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
-
+            #GTDepth[torch.logical_not(GTMask.to(torch.bool))] = 1.0
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
             L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
             Loss += self.Lambda * L2Loss + MaskLoss

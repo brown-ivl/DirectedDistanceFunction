@@ -28,7 +28,7 @@ from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import ODFSingleV3, ODFSingleV3Constant
+from single_models import ODFSingleV3, ODFSingleV3SH, ODFSingleV3Constant
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
@@ -319,6 +319,8 @@ Parser.add_argument('--resolution', help='Resolution of the mesh to extract', ty
 Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
 Parser.add_argument('--object', help="Name of the object", type=str)
 Parser.set_defaults(no_posenc=False)
+Parser.add_argument('--degrees', help='degree for [depth, intersect]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
+
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
@@ -334,6 +336,9 @@ if __name__ == '__main__':
     if Args.arch == 'standard':
         print("Using original architecture")
         NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
+    elif Args.arch == 'SH':
+        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees)
+        print("Using spherical harmonics architecture")
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
         NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
