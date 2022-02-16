@@ -1433,7 +1433,7 @@ def confusion_matrix_masks(model, n_dirs=20, resolution=100, device="cpu"):
 if __name__ == "__main__":
     name = "feb15_allsh_2222_reg_const"
     save_dir = "/users/clu52/results2D/"
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = load_model(name, save_dir, last_checkpoint=True, device=device)
 
     # show_surface_points()
