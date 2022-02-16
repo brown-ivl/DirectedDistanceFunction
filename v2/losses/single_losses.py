@@ -85,10 +85,11 @@ class SingleDepthBCELoss(nn.Module):
 
 class DepthFieldRegularizingLossGrad(nn.Module):
 
-    def __init__(self):
+    def __init__(self, Thresh=SINGLE_MASK_THRESH):
         super().__init__()
         self.GradientLoss = nn.MSELoss()
         self.Sigmoid = nn.Sigmoid()
+        self.Thresh = Thresh
 
         
     def forward(self, output, target, otherInputs={}):
@@ -118,7 +119,8 @@ class DepthFieldRegularizingLossGrad(nn.Module):
                 PredMaskConf, PredDepth = output
             else:
                 PredMaskConf, PredDepth, _, _ = output
-            intersections = PredMaskConf.squeeze()
+            PredMaskConfSig = self.Sigmoid(PredMaskConf)
+            intersections = PredMaskConfSig.squeeze()
             depths = PredDepth
 
             x_grads = gradient(Coords, depths)[0][...,:3]
@@ -129,10 +131,10 @@ class DepthFieldRegularizingLossGrad(nn.Module):
             odf_gradient_directions = Coords[:,3:]
 
 
-            if torch.sum(intersections > 0.5) != 0.:
+            if torch.sum(intersections > self.Thresh) != 0.:
                 # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
                 # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
-                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[intersections>0.5]*x_grads[intersections>0.5], dim=-1) + 1.))
+                grad_dir_loss = torch.mean(torch.abs(torch.sum(odf_gradient_directions[intersections>self.Thresh]*x_grads[intersections>self.Thresh], dim=-1) + 1.))
             else:
                 grad_dir_loss = torch.tensor(0.).to(TrainCoords.device)
             # print(odf_gradient_directions[intersections>0.5].shape)
@@ -149,10 +151,11 @@ class DepthFieldRegularizingLossGrad(nn.Module):
 
 class ConstantRegularizingLoss(nn.Module):
 
-    def __init__(self):
+    def __init__(self, Thresh=SINGLE_MASK_THRESH):
         super().__init__()
         self.GradientLoss = nn.MSELoss()
         self.Sigmoid = nn.Sigmoid()
+        self.Thresh = Thresh
         
     def forward(self, output, target, otherInputs={}):
         return self.computeLoss(output, target, otherInputs=otherInputs)
@@ -176,8 +179,9 @@ class ConstantRegularizingLoss(nn.Module):
             Coords.requires_grad_()
             output = model([Coords], {})[0]
             assert(len(output) > 2)
-            PredMaskConf, PredDepth, PredMaskConst, PredConst = output
-            constant_mask = PredMaskConf.squeeze()
+            _, _, PredMaskConst, PredConst = output
+            PredMaskConstSig = self.Sigmoid(PredMaskConst)
+            constant_mask = PredMaskConstSig.squeeze()
             constant = PredConst
 
             x_grads = gradient(Coords, constant)[0][...,:3]
@@ -188,10 +192,10 @@ class ConstantRegularizingLoss(nn.Module):
             odf_gradient_directions = Coords[:,3:]
 
 
-            if torch.sum(constant_mask > 0.5) != 0.:
+            if torch.sum(constant_mask > self.Thresh) != 0.:
                 # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
                 # grad_dir_loss = torch.mean(torch.linalg.norm((odf_gradient_directions[intersections>0.5] - x_grads[intersections > 0.5]).abs(), dim=-1))
-                grad_dir_loss = torch.mean(torch.square(torch.sum(odf_gradient_directions[constant_mask>0.5]*x_grads[constant_mask>0.5], dim=-1)))
+                grad_dir_loss = torch.mean(torch.abs(torch.sum(odf_gradient_directions[constant_mask>self.Thresh]*x_grads[constant_mask>self.Thresh], dim=-1)))
             else:
                 grad_dir_loss = torch.tensor(0.).to(TrainCoords.device)
             # print(odf_gradient_directions[intersections>0.5].shape)
