@@ -1,3 +1,4 @@
+from turtle import position
 import torch
 from beacon import utils as butils
 import argparse
@@ -11,13 +12,14 @@ from tqdm import tqdm
 import multiprocessing as mp
 from skimage.measure import marching_cubes
 import trimesh
+import glob
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import open3d as o3d
 
+MASK_THRESH = 0.7
+# MASK_THRESH = 0.622
 # MASK_THRESH = 0.995
-# MASK_THRESH = 0.80
-MASK_THRESH = 0.995
-
-MESH_RADIUS = 1.0
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
@@ -28,7 +30,7 @@ from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import ODFSingleV3, ODFSingleV3SH, ODFSingleV3Constant, ODFSingleV3ConstantSH
+from single_models import ODFSingleV3, ODFSingleV3Constant
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
@@ -67,7 +69,7 @@ def load_object(obj_name, data_path):
 def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
     direction = torch.tensor(direction).float()
     direction /= torch.linalg.norm(direction)
-    lin_coords = torch.linspace(-MESH_RADIUS,MESH_RADIUS,resolution)
+    lin_coords = torch.linspace(-1.,1.,resolution)
     x_coords, y_coords, z_coords = torch.meshgrid([lin_coords, lin_coords, lin_coords])
     positional_coords = torch.stack([x_coords, y_coords, z_coords], dim=-1).reshape((-1, 3))
     valid_positions = torch.linalg.norm(positional_coords, dim=-1) < 1.
@@ -77,7 +79,7 @@ def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
 
 def show_mesh(verts, faces, ground_truth=None):
     import open3d as o3d
-    gt_translation = [2.5,0.,0.]
+    gt_translation = [1.5,0.,0.]
     mesh = o3d.geometry.TriangleMesh()
     mesh.vertices = o3d.utility.Vector3dVector(verts)
     mesh.triangles = o3d.utility.Vector3iVector(faces)
@@ -91,7 +93,12 @@ def show_mesh(verts, faces, ground_truth=None):
         gt_mesh.vertices = o3d.utility.Vector3dVector(ground_truth.vertices)
         gt_mesh.triangles = o3d.utility.Vector3iVector(ground_truth.faces)
         gt_mesh.compute_vertex_normals()
-        gt_mesh.translate(gt_translation)
+        print("Ground Truth Extent-")
+        print(ground_truth.bounds)
+        pred_mesh = trimesh.Trimesh(vertices = verts, faces=faces)
+        print("Predicted Bounds-")
+        print(pred_mesh.bounds)
+        # gt_mesh.translate(gt_translation)
     viewer = o3d.visualization.Visualizer()
     viewer.create_window()
     viewer.add_geometry(mesh)
@@ -106,6 +113,8 @@ def show_mesh(verts, faces, ground_truth=None):
 def run_inference(Network, Device, coordinates):
     all_depths = []
     all_masks = []
+
+    print(coordinates.shape)
 
     sigmoid = torch.nn.Sigmoid()
 
@@ -161,152 +170,151 @@ def run_inference(Network, Device, coordinates):
 #     depths = depths.flatten()
 #     masks = masks.flatten()
 #     return depths, masks
-
-def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resolution, ground_truth):
-    thresholds = [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
-    # thresholds = [0.1,0.5,0.9]
-    pred_to_gt_dists = []
-    gt_to_pred_dists = []
-
-    for thresh in tqdm(thresholds):
-        all_final_depths = []
-        for i in range(len(depths)):
-            final_depths = np.ones(bounds_masks[i].shape, dtype=float)
-            curr_intersection_mask = intersection_masks[i] > thresh
-            curr_depths = depths[i]
-            curr_depths[np.logical_not(curr_intersection_mask)] = 1.0
-            final_depths[bounds_masks[i]] = curr_depths
-            final_depths = final_depths.reshape((resolution, resolution, resolution))
-            all_final_depths.append(final_depths)
     
-        threshold = len(depths)/2.
-        stacked_depths = np.stack(all_final_depths, axis=-1)
-        interior_count = np.sum(stacked_depths < 0., axis=-1)
-        interior = interior_count > threshold
-        implicit_values = np.ones(interior.shape)
-        implicit_values[interior] = -1.
-        
-        # run marching cubes, compute mesh accuracy
 
-        spacing = 2.*MESH_RADIUS/(resolution-1)
-        verts, faces, _, _ = marching_cubes(implicit_values, level=0.0, spacing=(spacing, spacing, spacing))
-        verts = verts - 1.0
-        predicted_mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+def extract_mesh(Network, Device, resolution=256):
 
-        # print(f"Showing mesh with threshold: {thresh}")
-        # show_mesh(verts, faces)
-
-        pred_to_gt_dists.append(np.mean(np.abs(trimesh.proximity.signed_distance(ground_truth, predicted_mesh.vertices))))
-        gt_to_pred_dists.append(np.mean(np.abs(trimesh.proximity.signed_distance(predicted_mesh, ground_truth.vertices))))
-
-
-
-
-                # print(f"applying mask: {MASK_THRESH}")
-                # masks = masks > MASK_THRESH
-                # depths[np.logical_not(masks)] = 1.0
-                # final_depths[valid_mask] = depths
-                # final_depths = final_depths.reshape((resolution, resolution, resolution))
-    f, ax = plt.subplots()
-    ax.plot(thresholds, pred_to_gt_dists, label="Predicted to GT")
-    ax.plot(thresholds, gt_to_pred_dists, label="GT to Predicted")
-    ax.plot(thresholds, [(pred_to_gt_dists[i]+gt_to_pred_dists[i])/2. for i in range(len(pred_to_gt_dists))], label="Mean")
-    ax.set_title("Mesh Reconstruction Error by Intersection Mask Threshold")
-    ax.legend()
-    plt.show()
-
-
-def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None):
     Network.eval()  # switch to evaluation mode
     Network.to(Device)
+    
+    coordinates, valid_mask = generate_marching_cubes_coordinates(resolution=resolution)
+    coordinates = coordinates[valid_mask]
+    valid_mask = np.array(valid_mask)
+    final_depths = np.ones(valid_mask.shape, dtype=float)
 
-    # directions = [[1.,0.,0.],
-    #               [-1.,0.,0.],
-    #               [0.,1.,0.],
-    #               [0.,-1.,0.],
-    #               [0.,0.,1.],
-    #               [0.,0.,-1.]]
+    print(coordinates.shape)
+    print(torch.min(coordinates, dim=0))
+    print(torch.max(coordinates, dim=0))
 
+    # DataPosEnc = coordinates.copy()
+    # if UsePosEnc:
+    #     for Idx, BD in enumerate(DataPosEnc):
+    #         DataPosEnc[Idx] = torch.from_numpy(o2utils.get_positional_enc(BD.numpy())).to(torch.float32)
+
+    depths, masks = run_inference(Network, Device, coordinates)
+    # depths = depths.reshape((resolution, resolution, resolution))
+    # masks = masks.reshape((resolution, resolution, resolution))
+
+    print(np.min(depths), np.max(depths))
+    masks = masks > MASK_THRESH
+    depths[np.logical_not(masks)] = 1.0
+    final_depths[valid_mask] = depths
+    final_depths = final_depths.reshape((resolution, resolution, resolution))
+
+    spacing = 2.*1./(resolution-1)
+    verts, faces, normals, _ = marching_cubes(final_depths, level=0.0, spacing=(spacing, spacing, spacing))
+    verts = verts - 1.0
+    
+    return verts, faces, normals
+
+def extract_mesh_multiple_directions(Network, Device, resolution=256):
+    Network.eval()  # switch to evaluation mode
+    Network.to(Device)
 
     directions = [[1.,0.,0.],
                   [-1.,0.,0.],
                   [0.,1.,0.],
                   [0.,-1.,0.],
                   [0.,0.,1.],
-                  [0.,0.,-1.],
-                  [1.,1.,1.],
-                  [1.,1.,-1.],
-                  [1.,-1.,1.],
-                  [-1.,1.,1.],
-                  [1.,-1.,-1.],
-                  [-1.,-1.,1.],
-                  [-1.,1.,-1.],
-                  [-1.,-1.,-1.],
-                  ]
+                  [0.,0.,-1.]]
+
+    # directions = [[1.,0.,0.],
+    #               [-1.,0.,0.],
+    #               [0.,1.,0.],
+    #               [0.,-1.,0.],
+    #               [0.,0.,1.],
+    #               [0.,0.,-1.],
+    #               [1.,1.,1.],
+    #               [1.,1.,-1.],
+    #               [1.,-1.,1.],
+    #               [-1.,1.,1.],
+    #               [1.,-1.,-1.],
+    #               [-1.,-1.,1.],
+    #               [-1.,1.,-1.],
+    #               [-1.,-1.,-1.],
+    #               ]
 
     # directions = [[1.,0.,0.]]
 
-    # n_dirs = 100
-    # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
-    # directions = [x/np.linalg.norm(x) for x in directions]
-
     all_depths = []
-    all_intersection_masks = []
-    all_bounds_masks = []
+    all_masks = []
 
+    n_dirs = 100
 
     for dir in tqdm(directions):
-
-        coordinates, bounds_mask = generate_marching_cubes_coordinates(resolution=resolution, direction=dir)
-        coordinates = coordinates[bounds_mask]
-        bounds_mask = np.array(bounds_mask)
-        # final_depths = np.ones(bounds_mask.shape, dtype=float)
-
-
-        depths, intersection_mask = run_inference(Network, Device, coordinates)
-        # print(f"applying mask: {MASK_THRESH}")
-        # masks = masks > MASK_THRESH
-        # depths[np.logical_not(masks)] = 1.0
-        # final_depths[valid_mask] = depths
-        # final_depths = final_depths.reshape((resolution, resolution, resolution))
+    # for _ in tqdm(range(n_dirs)):
+    #     dir = np.random.normal(size=3)
+    #     dir = dir/np.linalg.norm(dir)
+        coordinates, valid_mask = generate_marching_cubes_coordinates(resolution=resolution, direction=dir)
+        coordinates = coordinates[valid_mask]
+        valid_mask = np.array(valid_mask)
+        final_depths = np.ones(valid_mask.shape, dtype=float)
 
 
-        all_bounds_masks.append(bounds_mask)
-        all_depths.append(depths)
-        all_intersection_masks.append(intersection_mask)
-
-    # if ground_truth is not None:
-    #     print("Calculating distances")
-    #     show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
-
-    all_final_depths = []
-    for i in range(len(all_depths)):
-        final_depths = np.ones(all_bounds_masks[i].shape, dtype=float)
-        curr_intersection_mask = all_intersection_masks[i] > MASK_THRESH
-        curr_depths = all_depths[i]
-        curr_depths[np.logical_not(curr_intersection_mask)] = 1.0
-        final_depths[all_bounds_masks[i]] = curr_depths
+        depths, masks = run_inference(Network, Device, coordinates)
+        print(f"applying mask: {MASK_THRESH}")
+        masks = masks > MASK_THRESH
+        depths[np.logical_not(masks)] = 1.0
+        final_depths[valid_mask] = depths
         final_depths = final_depths.reshape((resolution, resolution, resolution))
-        all_final_depths.append(final_depths)
+
+
+        all_depths.append(final_depths)
+        all_masks.append(masks)
 
     threshold = len(directions)/2.
-    stacked_depths = np.stack(all_final_depths, axis=-1)
-    interior_count = np.sum(stacked_depths < 0., axis=-1)
+    # threshold = n_dirs/2.
+    depths = np.stack(all_depths, axis=-1)
+    masks = np.stack(all_masks, axis=-1)
+    # masks = masks > MASK_THRESH
+    # depths[np.logical_not(masks)] = 1.0
+    interior_count = np.sum(depths < 0., axis=-1)
     interior = interior_count > threshold
     implicit_values = np.ones(interior.shape)
     implicit_values[interior] = -1.
-    
-    # run marching cubes, compute mesh accuracy
+    implicit_values = implicit_values.reshape((resolution, resolution, resolution))
 
-    spacing = 2.*MESH_RADIUS/(resolution-1)
+    spacing = 2.0*1.0/(resolution-1)
     verts, faces, normals, _ = marching_cubes(implicit_values, level=0.0, spacing=(spacing, spacing, spacing))
     verts = verts - 1.0
     
     return verts, faces, normals
 
+def project_mesh(verts, faces, ground_truth=None, epoch=None, viewer=None):
+    gt_translation = [1.5,0.,0.]
+    mesh = o3d.geometry.TriangleMesh()
+    mesh.vertices = o3d.utility.Vector3dVector(verts)
+    mesh.triangles = o3d.utility.Vector3iVector(faces)
+    # mesh.vertex_normals = o3d.utility.Vector3dVector(normals)
+    mesh.compute_vertex_normals()
 
+    gt_mesh = None
 
-
+    if ground_truth is not None:
+        gt_mesh = o3d.geometry.TriangleMesh()
+        gt_mesh.vertices = o3d.utility.Vector3dVector(ground_truth.vertices)
+        gt_mesh.triangles = o3d.utility.Vector3iVector(ground_truth.faces)
+        gt_mesh.compute_vertex_normals()
+        print("Ground Truth Extent-")
+        print(ground_truth.bounds)
+        pred_mesh = trimesh.Trimesh(vertices = verts, faces=faces)
+        print("Predicted Bounds-")
+        print(pred_mesh.bounds)
+        # gt_mesh.translate(gt_translation)
+    #viewer = o3d.visualization.Visualizer()
+    #viewer.create_window()
+    viewer.add_geometry(mesh)
+    if gt_mesh is not None:
+        viewer.add_geometry(gt_mesh)
+    opt = viewer.get_render_option()
+    opt.show_coordinate_frame = True
+    opt.background_color = np.asarray([0.5, 0.5, 0.5])
+    
+    viewer.poll_events()
+    viewer.update_renderer()
+    frame = viewer.capture_screen_float_buffer()
+    viewer.remove_geometry(mesh)
+    return [plt.imshow(np.asarray(frame), animated=True), plt.text(0.5, 1.100, 'Epoch: {}'.format(epoch), transform=plt.gca().transAxes, ha="center")]
 
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
 Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
@@ -316,12 +324,10 @@ Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.'
 Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
 Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
 Parser.add_argument('--object', help="Name of the object", type=str)
-Parser.set_defaults(no_posenc=False)Parser.add_argument('--degrees', help='degree for [depth, intersect]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2]
-Parser.add_argument('--degrees', help='degree for [depth, intersect]|[depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
-
+Parser.set_defaults(no_posenc=False)
 
 if __name__ == '__main__':
-        print('[ INFO ]: Degress {}'.format(Args.degrees))
+    Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
         Parser.print_help()
         exit()
@@ -334,38 +340,40 @@ if __name__ == '__main__':
     if Args.arch == 'standard':
         print("Using original architecture")
         NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-    elif Args.arch == 'SH':
-        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees)
-        print("Using spherical harmonics architecture")
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
         NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-    elif Args.arch == 'SH_constant':
-        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees)
-        print('[ INFO ]: Degress {}'.format(Args.degrees))
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    print(f"Using {Device}")
     # Device = torch.device("cpu")
-    NeuralODF.setupCheckpoint(Device)
+    #NeuralODF.setupCheckpoint(Device)1
+    model_dir = os.path.join(NeuralODF.Config.Args.output_dir, NeuralODF.Config.Args.expt_name)
+    checkpoints = sorted(glob.glob(os.path.join(model_dir, '*.tar')))
+    print(model_dir)
+    step = 5 
+    fig = plt.figure()
+    frames = []
+    viewer = o3d.visualization.Visualizer()
+    viewer.create_window()
+    jump = 6
+    for i in range(0, len(checkpoints), jump):
+        print("Epoch: {}".format((i+1)*step))
+        NeuralODF.loadCheckpoint(Path=checkpoints[i])
 
-    gt_mesh = None
-    if Args.object is not None and Args.mesh_dir is not None:
-        gt_vertices, gt_faces, gt_mesh = load_object(Args.object, Args.mesh_dir)
-        # gt_mesh = trimesh.load(os.path.join(Args.mesh_dir, f"{Args.object}.obj"))
-    else:
-        print("Provide a mesh directory and object name if you want to visualize the ground truth.")
+        gt_mesh = None
+        if Args.object is not None and Args.mesh_dir is not None:
+            gt_vertices, gt_faces, gt_mesh = load_object(Args.object, Args.mesh_dir)
+            # gt_mesh = trimesh.load(os.path.join(Args.mesh_dir, f"{Args.object}.obj"))
+        else:
+            print("Provide a mesh directory and object name if you want to visualize the ground truth.")
 
 
-    # verts, faces, normals = extract_mesh(NeuralODF, Device, resolution=Args.resolution)
-    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh)
-
-    show_mesh(verts, faces, ground_truth=gt_mesh)
-
-
-
-
-
-
-
+        #verts, faces, normals = extract_mesh(NeuralODF, Device, resolution=Args.resolution)
+        verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution)
+        frames.append(project_mesh(verts, faces, ground_truth=gt_mesh, epoch=(i+1)*step, viewer=viewer))
+        #show_mesh(verts, faces, ground_truth=gt_mesh)
+    ani = animation.ArtistAnimation(fig, frames, interval=300, blit=False, repeat_delay=300)
+    ani.save(os.path.join(model_dir, '{}.mp4'.format(NeuralODF.Config.Args.expt_name)))
+    plt.show()
+    viewer.destroy_window()
