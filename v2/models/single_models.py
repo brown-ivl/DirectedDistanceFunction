@@ -117,7 +117,7 @@ class ODFSingleV3SH(supernet.SuperNet):
     A linear combination of the spherical harmonic as differential forward map.
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, degrees=[2, 2], Args=None):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, degrees=[2, 2], return_coeff=False, Args=None):
         super().__init__(Args=Args)
 
         # store args
@@ -127,7 +127,7 @@ class ODFSingleV3SH(supernet.SuperNet):
         self.radius = radius
         self.degrees = degrees
         self.input_size = input_size
-
+        self.return_coeff = return_coeff
         assert (n_layers > 1)
 
         # set which layers (aside from the first) should have the positional encoding passed in
@@ -212,20 +212,26 @@ class ODFSingleV3SH(supernet.SuperNet):
             # depths = self.relu(depths) # todo: Avoid relu at the last layer?
             # depths = torch.cumsum(depths, dim=1)
             
-            cart = Input[b][:, 3:]
-            sh = SH(max(self.degrees), cart)
+            if self.return_coeff:
+                #BIntersects[b] = intersect_coeff
+                #BDepths[b] = depth_coeff
+                CollateList[b] = (intersect_coeff, depth_coeff)           
+            else:
+
+                cart = Input[b][:, 3:]
+                sh = SH(max(self.degrees), cart)
             
-            depths = sh.linear_combination(self.degrees[0], depth_coeff).view(-1, 1)
-            intersections = sh.linear_combination(self.degrees[1], intersect_coeff).view(-1, 1)
+                depths = sh.linear_combination(self.degrees[0], depth_coeff).view(-1, 1)
+                intersections = sh.linear_combination(self.degrees[1], intersect_coeff).view(-1, 1)
 
-            if len(intersections.size()) == 3:
-                intersections = torch.squeeze(intersections, dim=1)
+                if len(intersections.size()) == 3:
+                    intersections = torch.squeeze(intersections, dim=1)
 
-            if len(depths.size()) == 3:
-                depths = torch.squeeze(depths, dim=1)
-            BIntersects[b] = intersections
-            BDepths[b] = depths
-            CollateList[b] = (intersections, depths)
+                if len(depths.size()) == 3:
+                    depths = torch.squeeze(depths, dim=1)
+                #BIntersects[b] = intersections
+                #BDepths[b] = depths
+                CollateList[b] = (intersections, depths)
 
         return CollateList
         # return BIntersects, BDepths
@@ -351,7 +357,7 @@ class ODFSingleV3ConstantSH(supernet.SuperNet):
     A DDF with structure adapted from this LFN paper https://arxiv.org/pdf/2106.02634.pdf
     '''
 
-    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, Args=None, degrees=[2, 2, 2, 2]):
+    def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, coord_type='direction', pos_enc=True, Args=None, degrees=[2, 2, 2, 2], return_coeff=False):
         super().__init__(Args=Args)
 
         # store args
@@ -361,7 +367,7 @@ class ODFSingleV3ConstantSH(supernet.SuperNet):
         assert (n_layers > 1)
         self.degrees = degrees
         assert (len(degrees)==4)
-
+        self.return_coeff = return_coeff
         # set which layers (aside from the first) should have the positional encoding passed in
         if self.pos_enc:
             self.pos_enc_layers = [4]
@@ -456,21 +462,24 @@ class ODFSingleV3ConstantSH(supernet.SuperNet):
             constant_mask_coeff = self.relu(constant_mask_coeff)
             constant_mask_coeff = self.constant_mask_head[1](constant_mask_coeff)
 
-            cart = Input[b][:, 3:]
-            sh = SH(max(self.degrees), cart)
+            if self.return_coeff:
+                CollateList[b] = (intersections_coeff, depths_coeff, constant_mask_coeff, constants_coeff)
+            else:
+                cart = Input[b][:, 3:]
+                sh = SH(max(self.degrees), cart)
 
-            depths = sh.linear_combination(self.degrees[0], depths_coeff, clear=True).view(-1, 1)
-            intersections = sh.linear_combination(self.degrees[1], intersections_coeff).view(-1, 1)
-            constants = sh.linear_combination(self.degrees[2], constants_coeff).view(-1, 1)
-            constant_mask = sh.linear_combination(self.degrees[3], constant_mask_coeff).view(-1, 1)
+                depths = sh.linear_combination(self.degrees[0], depths_coeff, clear=True).view(-1, 1)
+                intersections = sh.linear_combination(self.degrees[1], intersections_coeff).view(-1, 1)
+                constants = sh.linear_combination(self.degrees[2], constants_coeff).view(-1, 1)
+                constant_mask = sh.linear_combination(self.degrees[3], constant_mask_coeff).view(-1, 1)
 
-            if len(intersections.size()) == 3:
-                intersections = torch.squeeze(intersections, dim=1)
-            if len(depths.size()) == 3:
-                depths = torch.squeeze(depths, dim=1)
-            # BIntersects[b] = intersections
-            # BDepths[b] = depths
-            CollateList[b] = (intersections, depths, constant_mask, constants)
+                if len(intersections.size()) == 3:
+                    intersections = torch.squeeze(intersections, dim=1)
+                if len(depths.size()) == 3:
+                    depths = torch.squeeze(depths, dim=1)
+                # BIntersects[b] = intersections
+                # BDepths[b] = depths
+                CollateList[b] = (intersections, depths, constant_mask, constants)
 
         return CollateList
 

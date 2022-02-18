@@ -198,6 +198,40 @@ class SH:
                                 self.all_sh[:, :num_basis].view(-1, num_basis, 1).detach())
         return linear_comb
 
+
+class SHV2:
+
+    def __init__(self, degree, cart, Device):
+        clear_spherical_harmonics_cache()
+        self.degree = -1
+        self.theta, self.phi = cart_to_sphere(cart)
+        self.all_sh = torch.empty((cart.size()[0], 0)).to(self.theta.device)
+        self.update_spherical_harmonics(degree)
+        self.all_sh = torch.transpose(self.all_sh, 0, 1)
+    
+    def update_spherical_harmonics(self, degree):
+        assert degree>=0
+        if degree>self.degree:
+            for i in range(self.degree+1, degree+1):
+                self.all_sh = torch.hstack([self.all_sh, 
+                                            get_spherical_harmonics(i, self.theta, self.phi)])
+            self.degree = degree
+    
+    def linear_combination(self, degree, coefficients, clear=False):
+        """
+        get all SH from degree 0 to degree
+        coefficient: [b1, (degree+1)**2]
+        self.all_sh: [(max_degree+1)**2, b2]
+        output: [b1, b2]
+        """
+        if clear:
+            clear_spherical_harmonics_cache()
+        num_basis = (degree+1)**2
+        # linear_comb: [b1, b2]
+        linear_comb = torch.matmul(coefficients, self.all_sh[:num_basis, :])
+        return linear_comb
+
+
 if __name__=="__main__":
     degree = 3
     num_basis = (degree+1)**2
