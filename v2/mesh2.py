@@ -73,10 +73,9 @@ def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
     lin_coords = torch.linspace(-MESH_RADIUS,MESH_RADIUS,resolution)
     x_coords, y_coords, z_coords = torch.meshgrid([lin_coords, lin_coords, lin_coords])
     positional_coords = torch.stack([x_coords, y_coords, z_coords], dim=-1).reshape((-1, 3))
-    valid_positions = torch.linalg.norm(positional_coords, dim=-1) < 1.
     repeat_directions = torch.stack([direction]*positional_coords.shape[0], dim=0)
     coordinates = torch.cat([positional_coords, repeat_directions], dim=1)
-    return coordinates, valid_positions
+    return coordinates
 
 
 def generate_marching_cubes_coordinates_sh(resolution=256):
@@ -115,6 +114,7 @@ def show_mesh(verts, faces, ground_truth=None):
     viewer.run()
     viewer.destroy_window()
 
+
 def run_inference(Network, Device, coordinates):
     all_depths = []
     all_masks = []
@@ -136,7 +136,6 @@ def run_inference(Network, Device, coordinates):
         depths = PredDepth.detach().cpu().numpy()
         masks = sigmoid(PredMaskConf)
         masks = masks.detach().cpu().numpy()
-
         # masks, depths = Network([DataTD], {})[0]
         # depths = depths.detach().cpu().numpy()
         # masks = masks.detach().cpu().numpy()
@@ -147,6 +146,39 @@ def run_inference(Network, Device, coordinates):
     masks = np.concatenate(all_masks, axis=0)
     depths = depths.flatten()
     masks = masks.flatten()
+    return depths, masks
+
+def run_inference_v2(Network, Device, coordinates):
+    all_depths = []
+    all_masks = []
+
+    sigmoid = torch.nn.Sigmoid()
+
+    batch_size = 5000
+    for i in range(0, coordinates.shape[0], batch_size):
+        DataTD = butils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
+
+        output = Network([DataTD], {})[0]
+
+        if len(output) == 2:
+            PredMaskConf, PredDepth = output
+        else:
+            PredMaskConf, PredDepth, PredMaskConst, PredConst = output
+            PredDepth += sigmoid(PredMaskConst)*PredConst
+
+        depths = PredDepth#.detach().cpu().numpy()
+        masks = sigmoid(PredMaskConf)
+        masks = masks#.detach().cpu().numpy()
+        # masks, depths = Network([DataTD], {})[0]
+        # depths = depths.detach().cpu().numpy()
+        # masks = masks.detach().cpu().numpy()
+        
+        all_depths.append(depths)
+        all_masks.append(masks)
+    depths = torch.cat(all_depths, axis=0)
+    masks = torch.cat(all_masks, axis=0)
+    depths = torch.flatten(depths)
+    masks = torch.flatten(masks)
     return depths, masks
 
 # def run_inference(Network, Device, coordinates):
@@ -228,13 +260,13 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
     plt.show()
 
 
-def generate_grid_coordinates(resolution=256):
-    lin_coords = torch.linspace(-MESH_RADIUS,MESH_RADIUS,resolution)
+def generate_grid_coordinates(resolution=256, Device='cpu'):
+    lin_coords = torch.linspace(-MESH_RADIUS,MESH_RADIUS,resolution).to(Device)
     x_coords, y_coords, z_coords = torch.meshgrid([lin_coords, lin_coords, lin_coords])
     # (resolution, resolution, resolution, 3)
     positional_coords = torch.stack([x_coords, y_coords, z_coords], dim=-1)
     sphere_positions = torch.linalg.norm(positional_coords, dim=-1) < 1.
-     
+    # get points on the sphere surface
     sides = [1, 0, 0, 0, 0, 0]
     inside_sphere_positions = pad(sphere_positions, 
                                   sides, 
@@ -258,50 +290,49 @@ def generate_grid_coordinates(resolution=256):
     return positional_coords, surface_sphere_position, sphere_positions
 
 
-def get_meshing_coordinates(resolution, Network, Device):
-    coordinate, surface_mask, sphere_positions = generate_grid_coordinates(resolution=resolution)
-    object_mask = torch.zeros(coordinate.size()[:-1]).to(bool)
-    threshold = 0.1
+def get_meshing_coordinates(resolution, Network, Device='cpu'):
+    # construct the grid
+    coordinate, surface_mask, sphere_positions  = generate_grid_coordinates(resolution=resolution, Device=Device)
+    # initial the final object mask
+    object_mask = torch.zeros(coordinate.size()[:-1], dtype=torch.bool).to(Device)
+    # margin for distance
+    margin_dis = 0.0 #0.1
+    margin_cell = 0.0
+    # run inference on six sides
     for side in range(3):
-        #side = 0
-        #coordinate, surface_mask, sphere_positions = generate_grid_coordinates(resolution=resolution)
-        print(side)
-        ray = torch.zeros(coordinate.shape)
-        #dir_mask = coordinate[:,:,:,2-side]>=0
+        # ray for a pair of side
+        ray = torch.zeros(coordinate.shape).to(Device)
         ray[:,:,:,2-side][coordinate[:,:,:,2-side]>=0] = -1.
         ray[:,:,:,2-side][coordinate[:,:,:,2-side]<0] = 1.
+        # testing data
         data = torch.cat((coordinate, ray), -1)[surface_mask]
-        #data = data[surface_mask]
-        depths, intersection_mask = run_inference(Network, Device, data)
-        depths = torch.tensor(depths).view(-1, 1)
-        intersection_mask = torch.tensor(intersection_mask).view(-1, 1)>MASK_THRESH
-        print(torch.min(depths))
-
+        depths, intersection_mask = run_inference_v2(Network, Device, data)
+        depths = depths.view(-1, 1)
+        intersection_mask = intersection_mask.view(-1, 1)>MASK_THRESH
         
-        surface_intersection_mask = torch.unsqueeze(torch.zeros(coordinate.size()[:-1]), -1).to(bool)
+        # put intersection mask back to grid coordinate
+        surface_intersection_mask = torch.unsqueeze(torch.zeros(coordinate.size()[:-1], dtype=torch.bool).to(Device), -1)
         surface_intersection_mask[surface_mask] = intersection_mask
+        # whether the row has surface points or not
         surface_intersection_mask = torch.sum(surface_intersection_mask, 2-side).expand(coordinate.size()[:-1])
-
-        surface_min = torch.unsqueeze(torch.ones(coordinate.size()[:-1]), -1)*100
+        # put the coordinate of surface back to grid coordinate
+        surface_min = torch.unsqueeze(torch.ones(coordinate.size()[:-1]).to(Device), -1)*1e8
         surface_max = surface_min*-1       
-        
         surface_min[surface_mask] = data[:, 2-side:2-side+1]+depths*data[:, 2-side+3:2-side+4]
         surface_max[surface_mask] = surface_min[surface_mask]
         maxi_surface, maxi_surface_ind = torch.max(surface_max, dim=2-side)
         mini_surface, mini_surface_ind = torch.min(surface_min, dim=2-side)
-        valid_surface_mask = (maxi_surface_ind>=mini_surface_ind).expand(coordinate.size()[:-1])
+        # mask to remove the potential non-interescting points
+        valid_surface_mask = (maxi_surface_ind>=mini_surface_ind-margin_cell).expand(coordinate.size()[:-1])
+        # get center and radius for each row
         radius = torch.sqrt(torch.square(maxi_surface-mini_surface))/2
         center = (maxi_surface+mini_surface)/2
-    
-        cur_object_mask = torch.sqrt(torch.square(coordinate[:,:,:,2-side]-center))<=radius+threshold
+        # mask for points inside the distance with radius for each row
+        cur_object_mask = torch.sqrt(torch.square(coordinate[:,:,:,2-side]-center))<=radius+margin_dis
         object_mask[torch.logical_and(torch.logical_and(cur_object_mask, valid_surface_mask), surface_intersection_mask)] = True
-    
-        #object_mask[torch.logical_and(cur_object_mask, surface_intersection_mask)] = True
-    #object_mask[torch.logical_not(sphere_positions)] = False
-    print(object_mask)
-    print(object_mask.shape)
-    print(torch.sum(object_mask))
-    return object_mask
+    object_mask = torch.logical_and(object_mask, sphere_positions)
+    print("Points for inference: {}".format(torch.sum(object_mask)))
+    return object_mask.cpu()
 
 def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None):
     Network.eval()  # switch to evaluation mode
@@ -342,14 +373,12 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     all_intersection_masks = []
     all_bounds_masks = []
 
-    #meshing_mask = get_meshing_coordinates(resolution, Network, Device)
+    meshing_mask = get_meshing_coordinates(resolution, Network, Device)
 
     
     for dir in tqdm(directions):
-        coordinates, bounds_mask = generate_marching_cubes_coordinates(resolution=resolution, direction=dir)
-        #print(torch.sum(bounds_mask))
-        bounds_mask = meshing_mask.view(-1)
-        print(torch.sum(bounds_mask))       
+        coordinates = generate_marching_cubes_coordinates(resolution=resolution, direction=dir)
+        bounds_mask = meshing_mask.view(-1)       
         coordinates = coordinates[bounds_mask]
         bounds_mask = np.array(bounds_mask)
         # final_depths = np.ones(bounds_mask.shape, dtype=float)
