@@ -6,6 +6,7 @@ from math import pi, sqrt
 from functools import reduce
 from operator import mul
 import torch
+import numpy as np
 from functools import wraps, lru_cache
 
 
@@ -135,6 +136,17 @@ def get_spherical_harmonics(l, theta, phi):
     return torch.stack([ get_spherical_harmonics_element(l, m, theta, phi) \
                          for m in range(-l, l+1) ],
                         dim = -1)
+
+
+# Code for sampling SH from Adrien Poulenard
+def fibonnacci_sphere_sampling(num_pts):
+    indices = np.arange(0, num_pts, dtype=float) + 0.5
+    phi = np.arccos(1 - 2*indices/num_pts)
+    theta = np.pi * (1 + 5**0.5) * indices
+    x, y, z = np.cos(theta) * np.sin(phi), np.sin(theta) * np.sin(phi), np.cos(phi)
+    S2 = np.stack([x, y, z], axis=-1)
+    return torch.tensor(S2).float()
+
 
 def cart_to_sphere(cart):
     """
