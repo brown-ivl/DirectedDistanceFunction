@@ -148,8 +148,8 @@ class SingleDepthBCELoss(nn.Module):
             PredMaskMaxConfVal = PredMaskConfSig
             ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
-            ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask.to(torch.bool))
-
+            # ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask.to(torch.bool))
+            GTDepth[torch.logical_not(GTMask.to(torch.bool))] = 1.0
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
             L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
             Loss += self.Lambda * L2Loss + MaskLoss

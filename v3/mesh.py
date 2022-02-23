@@ -1,5 +1,5 @@
 import torch
-from beacon import utils as butils
+# from beacon import utils as butils
 import argparse
 import math
 
@@ -28,12 +28,11 @@ from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import ODFSingleV3, ODFSingleV3SH, ODFSingleV3Constant, ODFSingleV3ConstantSH
+from single_models import ODFSingleV3, ODFSingleV3Constant
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
 import odf_v2_utils as o2utils
-from spherical_harmonics import SHV2
 
 # RADIUS = 1.25
 
@@ -75,15 +74,6 @@ def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
     repeat_directions = torch.stack([direction]*positional_coords.shape[0], dim=0)
     coordinates = torch.cat([positional_coords, repeat_directions], dim=1)
     return coordinates, valid_positions
-
-
-def generate_marching_cubes_coordinates_sh(resolution=256):
-    lin_coords = torch.linspace(-MESH_RADIUS,MESH_RADIUS,resolution)
-    x_coords, y_coords, z_coords = torch.meshgrid([lin_coords, lin_coords, lin_coords])
-    positional_coords = torch.stack([x_coords, y_coords, z_coords], dim=-1).reshape((-1, 3))
-    valid_positions = torch.linalg.norm(positional_coords, dim=-1) < 1.
-    return positional_coords, valid_positions
-
 
 def show_mesh(verts, faces, ground_truth=None):
     import open3d as o3d
@@ -307,7 +297,7 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     implicit_values[interior] = -1.
     
     # run marching cubes, compute mesh accuracy
-    print(np.max(implicit_values), np.min(implicit_values))
+
     spacing = 2.*MESH_RADIUS/(resolution-1)
     verts, faces, normals, _ = marching_cubes(implicit_values, level=0.0, spacing=(spacing, spacing, spacing))
     verts = verts - 1.0
@@ -315,93 +305,18 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     return verts, faces, normals
 
 
-def extract_mesh_multiple_directions_sh(Network, Device, degrees, resolution=256, ground_truth=None):
-    Network.eval()  # switch to evaluation mode
-    Network.to(Device)
-    """
-    directions = [[1.,0.,0.],
-                   [-1.,0.,0.],
-                   [0.,1.,0.],
-                   [0.,-1.,0.],
-                   [0.,0.,1.],
-                   [0.,0.,-1.]]
-    """
-    """
-    directions = [[1.,0.,0.],
-                  [-1.,0.,0.],
-                  [0.,1.,0.],
-                  [0.,-1.,0.],
-                  [0.,0.,1.],
-                  [0.,0.,-1.],
-                  [1.,1.,1.],
-                  [1.,1.,-1.],
-                  [1.,-1.,1.],
-                  [-1.,1.,1.],
-                  [1.,-1.,-1.],
-                  [-1.,-1.,1.],
-                  [-1.,1.,-1.],
-                  [-1.,-1.,-1.],
-                  ]   
-    """
-    directions = [[1., 0., 0.]]
-    threshold = len(directions)/2.
-    # get all sh
-    sh = SHV2(max(degrees), torch.tensor(directions).to(Device), Device) 
-    
-    # get coordinate from grid
-    coordinates, bounds_mask = generate_marching_cubes_coordinates_sh(resolution=resolution)
-    #coordinates = coordinates[bounds_mask]
-    bounds_mask = torch.tensor(bounds_mask).to(Device) 
-    implicit_values = torch.ones(bounds_mask.size()).to(Device)
 
-    sigmoid = torch.nn.Sigmoid()
-    # run inference
-    batch_size = 5000
-    for i in range(0, coordinates.shape[0], batch_size):
-        DataTD = butils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
-        output = Network([DataTD], {})[0]
-        if len(output) == 2:
-            PredMaskConf_coeff, PredDepth_coeff = output
-            PredDepth = sh.linear_combination(degrees[0], PredDepth_coeff)
-            PredMaskConf = sigmoid(sh.linear_combination(degrees[1], PredMaskConf_coeff))
-            
-        else:
-            PredMaskConf_coeff, PredDepth_coeff, PredMaskConst_coeff, PredConst_coeff = output
-            PredDepth = sh.linear_combination(degrees[0], PredDepth_coeff)
-            PredMaskConf = sigmoid(sh.linear_combination(degrees[1], PredMaskConf_coeff))
-            PredConst = sh.linear_combination(degrees[2], PredConst_coeff)
-            PredMaskConst = sh.linear_combination(degrees[3], PredMaskConst_coeff)
-            PredDepth += sigmoid(PredMaskConst)*PredConst
-
-        curr_intersection_mask = PredMaskConf<=MASK_THRESH
-        #cur_batch_size = PredMaskConf.size()[0]
-        PredDepth[curr_intersection_mask] = 1.0 
-        inter_count = torch.sum(PredDepth<0., dim=-1)
-        interior = inter_count > threshold
-        implicit_values[i:i+batch_size][torch.logical_and(interior, bounds_mask[i:i+batch_size])] = -1.0
-
-    
-    # run marching cubes, compute mesh accuracy
-
-    spacing = 2.*MESH_RADIUS/(resolution-1)
-    implicit_values = implicit_values.view(resolution, resolution, resolution).cpu().numpy()
-    verts, faces, normals, _ = marching_cubes(implicit_values, level=0.0, spacing=(spacing, spacing, spacing))
-    verts = verts - 1.0
-
-    
-    return verts, faces, normals
 
 
 Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
-Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant', 'SH', 'SH_constant'], default='standard')
+Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
 Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
 Parser.add_argument('--object', help="Name of the object", type=str)
-Parser.add_argument('--degrees', help='degree for [depth, intersect]|[depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
-
+Parser.set_defaults(no_posenc=False)
 
 if __name__ == '__main__':
     Args, _ = Parser.parse_known_args()
@@ -417,15 +332,9 @@ if __name__ == '__main__':
     if Args.arch == 'standard':
         print("Using original architecture")
         NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-    elif Args.arch == 'SH':
-        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees, return_coeff=True)
-        print("Using spherical harmonics architecture")
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
         NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-    elif Args.arch == 'SH_constant':
-        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees, return_coeff=True)
-        print('[ INFO ]: Degress {}'.format(Args.degrees))
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -436,14 +345,13 @@ if __name__ == '__main__':
     gt_mesh = None
     if Args.object is not None and Args.mesh_dir is not None:
         gt_vertices, gt_faces, gt_mesh = load_object(Args.object, Args.mesh_dir)
-        gt_mesh = trimesh.load(os.path.join(Args.mesh_dir, f"{Args.object}.obj"))
+        # gt_mesh = trimesh.load(os.path.join(Args.mesh_dir, f"{Args.object}.obj"))
     else:
         print("Provide a mesh directory and object name if you want to visualize the ground truth.")
 
 
     # verts, faces, normals = extract_mesh(NeuralODF, Device, resolution=Args.resolution)
-    #verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh)
-    verts, faces, normals = extract_mesh_multiple_directions_sh(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh, degrees=Args.degrees)
+    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh)
 
     show_mesh(verts, faces, ground_truth=gt_mesh)
 

@@ -4,7 +4,6 @@ import zipfile
 import glob
 import random
 import sys
-import beacon.utils as butils
 import trimesh
 from tqdm import tqdm
 
@@ -24,17 +23,16 @@ sys.path.append(os.path.join(FileDirPath, '../'))
 sys.path.append(os.path.join(FileDirPath, '../losses'))
 sys.path.append(os.path.join(FileDirPath, '../../'))
 
-import odf_utils
-import odf_v2_utils as o2utils
-from odf_dataset import ODFDatasetLiveVisualizer
+# from odf_dataset import ODFDatasetLiveVisualizer
 from depth_sampler_5d import DepthMapSampler
+import v3_utils
 
-DEPTH_DATASET_NAME = 'tetrahedron'
+# DEPTH_DATASET_NAME = 'torus'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False):
-        self.FileName = DEPTH_DATASET_NAME + '.zip'
+    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False):
+        self.FileName = name + '.zip'
         self.DataURL = DEPTH_DATASET_URL
         self.nTargetSamples = target_samples # Per image
         self.PositionalEnc = usePositionalEncoding
@@ -60,20 +58,20 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
 
     def loadData(self):
         # First check if unzipped directory exists
-        DatasetDir = os.path.join(butils.expandTilde(self.DataDir), os.path.splitext(self.FileName)[0])
+        DatasetDir = os.path.join(v3_utils.expandTilde(self.DataDir), os.path.splitext(self.FileName)[0])
         if os.path.exists(DatasetDir) is False:
-            DataPath = os.path.join(butils.expandTilde(self.DataDir), self.FileName)
+            DataPath = os.path.join(v3_utils.expandTilde(self.DataDir), self.FileName)
             if os.path.exists(DataPath) is False:
                 if self.isDownload:
                     print('[ INFO ]: Downloading', DataPath)
-                    butils.downloadFile(self.DataURL, DataPath)
+                    v3_utils.downloadFile(self.DataURL, DataPath)
 
                 if os.path.exists(DataPath) is False:  # Not downloaded
                     raise RuntimeError('Specified data path does not exist: ' + DataPath)
             # Unzip
             with zipfile.ZipFile(DataPath, 'r') as File2Unzip:
                 print('[ INFO ]: Unzipping.')
-                File2Unzip.extractall(butils.expandTilde(self.DataDir))
+                File2Unzip.extractall(v3_utils.expandTilde(self.DataDir))
 
         FilesPath = os.path.join(DatasetDir, 'depth', 'val')
         if self.isTrainData:
@@ -124,22 +122,22 @@ Parser.set_defaults(no_posenc=False)
 Parser.add_argument('-v', '--viz-limit', help='Limit visualizations to these many rays.', required=False, type=int, default=1000)
 
 
-if __name__ == '__main__':
-    Args = Parser.parse_args()
-    butils.seedRandom(Args.seed)
-    usePoseEnc = not Args.no_posenc
+# if __name__ == '__main__':
+#     Args = Parser.parse_args()
+#     butils.seedRandom(Args.seed)
+#     usePoseEnc = not Args.no_posenc
 
-    Data = DepthODFDatasetLoader(root=Args.data_dir, train=True, download=True, target_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
+#     Data = DepthODFDatasetLoader(root=Args.data_dir, train=True, download=True, target_samples=Args.nsamples, usePositionalEncoding=usePoseEnc, coord_type=Args.coord_type)
 
-    ODFVizList = []
-    for i in range(10):
-        LoadedData = Data[i]
-        ODFVizList.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
-                                  intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
-                                  DataLimit=Args.viz_limit))
+#     ODFVizList = []
+#     for i in range(10):
+#         LoadedData = Data[i]
+#         ODFVizList.append(ODFDatasetLiveVisualizer(coord_type='direction', rays=LoadedData[0].cpu(),
+#                                   intersects=LoadedData[1][0].cpu(), depths=LoadedData[1][1].cpu(),
+#                                   DataLimit=Args.viz_limit))
 
-    app = QApplication(sys.argv)
+#     app = QApplication(sys.argv)
 
-    mainWindow = Easel(ODFVizList, sys.argv[1:])
-    mainWindow.show()
-    sys.exit(app.exec_())
+#     mainWindow = Easel(ODFVizList, sys.argv[1:])
+#     mainWindow.show()
+#     sys.exit(app.exec_())
