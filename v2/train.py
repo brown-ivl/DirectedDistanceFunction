@@ -13,12 +13,12 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from single_losses import SingleDepthBCELoss, DepthFieldRegularizingLossGrad, ConstantRegularizingLoss
-from single_models import ODFSingleV3, ODFSingleV3Constant
+from single_models import ODFSingleV3, ODFSingleV3SH, ODFSingleV3Constant, ODFSingleV3ConstantSH
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 
 Parser = argparse.ArgumentParser(description='Training code for NeuralODFs.')
-Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
+Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'SH', 'constant', 'SH_constant'], default='standard')
 Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
 Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
 Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
@@ -29,6 +29,8 @@ Parser.set_defaults(force_test_on_train=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
 Parser.set_defaults(no_posenc=False)
+Parser.add_argument('--degrees', help='degree for [depth, intersect] or [depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
+
 
 import faulthandler; faulthandler.enable()
 
@@ -44,8 +46,16 @@ if __name__ == '__main__':
     usePosEnc = not Args.no_posenc
     if Args.arch == 'standard':
         NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
+    elif Args.arch == 'SH':
+        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
     elif Args.arch == 'constant':
         NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
+    elif Args.arch == 'SH_constant':
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
+    print('[ INFO ]: Architecture {}'.format(Args.arch))
+
 
     TrainDevice = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     TrainData = DDL(root=NeuralODF.Config.Args.input_dir, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=usePosEnc)
@@ -63,8 +73,8 @@ if __name__ == '__main__':
         print('[ WARN ]: Not validating during training. This should be used for debugging purposes only.')
         ValDataLoader = None
 
-    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0, 1.0, 1.0], Names=["Depth BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
-    # Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0], Names=["Depth BCE"], CustomLosses=[])
+    #Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0, 1.0, 1.0], Names=["Depth BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
+    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0], Names=["Depth BCE"], CustomLosses=[])
 
 
     NeuralODF.fit(TrainDataLoader, Objective=Loss, TrainDevice=TrainDevice, ValDataLoader=ValDataLoader)
