@@ -12,7 +12,7 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from single_losses import SingleDepthBCELoss, DepthFieldRegularizingLossGrad, ConstantRegularizingLoss
+from single_losses import SingleDepthBCELoss, DepthFieldRegularizingLossGrad, ConstantRegularizingLoss, SingleDepthLoss, SingleBCELoss
 from single_models import ODFSingleV3, ODFSingleV3Constant
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         print('[ WARN ]: Not validating during training. This should be used for debugging purposes only.')
         ValDataLoader = None
 
-    Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[5.0, 1.0, 1.0], Names=["Depth BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
+    Loss = SuperLoss(Losses=[SingleDepthLoss(), SingleBCELoss()], Weights=[5.0, 5.0, 1.0, 1.0], Names=["Depth L2", "Intersection BCE", "DFR", "Constant"], CustomLosses=[DepthFieldRegularizingLossGrad(), ConstantRegularizingLoss()])
     # Loss = SuperLoss(Losses=[SingleDepthBCELoss()], Weights=[1.0], Names=["Depth BCE"], CustomLosses=[])
 
 

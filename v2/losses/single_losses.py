@@ -18,14 +18,98 @@ def gradient(inputs, outputs):
         create_graph=True,
         retain_graph=True)
         # [0][:, -3:]
-    # print("GRADIENT INFO")
-    # print(inputs.shape)
-    # print(outputs.shape)
-    # print(len(points_grad))
-    # print(points_grad)
-    # # print(points_grad.shape)
-    # print("=============")
     return points_grad
+
+class SingleBCELoss(nn.Module):
+    Thresh = SINGLE_MASK_THRESH
+    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+        super().__init__()
+        self.MaskLoss = nn.BCELoss(reduction='mean')
+        self.Sigmoid = nn.Sigmoid()
+        self.Thresh = Thresh
+
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target)
+
+    def computeLoss(self, output, target):
+        # print(f"output type: {type(output)}")
+        # print(output[0][1])
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+        for b in range(B):
+            # Single batch version
+            GTMask, GTDepth = target[b]
+            GTDepth[torch.logical_not(GTMask)] = 0.0 #Set to 0.0 in dataset, but this leads to spurious surfaces
+
+            if len(output[b]) == 2:
+                PredMaskConf, PredDepth = output[b]
+            else:
+                PredMaskConf, PredDepth, PredMaskConst, PredConst = output[b]
+                PredDepth += self.Sigmoid(PredMaskConst)*PredConst
+
+
+            PredMaskConfSig = self.Sigmoid(PredMaskConf)
+            PredMaskMaxConfVal = PredMaskConfSig
+
+            MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
+            Loss += MaskLoss
+        Loss /= B
+
+        return Loss
+
+class SingleDepthLoss(nn.Module):
+    Thresh = SINGLE_MASK_THRESH
+    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+        super().__init__()
+        self.MaskLoss = nn.BCELoss(reduction='mean')
+        self.Sigmoid = nn.Sigmoid()
+        self.Thresh = Thresh
+
+    def forward(self, output, target, otherInputs={}):
+        return self.computeLoss(output, target)
+
+    def computeLoss(self, output, target):
+        # print(f"output type: {type(output)}")
+        # print(output[0][1])
+        assert isinstance(output, list) # For custom collate
+        B = len(target) # Number of batches with custom collate
+        Loss = 0
+        for b in range(B):
+            # Single batch version
+            GTMask, GTDepth = target[b]
+            GTDepth[torch.logical_not(GTMask)] = 1.0 #Set to 0.0 in dataset, but this leads to spurious surfaces
+
+            if len(output[b]) == 2:
+                PredMaskConf, PredDepth = output[b]
+            else:
+                PredMaskConf, PredDepth, PredMaskConst, PredConst = output[b]
+                PredDepth += self.Sigmoid(PredMaskConst)*PredConst
+
+
+            PredMaskConfSig = self.Sigmoid(PredMaskConf)
+            PredMaskMaxConfVal = PredMaskConfSig
+            ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
+            # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
+            # ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask.to(torch.bool))
+
+            L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            Loss += 1.0 * L2Loss
+        Loss /= B
+
+        return Loss
+
+    def L2(self, labels, predictions):
+        # print(labels.size())
+        # print(predictions.size())
+        Loss = torch.mean(torch.square(labels - predictions))
+        if math.isnan(Loss) or math.isinf(Loss):
+            return torch.tensor(0)
+
+        # print(torch.min(labels), torch.max(labels))
+        # print(torch.min(predictions), torch.max(predictions))
+        return Loss
+
 
 
 
@@ -51,6 +135,7 @@ class SingleDepthBCELoss(nn.Module):
         for b in range(B):
             # Single batch version
             GTMask, GTDepth = target[b]
+            GTDepth[torch.logical_not(GTMask)] = 0.0 #Set to 0.0 in dataset, but this leads to spurious surfaces
 
             if len(output[b]) == 2:
                 PredMaskConf, PredDepth = output[b]
@@ -63,6 +148,7 @@ class SingleDepthBCELoss(nn.Module):
             PredMaskMaxConfVal = PredMaskConfSig
             ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
+            ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask.to(torch.bool))
 
             MaskLoss = self.MaskLoss(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
             L2Loss = self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
