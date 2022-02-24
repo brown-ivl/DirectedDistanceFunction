@@ -15,7 +15,7 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 # from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss
-from odf_models import ODFSingleV3, ODFSingleV3Constant
+from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 # from pc_odf_dataset import PCODFDatasetLoader as PCDL
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v3_utils
@@ -148,7 +148,7 @@ Parser.add_argument('--input-dir', help='Provide the input directory where datas
 Parser.add_argument('--dataset', help='The dataset')
 Parser.add_argument('--output-dir', help='Provide the *absolute* output directory where checkpoints, logs, and other output will be stored (under expt_name).')
 
-Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
+Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant', 'SH', 'SH_constant'], default='standard')
 Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
 Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
 Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
@@ -157,6 +157,8 @@ Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per obje
 Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
 Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
 Parser.add_argument('--use-posenc', help='Choose to use positional encoding.', action='store_true', required=False)
+Parser.add_argument('--degrees', help='degree for [depth, intersect] or [depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
+
 
 import faulthandler; faulthandler.enable()
 
@@ -182,6 +184,14 @@ if __name__ == '__main__':
         NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
     elif Args.arch == 'constant':
         NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+    elif Args.arch == 'SH':
+        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
+    elif Args.arch == 'SH_constant':
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
+
+
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
