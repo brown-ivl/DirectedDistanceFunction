@@ -33,7 +33,7 @@ from single_models import ODFSingleV3, ODFSingleV3SH, ODFSingleV3Constant, ODFSi
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from odf_dataset import ODFDatasetLoader as ODL
 import odf_v2_utils as o2utils
-from spherical_harmonics import SHV2
+from spherical_harmonics import SHV2, fibonnacci_sphere_sampling
 
 # RADIUS = 1.25
 
@@ -343,7 +343,8 @@ def extract_mesh_multiple_directions_sh(Network, Device, degrees, resolution=256
                   [-1.,-1.,-1.],
                   ]   
     """
-    directions = [[1., 0., 0.]]
+    #directions = [[1., 0., 0.]]
+    directions = fibonnacci_sphere_sampling(10000)
     threshold = len(directions)/2.
     # get all sh
     sh = SHV2(max(degrees), torch.tensor(directions).to(Device), Device) 
