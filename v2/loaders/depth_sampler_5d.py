@@ -67,7 +67,7 @@ class DepthMapSampler():
         SampledPosDir /= SampledPosDirNorm[:, np.newaxis]
         SampledPosDepths = np.linalg.norm(SampledPosEndPts - SampledPosStartPts, axis=1)
 
-        SampledPosIntersects = np.ones((nPosTargetRays, 1))
+        SampledPosIntersects = np.ones((len(SampledPosEndPts), 1))
         if self.Interior:
             SampledPosDir = -1. * SampledPosDir
             SampledPosDepths =-1. * SampledPosDepths
@@ -77,8 +77,8 @@ class DepthMapSampler():
         SampledNegDir = SampledNegEndPts - SampledNegStartPts
         SampledNegDirNorm = np.linalg.norm(SampledNegDir, axis=1)
         SampledNegDir /= SampledNegDirNorm[:, np.newaxis]
-        SampledNegDepths = np.zeros(nNegTargetRays)
-        SampledNegIntersects = np.zeros((nNegTargetRays, 1))
+        SampledNegDepths = np.zeros(len(SampledNegEndPts))
+        SampledNegIntersects = np.zeros((len(SampledNegEndPts), 1))
         if self.Interior:
             # All interior rays should intersect
             assert(AllNegIdx.shape[0] == 0)
