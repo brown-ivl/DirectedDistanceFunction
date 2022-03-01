@@ -46,23 +46,6 @@ import odf_v2_utils as o2utils
 #     verts = verts / scale
 #     return verts
 
-def load_object(obj_name, data_path):
-    obj_file = os.path.join(data_path, f"{obj_name}.obj")
-
-    obj_mesh = trimesh.load(obj_file)
-    # obj_mesh.show()
-
-    ## deepsdf normalization
-    mesh_vertices = obj_mesh.vertices
-    mesh_faces = obj_mesh.faces
-    center = (mesh_vertices.max(axis=0) + mesh_vertices.min(axis=0))/2.0
-    max_dist = np.linalg.norm(mesh_vertices - center, axis=1).max()
-    max_dist = max_dist * 1.03
-    mesh_vertices = (mesh_vertices - center) / max_dist
-    obj_mesh = trimesh.Trimesh(vertices=mesh_vertices, faces=mesh_faces)
-    
-    return mesh_vertices, mesh_faces, obj_mesh
-
 
 def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
     direction = torch.tensor(direction).float()

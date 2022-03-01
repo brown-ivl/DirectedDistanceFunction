@@ -11,6 +11,7 @@ import torch.nn as nn
 import pyrender
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as scipy_rotation
+import argparse
 
 # %%
 # open3d utils
@@ -203,7 +204,7 @@ def sphere_surface_sampler(num_points, radius=1.00):
     return surface_samples
 
 
-def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200):  
+def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200, camcenters=None, lookvecs=None, show=False):  
     
     # sample viewpoints on sphere
     sampled_camcenters = sphere_interior_sampler(num_viewpoints)
@@ -212,6 +213,11 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
     # sampled_camcenters = np.zeros((2,3))
     # sampled_lookvecs = np.array([[1.0,1.0,1.0],[-1.0,-1.0,-1.0]])
     # sampled_lookvecs /= np.linalg.norm(sampled_lookvecs, axis=1, keepdims=True)
+
+    if lookvecs is not None:
+        sampled_lookvecs = lookvecs
+    if camcenters is not None:
+        sampled_camcenters = camcenters
 
 
     opengl_camera_pose_matrix, reverse_camera_pose_matrix, viewpoint_samples, look_samples = get_viewpoint_samples_5d(sampled_camcenters, sampled_lookvecs, selected_samples_count=sampled_camcenters.shape[0])
@@ -259,8 +265,9 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
         # invalid depth map and unprojected skinning weights have -1 values
         unprojected_3D_points, invalid_depth_mask = unproject(np.copy(depth_map), camera_viewpoint_pose, opengl_camera.get_projection_matrix(), z_near=0.00001)
 
-        # plt.imshow(depth_map)
-        # plt.show()
+        if show:
+            plt.imshow(depth_map)
+            plt.show()
 
         if inside_mesh[iter]:
             zeros_mask = invalid_depth_mask.reshape(depth_map.shape)
@@ -335,5 +342,19 @@ for obj_file in all_obj_files:
 # print(data.keys())
 # print(data['unprojected_normalized_pts'].shape)
 # print(unprojected_normalized_pts[unprojected_normalized_pts[:,2]!=-1].shape)
+
+if __name__ == "__main__":
+    parser = argparse.argument_parser()
+    parser.add_argument("--data-dir", help="The directory with the meshes")
+    parser.add_argument("--object", help="The obj file to render")
+    args = parser.parse_args()
+
+    camcenters = [[3., 0., 0.]]
+    lookvecs = [[-1, 0., 0.]]
+
+
+    mesh_vertices, mesh_faces, obj_mesh = load_object(args.object, args.data_dir)
+
+    main(mesh_vertices, mesh_faces, obj_mesh, args.object, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200, camcenters=camcenters, lookvecs=lookvecs, show=True)
 
 

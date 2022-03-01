@@ -3,8 +3,6 @@ import torch.nn as nn
 import math
 import v3_utils
 
-SINGLE_MASK_THRESH = 0.5
-
 def gradient(inputs, outputs):
     d_points = torch.ones_like(outputs, requires_grad=False, device=outputs.device)
     points_grad = torch.autograd.grad(
@@ -16,7 +14,7 @@ def gradient(inputs, outputs):
     return points_grad
 
 class DepthLoss(nn.Module):
-    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+    def __init__(self, Thresh=v3_utils.INTERSECTION_MASK_THRESHOLD):
         super().__init__()
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
@@ -56,7 +54,7 @@ class DepthLoss(nn.Module):
         return Loss
 
 class IntersectionLoss(nn.Module):
-    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+    def __init__(self, Thresh=v3_utils.INTERSECTION_MASK_THRESHOLD):
         super().__init__()
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
@@ -91,7 +89,7 @@ class IntersectionLoss(nn.Module):
 
 class DepthFieldRegularizingLoss(nn.Module):
 
-    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+    def __init__(self, Thresh=v3_utils.INTERSECTION_MASK_THRESHOLD):
         super().__init__()
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh
@@ -141,7 +139,7 @@ class DepthFieldRegularizingLoss(nn.Module):
 
 class ConstantRegularizingLoss(nn.Module):
 
-    def __init__(self, Thresh=SINGLE_MASK_THRESH):
+    def __init__(self, Thresh=v3_utils.INTERSECTION_MASK_THRESHOLD):
         super().__init__()
         self.Sigmoid = nn.Sigmoid()
         self.Thresh = Thresh

@@ -1,6 +1,5 @@
 import torch
 import sys, os
-import argparse
 import multiprocessing as mp
 from tqdm import tqdm
 import numpy as np
@@ -12,11 +11,9 @@ sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-# from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss
-from odf_models import ODFSingleV3, ODFSingleV3Constant
-# from pc_odf_dataset import PCODFDatasetLoader as PCDL
+from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v3_utils
 
@@ -42,6 +39,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
     dfr_loss_fn = DepthFieldRegularizingLoss()
     cr_loss_fn = ConstantRegularizingLoss()
     
+
     for e in range(epochs):
         print(f"\n----------------------------- EPOCH: {e+previous_epochs+1}/{epochs+previous_epochs} -----------------------------")
         # Train on training batches
@@ -51,8 +49,8 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         all_train_intersection_losses = []
         all_train_dfr_losses = []
         all_train_cr_losses = []
+        model.train()
         for batch in tqdm(train_loader):
-            model.train()
             data, targets = batch
             data = v3_utils.sendToDevice(data, device)
             targets = v3_utils.sendToDevice(targets, device)
@@ -84,8 +82,8 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         all_val_intersection_losses = []
         all_val_dfr_losses = []
         all_val_cr_losses = []
+        model.eval()
         for batch in tqdm(val_loader):
-            model.eval()
             data, targets = batch
             data = v3_utils.sendToDevice(data, device)
             targets = v3_utils.sendToDevice(targets, device)
@@ -120,47 +118,39 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             loss_history["val_cr"].append(np.mean(np.asarray(all_val_cr_losses)))
 
         # track using weights and biases
-        wandb.log({"train_loss": np.mean(np.asarray(all_train_losses)),
+        loss_dict = {"train_loss": np.mean(np.asarray(all_train_losses)),
                     "val_loss": np.mean(np.asarray(all_val_losses)),
                     "train_depth_loss": np.mean(np.asarray(all_train_depth_losses)),
                     "val_depth_loss": np.mean(np.asarray(all_val_depth_losses)),
                     "train_intersection_loss": np.mean(np.asarray(all_train_intersection_losses)),
                     "val_intersection_loss": np.mean(np.asarray(all_val_intersection_losses)),
-                    })
+                    }
         if arch == "constant":
-            wandb.log({"train_dfr_loss": np.mean(np.asarray(all_train_dfr_losses)),
+            loss_dict.update({"train_dfr_loss": np.mean(np.asarray(all_train_dfr_losses)),
                     "val_dfr_loss": np.mean(np.asarray(all_val_dfr_losses)),
                     "train_cr_loss": np.mean(np.asarray(all_train_cr_losses)),
                     "val_cr_loss": np.mean(np.asarray(all_val_cr_losses))
             })
+        wandb.log(loss_dict)
 
 
         # save checkpoint
         v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history)
         v3_utils.plotLosses(loss_history, save_dir, name)
-        wandb.watch(model)
+        # wandb.watch(model)
 
 
-
-Parser = argparse.ArgumentParser(description='Training code for NeuralODFs.')
-Parser.add_argument('--expt-name', help='Provide a name for this experiment.')
-Parser.add_argument('--input-dir', help='Provide the input directory where datasets are stored.')
-Parser.add_argument('--dataset', help='The dataset')
-Parser.add_argument('--output-dir', help='Provide the *absolute* output directory where checkpoints, logs, and other output will be stored (under expt_name).')
-
-Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
-Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
-Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
-Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
-Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
-Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
-Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
-Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
-Parser.add_argument('--use-posenc', help='Choose to use positional encoding.', action='store_true', required=False)
 
 import faulthandler; faulthandler.enable()
 
 if __name__ == '__main__':
+    Parser = v3_utils.BaselineParser
+    Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
+    Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
+    Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
+    Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
+    Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
+    Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
     Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
         Parser.print_help()
@@ -170,11 +160,7 @@ if __name__ == '__main__':
     wandb.run.name = Args.expt_name
     wandb.run.save()
 
-    torch.backends.cudnn.deterministic = True
-    np.random.seed(Args.seed)
-    torch.manual_seed(Args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(Args.seed)
+    v3_utils.seedRandom(Args.seed)
 
     nCores = 0#mp.cpu_count()
 
@@ -182,6 +168,14 @@ if __name__ == '__main__':
         NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
     elif Args.arch == 'constant':
         NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+    elif Args.arch == 'SH':
+        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degrees {}'.format(Args.degrees))
+    elif Args.arch == 'SH_constant':
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        print('[ INFO ]: Degrees {}'.format(Args.degrees))
+
+
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
