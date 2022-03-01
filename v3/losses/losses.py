@@ -44,7 +44,7 @@ class DepthLoss(nn.Module):
             ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
             # ValidRaysIdx = torch.logical_and(PredMaskMaxConfVal > self.Thresh, GTMask.to(torch.bool)) #Use both masks
-            Loss += 5.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            Loss += 1.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
         Loss /= B
 
         return Loss
@@ -82,7 +82,7 @@ class IntersectionLoss(nn.Module):
             PredMaskConfSig = self.Sigmoid(PredMaskConf)
             PredMaskMaxConfVal = PredMaskConfSig
 
-            Loss += self.BCE(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
+            Loss += 5.0 * self.BCE(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
 
         Loss /= B
 
