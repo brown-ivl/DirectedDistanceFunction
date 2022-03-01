@@ -20,7 +20,7 @@ sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-from single_models import ODFSingleV3, ODFSingleV3Constant
+from single_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 
 
@@ -289,13 +289,15 @@ def make_multiview_video(model, name, save_dir, frames=100, device="cpu"):
 
 if __name__ == "__main__":
     Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
-    Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
+    Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant', 'SH', 'SH_constant'], default='standard')
     Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
     Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
     Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
     Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
     Parser.add_argument("--save-dir", type=str, help="Directory to save video in")
     Parser.add_argument("--model-name", type=str, help="name of model")
+    Parser.add_argument('--degrees', help='degree for [depth, intersect]|[depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
+
     # Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
     # Parser.add_argument('--object', help="Name of the object", type=str)
     Parser.set_defaults(no_posenc=False)
@@ -317,6 +319,14 @@ if __name__ == "__main__":
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
         NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
+    elif Args.arch == 'SH':
+        NeuralODF = ODFSingleV3SH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees, return_coeff=False)
+        print("Using spherical harmonics architecture")
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
+    elif Args.arch == 'SH_constant':
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=usePosEnc, n_layers=10, degrees=Args.degrees, return_coeff=False)
+        print("Using spherical harmonics architecture")
+        print('[ INFO ]: Degress {}'.format(Args.degrees))
 
     save_dir = Args.save_dir
     name = Args.model_name
