@@ -8,6 +8,33 @@ import sys
 import requests
 import matplotlib.pyplot as plt
 import math
+import trimesh
+import random
+
+#####################################################
+###################### SETUP ########################
+#####################################################
+
+INTERSECTION_MASK_THRESHOLD = 0.5
+
+BaselineParser = argparse.ArgumentParser(description='Parser for NeuralODFs.')
+BaselineParser.add_argument('--expt-name', help='Provide a name for this experiment.')
+BaselineParser.add_argument('--input-dir', help='Provide the input directory where datasets are stored.')
+BaselineParser.add_argument('--dataset', help='The dataset')
+BaselineParser.add_argument('--output-dir', help='Provide the *absolute* output directory where checkpoints, logs, and other output will be stored (under expt_name).')
+BaselineParser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
+BaselineParser.add_argument('--use-posenc', help='Choose to use positional encoding.', action='store_true', required=False)
+BaselineParser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
+
+def seedRandom(seed):
+    # NOTE: This gets us very close to deterministic but there are some small differences in 1e-4 and smaller scales
+    print('[ INFO ]: Seeding RNGs with {}'.format(seed))
+    torch.backends.cudnn.deterministic = True
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 #####################################################
@@ -42,7 +69,7 @@ def load_checkpoint(save_dir, name, device="cpu", load_best=False):
         f = open(best_file, "r")
         best_epoch = int(f.read().split("$")[0])
         f.close()
-        checkpoint_file = os.path.join(checkpoint_dir, checkpoint_filename(best_epoch))
+        checkpoint_file = os.path.join(checkpoint_dir, checkpoint_filename(name, best_epoch))
         print(f"Loading checkpoint {os.path.basename(checkpoint_file)}")
         return torch.load(checkpoint_file, map_location=device)
 
@@ -151,6 +178,27 @@ def odf_domain_sampler(n_points, radius=1.25):
 
     coords = np.concatenate([sampled_positions, sampled_directions], axis=-1)
     return coords
+
+#####################################################
+###################### MESHES #######################
+#####################################################
+
+def load_object(obj_name, data_path):
+    obj_file = os.path.join(data_path, f"{obj_name}.obj")
+
+    obj_mesh = trimesh.load(obj_file)
+    # obj_mesh.show()
+
+    ## deepsdf normalization
+    mesh_vertices = obj_mesh.vertices
+    mesh_faces = obj_mesh.faces
+    center = (mesh_vertices.max(axis=0) + mesh_vertices.min(axis=0))/2.0
+    max_dist = np.linalg.norm(mesh_vertices - center, axis=1).max()
+    max_dist = max_dist * 1.03
+    mesh_vertices = (mesh_vertices - center) / max_dist
+    obj_mesh = trimesh.Trimesh(vertices=mesh_vertices, faces=mesh_faces)
+    
+    return mesh_vertices, mesh_faces, obj_mesh
 
 #####################################################
 ###################### OTHER ########################
