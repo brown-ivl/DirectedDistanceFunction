@@ -28,7 +28,7 @@ class DepthLoss(nn.Module):
         Loss = torch.tensor(0.).to(target[0][0].device)
         for b in range(B):
             # Single batch version
-            GTMask, GTDepth = target[b]
+            GTMask, GTDepth, ValidDepthMask = target[b]
 
             if len(output[b]) == 2:
                 PredMaskConf, PredDepth = output[b]
@@ -41,8 +41,13 @@ class DepthLoss(nn.Module):
             PredMaskMaxConfVal = PredMaskConfSig
             ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             # ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
+<<<<<<< HEAD
             # ValidRaysIdx = torch.logical_and(PredMaskMaxConfVal > self.Thresh, GTMask.to(torch.bool)) #Use both masks
             Loss += 1.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+=======
+            ValidRaysIdx = torch.logical_and(PredMaskMaxConfVal > self.Thresh, ValidDepthMask.to(torch.bool)) #Use both masks
+            Loss += 5.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+>>>>>>> 0ba6244ef7c173adc4fef648617db9e4599cbd0f
         Loss /= B
 
         return Loss

@@ -27,7 +27,7 @@ DEPTH_SAMPLER_POS_RATIO = 0.5
 # depth_map : rendered depth map
 # rest elements are camera intrinsics and extrinsics.
 class DepthMapSampler():
-    def __init__(self, NPData, TargetRays, UsePosEnc=False):
+    def __init__(self, NPData, TargetRays, UsePosEnc=False, AdditionalIntersections=0):
         self.NPData = NPData
         self.nTargetRays = TargetRays
         self.UsePosEnc = UsePosEnc
@@ -40,7 +40,7 @@ class DepthMapSampler():
 
         self.Interior = np.min(NPData["depth_map"]) < 0.
 
-        self.sample(self.nTargetRays)
+        self.sample(self.nTargetRays, AdditionalIntersections = AdditionalIntersections)
 
     def additional_positive_intersections(self, unprojected_points, multiplier=3, max_perturbation=0.4):
         base_points = np.concatenate([unprojected_points]*multiplier, axis=0)
@@ -116,7 +116,11 @@ class DepthMapSampler():
             self.ValidDepthMask = torch.cat([self.ValidDepthMask, torch.from_numpy(valid_depths).to(torch.float32)], dim=0)
 
     def __getitem__(self, item):
+<<<<<<< HEAD
         return self.Coordinates[item], (self.Intersects[item], self.Depths[item], self.ValidDepthMask)
+=======
+        return self.Coordinates[item], (self.Intersects[item], self.Depths[item], self.ValidDepthMask[item])
+>>>>>>> 0ba6244ef7c173adc4fef648617db9e4599cbd0f
 
     def __len__(self):
         return len(self.Depths)
