@@ -71,8 +71,8 @@ def avg_depth_error(output, target):
     return total_depth_error / total_depths
 
 
-def infer(save_dir, name, model, val_loader, hyperparameters, device):
-    model = model.to(device)
+def infer(name, model, val_loader, hyperparameters, device):
+
     model.eval()
     arch = hyperparameters["architecture"]
 
@@ -100,7 +100,6 @@ def infer(save_dir, name, model, val_loader, hyperparameters, device):
     all_outputs = []
 
     print(f"Evaluating model {name}...")
-    # with torch.no_grad():
     for batch in tqdm(val_loader):
         data, targets = batch
         data = v3_utils.sendToDevice(data, device)
@@ -189,8 +188,8 @@ if __name__ == '__main__':
     print("-"*20 + Args.expt_name + " Evaluation" + "-"*20)
     print("Losses:")
     for loss in losses:
-        print(f"\t{loss}\t:\t{losses[loss]}")
-    print(f"Accuracy  : {accuracy*100:.4f}%")
+        print(f"\t{loss}{' '*(20-len(loss))}: {losses[loss]:.3f}")
+    print(f"Accuracy  : {accuracy*100:.2f}%")
     print(f"Precision : {precision:.4f}")
     print(f"Recall    : {recall:.4f}")
     print(f"F1        : {f1:.4f}")

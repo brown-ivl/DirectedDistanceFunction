@@ -1,12 +1,9 @@
 import torch
-# from beacon import utils as butils
 import argparse
 import math
+import os, sys
 
-from PyQt5.QtWidgets import QApplication
 import numpy as np
-from tk3dv.pyEasel import *
-from Easel import Easel
 from tqdm import tqdm
 import multiprocessing as mp
 from skimage.measure import marching_cubes
@@ -14,7 +11,7 @@ import trimesh
 import matplotlib.pyplot as plt
 
 # MASK_THRESH = 0.995
-MASK_THRESH = 0.80
+MASK_THRESH = 0.10
 # MASK_THRESH = 0.995
 
 MESH_RADIUS = 1.0
@@ -24,28 +21,11 @@ sys.path.append(os.path.join(FileDirPath, 'loaders'))
 sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
-from odf_dataset import ODFDatasetLiveVisualizer, ODFDatasetVisualizer
-# from pc_sampler import PC_SAMPLER_RADIUS
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from single_losses import SingleDepthBCELoss, SINGLE_MASK_THRESH
-from single_models import ODFSingleV3, ODFSingleV3Constant
-# from pc_odf_dataset import PCODFDatasetLoader as PCDL
-from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
-from odf_dataset import ODFDatasetLoader as ODL
-import odf_v2_utils as o2utils
+from odf_models import ODFSingleV3, ODFSingleV3Constant
+import v3_utils
 
 # RADIUS = 1.25
-
-# def mesh_normalize(verts):
-#     '''
-#     Translates and rescales mesh vertices so that they are tightly bounded within the unit sphere
-#     '''
-#     translation = (np.max(verts, axis=0) + np.min(verts, axis=0))/2.
-#     verts = verts - translation
-#     scale = np.max(np.linalg.norm(verts, axis=1))
-#     verts = verts / scale
-#     return verts
-
 
 def generate_marching_cubes_coordinates(resolution=256, direction=[0.,1.,0.]):
     direction = torch.tensor(direction).float()
@@ -94,9 +74,9 @@ def run_inference(Network, Device, coordinates):
 
     batch_size = 5000
     for i in range(0, coordinates.shape[0], batch_size):
-        DataTD = butils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
+        DataTD = v3_utils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
 
-        output = Network([DataTD], {})[0]
+        output = Network([DataTD])[0]
 
         if len(output) == 2:
             PredMaskConf, PredDepth = output
@@ -107,10 +87,6 @@ def run_inference(Network, Device, coordinates):
         depths = PredDepth.detach().cpu().numpy()
         masks = sigmoid(PredMaskConf)
         masks = masks.detach().cpu().numpy()
-
-        # masks, depths = Network([DataTD], {})[0]
-        # depths = depths.detach().cpu().numpy()
-        # masks = masks.detach().cpu().numpy()
         
         all_depths.append(depths)
         all_masks.append(masks)
@@ -120,30 +96,6 @@ def run_inference(Network, Device, coordinates):
     masks = masks.flatten()
     return depths, masks
 
-# def run_inference(Network, Device, coordinates):
-#     all_depths = []
-#     all_masks = []
-
-#     sigmoid = torch.nn.Sigmoid()
-
-#     batch_size = 10000
-#     for i in range(0, coordinates.shape[0], batch_size):
-#         DataTD = butils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
-
-#         masks, depths = Network([DataTD], {})[0]
-#         masks = sigmoid(masks)
-#         depths = depths.detach().cpu().numpy()
-#         masks = masks.detach().cpu().numpy()
-
-
-        
-#         all_depths.append(depths)
-#         all_masks.append(masks)
-#     depths = np.concatenate(all_depths, axis=0)
-#     masks = np.concatenate(all_masks, axis=0)
-#     depths = depths.flatten()
-#     masks = masks.flatten()
-#     return depths, masks
 
 def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resolution, ground_truth):
     thresholds = [0.01,0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,0.95,0.99]
@@ -183,13 +135,6 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
         gt_to_pred_dists.append(np.mean(np.abs(trimesh.proximity.signed_distance(predicted_mesh, ground_truth.vertices))))
 
 
-
-
-                # print(f"applying mask: {MASK_THRESH}")
-                # masks = masks > MASK_THRESH
-                # depths[np.logical_not(masks)] = 1.0
-                # final_depths[valid_mask] = depths
-                # final_depths = final_depths.reshape((resolution, resolution, resolution))
     f, ax = plt.subplots()
     ax.plot(thresholds, pred_to_gt_dists, label="Predicted to GT")
     ax.plot(thresholds, gt_to_pred_dists, label="GT to Predicted")
@@ -199,7 +144,7 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
     plt.show()
 
 
-def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None):
+def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None, show_curve=True):
     Network.eval()  # switch to evaluation mode
     Network.to(Device)
 
@@ -227,7 +172,7 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     #               [-1.,-1.,-1.],
     #               ]
 
-    directions = [[1.,0.,0.]]
+    directions = [[1.,1.,0.]]
 
     # n_dirs = 100
     # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
@@ -258,7 +203,7 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
         all_depths.append(depths)
         all_intersection_masks.append(intersection_mask)
 
-    if ground_truth is not None:
+    if ground_truth is not None and show_curve:
         print("Calculating distances")
         show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
 
@@ -291,44 +236,44 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
 
 
 
-Parser = argparse.ArgumentParser(description='Inference code for NeuralODFs.')
-Parser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
-Parser.add_argument('--coord-type', help='Type of coordinates to use, valid options are points | direction | pluecker.', choices=['points', 'direction', 'pluecker'], default='direction')
-Parser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
-Parser.add_argument('--no-posenc', help='Choose not to use positional encoding.', action='store_true', required=False)
-Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
-Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
-Parser.add_argument('--object', help="Name of the object", type=str)
-Parser.set_defaults(no_posenc=False)
+
 
 if __name__ == '__main__':
+    Parser = v3_utils.BaselineParser
+    Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
+    Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
+    Parser.add_argument('--object', help="Name of the object", type=str)
+
+
     Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
         Parser.print_help()
         exit()
 
-    butils.seedRandom(Args.seed)
+    v3_utils.seedRandom(Args.seed)
     nCores = 0#mp.cpu_count()
-
-    usePosEnc = not Args.no_posenc
-    print('[ INFO ]: Using positional encoding:', usePosEnc)
-    if Args.arch == 'standard':
-        print("Using original architecture")
-        NeuralODF = ODFSingleV3(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-    elif Args.arch == 'constant':
-        print("Using constant prediction architecture")
-        NeuralODF = ODFSingleV3Constant(input_size=(120 if usePosEnc else 6), radius=DEPTH_SAMPLER_RADIUS, coord_type=Args.coord_type, pos_enc=usePosEnc, n_layers=10)
-
-
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {Device}")
-    # Device = torch.device("cpu")
-    NeuralODF.setupCheckpoint(Device)
+
+    if Args.arch == 'standard':
+        print("Using original architecture")
+        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+    elif Args.arch == 'constant':
+        print("Using constant prediction architecture")
+        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+
+
+    # check to see if we have a model checkpoint
+    if os.path.exists(os.path.join(Args.output_dir, Args.expt_name, "checkpoints")):
+        checkpoint_dict = v3_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=True)
+        NeuralODF.load_state_dict(checkpoint_dict['model_state_dict'])
+        NeuralODF.to(Device)
+    else:
+        print(f"Unable to extract mesh for model {Args.expt_name} because no checkpoints were found")
 
     gt_mesh = None
-    if Args.object is not None and Args.mesh_dir is not None:
-        gt_vertices, gt_faces, gt_mesh = load_object(Args.object, Args.mesh_dir)
-        # gt_mesh = trimesh.load(os.path.join(Args.mesh_dir, f"{Args.object}.obj"))
+    if Args.mesh_dir is not None and Args.object is not None:
+        gt_vertices, gt_faces, gt_mesh = v3_utils.load_object(Args.object, Args.mesh_dir)
     else:
         print("Provide a mesh directory and object name if you want to visualize the ground truth.")
 

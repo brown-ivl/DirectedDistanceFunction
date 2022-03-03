@@ -16,6 +16,7 @@ from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, Cons
 from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v3_utils
+from infer import infer
 
 def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_history, hyperparameters, device):
     
@@ -156,7 +157,7 @@ if __name__ == '__main__':
         Parser.print_help()
         exit()
 
-    wandb.init(project="test-project", entity="neural-odf")
+    wandb.init(project=Args.dataset, entity="neural-odf")
     wandb.run.name = Args.expt_name
     wandb.run.save()
 
@@ -213,3 +214,27 @@ if __name__ == '__main__':
         optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
 
     train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
+
+
+    # Now load the best checkpoint for evaluation
+    checkpoint_dict = v3_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=True)
+    NeuralODF.load_state_dict(checkpoint_dict['model_state_dict'])
+    NeuralODF.to(Device)
+
+    losses, depth_error, precision, recall, accuracy, f1 = infer(Args.expt_name, NeuralODF, ValDataLoader, hyperparameters, Device)
+
+
+    all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection"]
+    if Args.arch == "constant":
+        all_losses += ["train_dfr", "val_dfr", "train_cr", "val_cr"]
+
+    for loss in all_losses:
+        del wandb.run.summary[loss+"_loss"]
+
+    for loss in losses:
+        wandb.run.summary[loss+"_loss"] = losses[loss]
+    wandb.run.summary["depth_error"] = depth_error
+    wandb.run.summary["mask precision"] = precision
+    wandb.run.summary["mask recall"] = recall
+    wandb.run.summary["mask f1"] = f1
+    wandb.run.summary["mask accuracy"] = accuracy
