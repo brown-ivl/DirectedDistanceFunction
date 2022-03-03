@@ -7,5 +7,5 @@
 #SBATCH -C geforce3090
 
 module load cuda/11.1.1
-python ../v3/train.py --expt-name feb23_torus_constant_5BCE --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d/ --dataset torus --output-dir /gpfs/data/ssrinath/neural-odf/output/ --arch constant --epochs 500 -s 42 --rays-per-shape 1000
+python ../v3/train.py --expt-name mar03_armadillo_standard --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d/ --dataset armadillo --output-dir /gpfs/data/ssrinath/neural-odf/output/ --arch standard --epochs 500 -s 42 --rays-per-shape 1000
 
