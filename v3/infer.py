@@ -26,8 +26,8 @@ def praf1(output, target):
     assert isinstance(output, list)
     B = len(target)
 
-    GTMasks = torch.cat([x[0] for x in target]).cpu().numpy()
-    MaskPredictions = torch.cat(x[0] for x in output).cpu().numpy()
+    GTMasks = torch.cat([x[0] for x in target]).detach().cpu().numpy()
+    MaskPredictions = torch.cat([x[0] for x in output]).to(torch.bool).detach().cpu().numpy()
 
     mask_confusion_mat = confusion_matrix(GTMasks, MaskPredictions)
     mask_tn = mask_confusion_mat[0][0]
@@ -72,7 +72,7 @@ def avg_depth_error(output, target):
 
 
 def infer(save_dir, name, model, val_loader, hyperparameters, device):
-
+    model = model.to(device)
     model.eval()
     arch = hyperparameters["architecture"]
 
@@ -100,28 +100,28 @@ def infer(save_dir, name, model, val_loader, hyperparameters, device):
     all_outputs = []
 
     print(f"Evaluating model {name}...")
-    with torch.no_grad():
-        for batch in tqdm(val_loader):
-            data, targets = batch
-            data = v3_utils.sendToDevice(data, device)
-            targets = v3_utils.sendToDevice(targets, device)
-            all_targets += targets
-            
-            # #########   LOSSES   #########
-            output = model(data)
-            all_outputs += output
-            val_depth_loss = depth_loss_fn(output, targets)
-            all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
-            val_intersection_loss = intersection_loss_fn(output, targets)
-            all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
-            val_loss = val_depth_loss + val_intersection_loss
-            if arch == "constant":
-                val_dfr_loss = dfr_loss_fn(model, data)
-                all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
-                val_cr_loss = cr_loss_fn(model, data)
-                all_val_cr_losses.append(val_cr_loss.detach().cpu().numpy())
-                val_loss += val_dfr_loss + val_cr_loss
-            all_val_losses.append(val_loss.detach().cpu().numpy())
+    # with torch.no_grad():
+    for batch in tqdm(val_loader):
+        data, targets = batch
+        data = v3_utils.sendToDevice(data, device)
+        targets = v3_utils.sendToDevice(targets, device)
+        all_targets += targets
+        
+        # #########   LOSSES   #########
+        output = model(data)
+        all_outputs += output
+        val_depth_loss = depth_loss_fn(output, targets)
+        all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
+        val_intersection_loss = intersection_loss_fn(output, targets)
+        all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
+        val_loss = val_depth_loss + val_intersection_loss
+        if arch == "constant":
+            val_dfr_loss = dfr_loss_fn(model, data)
+            all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
+            val_cr_loss = cr_loss_fn(model, data)
+            all_val_cr_losses.append(val_cr_loss.detach().cpu().numpy())
+            val_loss += val_dfr_loss + val_cr_loss
+        all_val_losses.append(val_loss.detach().cpu().numpy())
 
     losses = {}
     losses["val"] = np.mean(np.asarray(all_val_losses))
@@ -159,7 +159,8 @@ if __name__ == '__main__':
     v3_utils.seedRandom(Args.seed)
     nCores=0#mp.cpu_count()
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    
+    print(f"Using {Device}")
+
     # Load Data
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
