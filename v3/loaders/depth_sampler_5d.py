@@ -116,11 +116,7 @@ class DepthMapSampler():
             self.ValidDepthMask = torch.cat([self.ValidDepthMask, torch.from_numpy(valid_depths).to(torch.float32)], dim=0)
 
     def __getitem__(self, item):
-<<<<<<< HEAD
-        return self.Coordinates[item], (self.Intersects[item], self.Depths[item], self.ValidDepthMask)
-=======
         return self.Coordinates[item], (self.Intersects[item], self.Depths[item], self.ValidDepthMask[item])
->>>>>>> 0ba6244ef7c173adc4fef648617db9e4599cbd0f
 
     def __len__(self):
         return len(self.Depths)
