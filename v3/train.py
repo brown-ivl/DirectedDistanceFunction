@@ -152,7 +152,7 @@ if __name__ == '__main__':
     Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
     Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
     Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
-    Parser.add_argument('--additional-intersections', help="The number of addtional intersecting rays to generate per surface point")
+    Parser.add_argument('--additional-intersections', type=int, help="The number of addtional intersecting rays to generate per surface point")
     Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
         Parser.print_help()
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, additional_intersections=Args.additional_intersections)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 
-    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn, additional_intersections=Args.additional_intersections)
+    TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
 
     hyperparameters = {

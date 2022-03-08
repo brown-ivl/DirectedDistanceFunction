@@ -47,7 +47,7 @@ class DepthMapSampler():
         perturbations = v3_utils.sphere_interior_sampler(base_points.shape[0], radius=max_perturbation)
         view_directions = perturbations * -1 / np.linalg.norm(perturbations, axis=-1, keepdims=True)
         perturbed_points = base_points + perturbations
-        valid_points = np.linalg.norm(perturbed_points, dim=-1) < DEPTH_SAMPLER_RADIUS
+        valid_points = np.linalg.norm(perturbed_points, axis=-1) < DEPTH_SAMPLER_RADIUS
         perturbed_points = perturbed_points[valid_points]
         view_directions = view_directions[valid_points]
         coordinates = np.concatenate([perturbed_points, view_directions], axis=-1)
@@ -106,10 +106,10 @@ class DepthMapSampler():
         self.Coordinates = torch.from_numpy(Coordinates[ShuffleIdx]).to(torch.float32)
         self.Intersects = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
         self.Depths = torch.from_numpy(Depths[ShuffleIdx]).to(torch.float32)
-        self.ValidDepthMask = self.Intersects.copy()
+        self.ValidDepthMask = torch.from_numpy(Intersects[ShuffleIdx]).to(torch.float32)
 
         if AdditionalIntersections > 0:
-            coordinates, intersections, placeholder_depths, valid_depths = self.additional_positive_intersections(SampledPosEndPts, AdditionalIntersections, multiplier=AdditionalIntersections)
+            coordinates, intersections, placeholder_depths, valid_depths = self.additional_positive_intersections(SampledPosEndPts, multiplier=AdditionalIntersections)
             self.Coordinates = torch.cat([self.Coordinates, torch.from_numpy(coordinates).to(torch.float32)], dim=0)
             self.Intersects = torch.cat([self.Intersects, torch.from_numpy(intersections).to(torch.float32)], dim=0)
             self.Depths = torch.cat([self.Depths, torch.from_numpy(placeholder_depths).to(torch.float32)], dim=0)
