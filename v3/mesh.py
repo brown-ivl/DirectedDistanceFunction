@@ -11,7 +11,7 @@ import trimesh
 import matplotlib.pyplot as plt
 
 # MASK_THRESH = 0.995
-MASK_THRESH = 0.10
+MASK_THRESH = 0.05
 # MASK_THRESH = 0.995
 
 MESH_RADIUS = 1.0
@@ -144,7 +144,7 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
     plt.show()
 
 
-def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None, show_curve=True):
+def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None, show_curve=False):
     Network.eval()  # switch to evaluation mode
     Network.to(Device)
 
@@ -156,23 +156,23 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
     #               [0.,0.,-1.]]
 
 
-    # directions = [[1.,0.,0.],
-    #               [-1.,0.,0.],
-    #               [0.,1.,0.],
-    #               [0.,-1.,0.],
-    #               [0.,0.,1.],
-    #               [0.,0.,-1.],
-    #               [1.,1.,1.],
-    #               [1.,1.,-1.],
-    #               [1.,-1.,1.],
-    #               [-1.,1.,1.],
-    #               [1.,-1.,-1.],
-    #               [-1.,-1.,1.],
-    #               [-1.,1.,-1.],
-    #               [-1.,-1.,-1.],
-    #               ]
+    directions = [[1.,0.,0.],
+                  [-1.,0.,0.],
+                  [0.,1.,0.],
+                  [0.,-1.,0.],
+                  [0.,0.,1.],
+                  [0.,0.,-1.],
+                  [1.,1.,1.],
+                  [1.,1.,-1.],
+                  [1.,-1.,1.],
+                  [-1.,1.,1.],
+                  [1.,-1.,-1.],
+                  [-1.,-1.,1.],
+                  [-1.,1.,-1.],
+                  [-1.,-1.,-1.],
+                  ]
 
-    directions = [[1.,1.,0.]]
+    # directions = [[1.,1.,0.]]
 
     # n_dirs = 100
     # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
@@ -243,6 +243,7 @@ if __name__ == '__main__':
     Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
     Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
     Parser.add_argument('--object', help="Name of the object", type=str)
+    Parser.add_argument('--show-curve', action="store_true", help="Show the mesh similarity curve using different mask threshold values.")
 
 
     Args, _ = Parser.parse_known_args()
@@ -279,7 +280,7 @@ if __name__ == '__main__':
 
 
     # verts, faces, normals = extract_mesh(NeuralODF, Device, resolution=Args.resolution)
-    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh)
+    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh, show_curve=Args.show_curve)
 
     show_mesh(verts, faces, ground_truth=gt_mesh)
 
