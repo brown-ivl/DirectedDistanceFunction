@@ -70,7 +70,7 @@ class IntersectionLoss(nn.Module):
         Loss = 0
         for b in range(B):
             # Single batch version
-            GTMask, _ = target[b]
+            GTMask, _, _ = target[b]
 
             if len(output[b]) == 2:
                 PredMaskConf, _ = output[b]

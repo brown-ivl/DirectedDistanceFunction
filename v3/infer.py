@@ -51,7 +51,7 @@ def avg_depth_error(output, target):
     total_depth_error = 0.
     total_depths = 0.
     for b in range(B):
-        GTMask, GTDepth = target[b]
+        GTMask, GTDepth, ValidDepthMask = target[b]
 
         if len(output[b]) == 2:
             PredMaskConf, PredDepth = output[b]
@@ -62,7 +62,7 @@ def avg_depth_error(output, target):
         PredMaskConfSig = Sigmoid(PredMaskConf)
         PredMaskMaxConfVal = PredMaskConfSig
         ValidRaysIdx = PredMaskMaxConfVal > v3_utils.INTERSECTION_MASK_THRESHOLD  # Use predicted mask
-        ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask)
+        ValidRaysIdx = torch.logical_and(ValidRaysIdx, ValidDepthMask)
         
         # compute mean depth only when it is defined by both prediction and ground truth
         if torch.max(ValidRaysIdx) > 0.:
