@@ -1,0 +1,41 @@
+{
+    "os": "Linux-3.10.0-1062.el7.x86_64-x86_64-with-glibc2.17",
+    "python": "3.9.0",
+    "heartbeatAt": "2022-03-11T05:48:42.669340",
+    "startedAt": "2022-03-11T05:48:41.729333",
+    "docker": null,
+    "gpu": "NVIDIA GeForce GTX 1080 Ti",
+    "gpu_count": 1,
+    "cpu_count": 32,
+    "cuda": null,
+    "args": [
+        "--arch",
+        "standard",
+        "--expt-name",
+        "Mar11_newrecipe",
+        "--input-dir",
+        "/gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d",
+        "--output-dir",
+        "/users/clu52/results/",
+        "--epochs",
+        "5000",
+        "--dataset",
+        "bunny_watertight_balance",
+        "--learning-rate",
+        "0.0005",
+        "--batch-size",
+        "96"
+    ],
+    "state": "running",
+    "program": "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/train.py",
+    "codePath": "v4/train.py",
+    "git": {
+        "remote": "https://github.com/brown-ivl/DirectedDistanceFunction.git",
+        "commit": "b1ed011f6daeeb01733c910964658c2fcf300021"
+    },
+    "email": null,
+    "root": "/gpfs/home/clu52/new/DirectedDistanceFunction",
+    "host": "gpu717.oscar.ccv.brown.edu",
+    "username": "clu52",
+    "executable": "/gpfs/home/clu52/pytorch.venv/bin/python"
+}
