@@ -80,7 +80,7 @@ class IntersectionLoss(nn.Module):
             PredMaskConfSig = self.Sigmoid(PredMaskConf)
             PredMaskMaxConfVal = PredMaskConfSig
 
-            Loss += 5.0 * self.BCE(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
+            Loss += 1.0 * self.BCE(PredMaskMaxConfVal.to(torch.float), GTMask.to(torch.float))
 
         Loss /= B
 
