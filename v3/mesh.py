@@ -11,7 +11,7 @@ import trimesh
 import matplotlib.pyplot as plt
 
 # MASK_THRESH = 0.995
-MASK_THRESH = 0.05
+MASK_THRESH = 0.99
 # MASK_THRESH = 0.995
 
 MESH_RADIUS = 1.0
@@ -242,6 +242,7 @@ if __name__ == '__main__':
     Parser = v3_utils.BaselineParser
     Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
     Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
     Parser.add_argument('--object', help="Name of the object", type=str)
     Parser.add_argument('--show-curve', action="store_true", help="Show the mesh similarity curve using different mask threshold values.")
 
@@ -258,10 +259,10 @@ if __name__ == '__main__':
 
     if Args.arch == 'standard':
         print("Using original architecture")
-        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
-        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
 
 
     # check to see if we have a model checkpoint

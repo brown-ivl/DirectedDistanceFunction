@@ -149,6 +149,7 @@ if __name__ == '__main__':
     Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
     Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
     Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
     Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
     Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
     Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
@@ -169,14 +170,14 @@ if __name__ == '__main__':
     nCores = 0#mp.cpu_count()
 
     if Args.arch == 'standard':
-        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'constant':
-        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'SH':
-        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
         print('[ INFO ]: Degrees {}'.format(Args.degrees))
     elif Args.arch == 'SH_constant':
-        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
         print('[ INFO ]: Degrees {}'.format(Args.degrees))
 
 

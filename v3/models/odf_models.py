@@ -109,7 +109,6 @@ class ODFSingleV3Constant(torch.nn.Module):
 
     def __init__(self, input_size=6, n_layers=6, hidden_size=256, radius=1.25, pos_enc=True):
         super().__init__()
-
         # store args
         self.pos_enc = pos_enc
         self.radius = radius
