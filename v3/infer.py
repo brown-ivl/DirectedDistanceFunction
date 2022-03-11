@@ -158,7 +158,8 @@ if __name__ == '__main__':
     v3_utils.seedRandom(Args.seed)
     nCores=0#mp.cpu_count()
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    
+    print(f"Using {Device}")
+
     # Load Data
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')

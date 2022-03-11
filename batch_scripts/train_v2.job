@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -p 3090-gcondo --gres=gpu:1
+#SBATCH -p gpu --gres=gpu:1
 #SBATCH -t 72:00:00
-#SBATCH --mem=128G
-#SBATCH -n 4
+#SBATCH --mem=64G
+#SBATCH -n 8
+#SBATCH -C geforce3090
 
 module load cuda/11.1.1
-conda activate bodymodel
-python ../v2/train.py --expt-name bunny-10000 --input-dir /gpfs/data/ssrinath/neural-odf/input --output-dir /gpfs/data/ssrinath/neural-odf/output --rays-per-shape 10000 -s 42 --no-posenc --epochs 100 --save-freq 50
+python ../v2/train.py --expt-name feb17_torus_constant_NoInt1_weights_5_5_1_1 --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d/ --output-dir /gpfs/data/ssrinath/neural-odf/output/ --arch constant --epochs 500 --no-posenc -s 42 --rays-per-shape 1000

@@ -1,3 +1,4 @@
 __pycache__/
 batch_scripts/slurm*
 v3/wandb/*
+batch_scripts/wandb/*
