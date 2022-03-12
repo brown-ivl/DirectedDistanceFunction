@@ -1,0 +1,22 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+  0%|                                                                                           | 0/11 [00:00<?, ?it/s]
+----------------------------- EPOCH: 1/5000 -----------------------------
+Training...
+Traceback (most recent call last):
+  File "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/train.py", line 227, in <module>
+    train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
+  File "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/train.py", line 64, in train
+    train_depth_loss = depth_loss_fn(output, targets)
+  File "/gpfs/home/clu52/pytorch.venv/lib/python3.9/site-packages/torch/nn/modules/module.py", line 889, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/losses/losses.py", line 23, in forward
+    return self.computeLoss(output, target)
+  File "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/losses/losses.py", line 31, in computeLoss
+    GTMask, GTDepth, ValidDepthMask = target[b]
+ValueError: not enough values to unpack (expected 3, got 2)

@@ -26,12 +26,13 @@ class ODFSingleV3(torch.nn.Module):
             input_size = 120
         else:
             self.pos_enc_layers = []
+            self.skip_connect = [4]
 
         # Define the main network body
         main_layers = []
         main_layers.append(nn.Linear(input_size, hidden_size))
         for l in range(n_layers - 1):
-            if l + 2 in self.pos_enc_layers:
+            if l + 2 in self.pos_enc_layers or l + 2 in self.skip_connect:
                 main_layers.append(nn.Linear(hidden_size + input_size, hidden_size))
             else:
                 main_layers.append(nn.Linear(hidden_size, hidden_size))
@@ -39,14 +40,14 @@ class ODFSingleV3(torch.nn.Module):
 
         # Define the intersection head
         intersection_layers = [
-            nn.Linear(hidden_size, hidden_size),
+            #nn.Linear(hidden_size, hidden_size),
             nn.Linear(hidden_size, n_intersections)
         ]
         self.intersection_head = nn.ModuleList(intersection_layers)
 
         # Define the depth head
         depth_layers = [
-            nn.Linear(hidden_size, hidden_size),
+            #nn.Linear(hidden_size, hidden_size),
             nn.Linear(hidden_size, n_intersections)
         ]
         self.depth_head = nn.ModuleList(depth_layers)
@@ -55,7 +56,7 @@ class ODFSingleV3(torch.nn.Module):
         # other layers
         self.relu = nn.ReLU()
         # No layernorm for now
-        # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+        self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
     def forward(self, input):
         Input = input
@@ -65,6 +66,7 @@ class ODFSingleV3(torch.nn.Module):
 
 
         CollateList = [None] * B
+        feature = None
         for b in range(B):
             if not self.pos_enc:
                 x = Input[b]
@@ -73,27 +75,29 @@ class ODFSingleV3(torch.nn.Module):
                 x = v3_utils.positional_encoding_tensor(Input[b], L=10)
                 BInput = v3_utils.positional_encoding_tensor(Input[b], L=10)
             for i in range(len(self.network)):
-                if i + 1 in self.pos_enc_layers:
+                if i + 1 in self.pos_enc_layers or i + 1 in self.skip_connect:
                     x = self.network[i](torch.cat([BInput, x], dim=1))
                 else:
                     x = self.network[i](x)
                 x = self.relu(x)
-                # x = self.layernorm(x)
+                x = self.layernorm(x)
+                if i == 1:
+                    feature = x
 
             # intersection head
-            intersections = self.intersection_head[0](x)
-            intersections = self.relu(intersections)
+            intersections = self.intersection_head[0](feature)
+            #intersections = self.relu(intersections)
             # intersections = self.layernorm(intersections)
-            intersections = self.intersection_head[1](intersections)
+            #intersections = self.intersection_head[1](intersections)
             # intersections = torch.sigmoid(intersections)
             if len(intersections.size()) == 3:
                 intersections = torch.squeeze(intersections, dim=1)
 
             # depth head
             depths = self.depth_head[0](x)
-            depths = self.relu(depths)
+            #depths = self.relu(depths)
             # depths = self.layernorm(depths)
-            depths = self.depth_head[1](depths)
+            #depths = self.depth_head[1](depths)
             if len(depths.size()) == 3:
                 depths = torch.squeeze(depths, dim=1)
 
