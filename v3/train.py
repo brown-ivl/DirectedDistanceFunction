@@ -4,7 +4,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 import numpy as np
 import wandb
-
+import math
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
@@ -149,9 +149,11 @@ if __name__ == '__main__':
     Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
     Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
     Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
     Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
     Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
     Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
+    Parser.add_argument('--schedule', help="Halve the learning rate every x epochs. Does not halve if zero is passed.", default=0, type=int)
     Parser.add_argument('--additional-intersections', type=int, default=0, help="The number of addtional intersecting rays to generate per surface point")
     Parser.add_argument('--near-surface-threshold', type=float, default=-1., help="Sample an additional near-surface (within threshold) point for each intersecting ray. No sampling if negative.")
     Parser.add_argument('--tangent-rays-ratio', type=float, default=0., help="The proportion of sampled rays that should be roughly tangent to the object.")
@@ -169,19 +171,19 @@ if __name__ == '__main__':
     nCores = 0#mp.cpu_count()
 
     if Args.arch == 'standard':
-        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'constant':
-        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10)
+        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'SH':
-        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
         print('[ INFO ]: Degrees {}'.format(Args.degrees))
     elif Args.arch == 'SH_constant':
-        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=10, degrees=Args.degrees)
+        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
         print('[ INFO ]: Degrees {}'.format(Args.degrees))
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, additional_intersections=Args.additional_intersections, near_surface_threshold=Args.near_surface_threshold, tangent_rays_ratio=Args.tangent_rays_ratio)
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, additional_intersections=Args.additional_intersections, near_surface_threshold=Args.near_surface_threshold, near_surface_fraction=0.0, tangent_rays_ratio=Args.tangent_rays_ratio)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
@@ -197,7 +199,8 @@ if __name__ == '__main__':
         "epochs": Args.epochs,
         "batch_size": Args.batch_size,
         "architecture": Args.arch,
-        "dataset": Args.dataset
+        "dataset": Args.dataset,
+        "layers": Args.n_layers,
     }
 
     wandb.config = hyperparameters
@@ -215,7 +218,23 @@ if __name__ == '__main__':
         NeuralODF = NeuralODF.to(Device)
         optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
 
-    train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
+    if Args.schedule > 0: 
+        # optimizers = [optimizer]
+        # for i in range(math.ceil(Args.epochs/float(Args.schedule))-1):
+        #     optimizers.append(torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate*2.**(-(i+1)), weight_decay=1e-5))
+        # DataLoaders = [torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn, )]
+
+        hyperparameters["epochs"] = Args.schedule
+
+        for i in range(math.ceil(Args.epochs/float(Args.schedule))):
+            if i != 0:
+                for g in optimizer.param_groups:
+                    g['lr'] = g['lr'] * 0.5
+                TrainData.increaseNearSurfaceFraction(0.04)
+                TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
+            train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
+    else:
+        train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
 
 
     # Now load the best checkpoint for evaluation

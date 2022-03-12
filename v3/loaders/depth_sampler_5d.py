@@ -28,7 +28,7 @@ DEPTH_SAMPLER_POS_RATIO = 0.5
 # depth_map : rendered depth map
 # rest elements are camera intrinsics and extrinsics.
 class DepthMapSampler():
-    def __init__(self, NPData, TargetRays, UsePosEnc=False, NearSurfacePointsOffset=-1., TangentRaysRatio=0.0, AdditionalIntersections=0):
+    def __init__(self, NPData, TargetRays, UsePosEnc=False, NearSurfacePointsOffset=-1., NearSurfaceFraction=0.1, TangentRaysRatio=0.0, AdditionalIntersections=0):
         self.NPData = NPData
         self.nTargetRays = TargetRays
         self.UsePosEnc = UsePosEnc
@@ -36,6 +36,7 @@ class DepthMapSampler():
         self.NearSurfacePointsOffset = NearSurfacePointsOffset
         self.TangentRaysRatio=TangentRaysRatio
         self.AdditionalIntersections=AdditionalIntersections
+        self.NearSurfaceFraction = NearSurfaceFraction
 
         self.Coordinates = None
         self.Intersects = None
@@ -62,6 +63,14 @@ class DepthMapSampler():
         return coordinates, intersections, placeholder_depths, valid_depths_mask
 
     def additional_near_surface_points(self, end_points, start_points, max_offset=0.01):
+        selection_fraction = self.NearSurfaceFraction
+        n_samples = int(end_points.shape[0]*selection_fraction)
+        selection_indices = np.zeros((end_points.shape[0],), dtype=bool)
+        selection_indices[:n_samples] = 1
+        np.random.shuffle(selection_indices)
+        end_points = end_points[selection_indices]
+        start_points = start_points[selection_indices]
+
         view_dirs = end_points - start_points
         depths = np.linalg.norm(view_dirs, axis=-1)
         view_dirs = view_dirs / np.linalg.norm(view_dirs, axis=-1, keepdims=True)
