@@ -1,0 +1,18 @@
+
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+Traceback (most recent call last):
+  File "train.py", line 222, in <module>
+    optimizer = torch.optim.Adam({"NODF": NeuralODF.parameters(), "Mask 3D": Mask3D.parameters()}, lr=Args.learning_rate, weight_decay=1e-5)
+  File "C:\Users\Trevor\miniconda3\envs\ivlresearch\lib\site-packages\torch\optim\adam.py", line 48, in __init__
+    super(Adam, self).__init__(params, defaults)
+  File "C:\Users\Trevor\miniconda3\envs\ivlresearch\lib\site-packages\torch\optim\optimizer.py", line 52, in __init__
+    self.add_param_group(param_group)
+  File "C:\Users\Trevor\miniconda3\envs\ivlresearch\lib\site-packages\torch\optim\optimizer.py", line 230, in add_param_group
+    raise TypeError("optimizer can only optimize Tensors, "
+TypeError: optimizer can only optimize Tensors, but one of the params is str

@@ -1,0 +1,12 @@
+
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+Traceback (most recent call last):
+  File "train.py", line 221, in <module>
+    Mask3D = Mask3D.to(device)
+NameError: name 'device' is not defined

@@ -1,0 +1,35 @@
+{
+    "os": "Windows-10-10.0.19041-SP0",
+    "python": "3.8.8",
+    "heartbeatAt": "2022-03-15T19:19:35.179178",
+    "startedAt": "2022-03-15T19:19:29.119878",
+    "docker": null,
+    "gpu": "NVIDIA TITAN RTX",
+    "gpu_count": 1,
+    "cpu_count": 4,
+    "cuda": null,
+    "args": [
+        "--expt-name",
+        "v5_test",
+        "--input-dir",
+        "F:/ivl-data/common-3d-test-models/rendered-data-5d",
+        "--dataset",
+        "bunny_watertight_small",
+        "--output-dir",
+        "F:/ivl-data/output",
+        "--epochs",
+        "3"
+    ],
+    "state": "running",
+    "program": "train.py",
+    "codePath": "v5\\train.py",
+    "git": {
+        "remote": "https://github.com/houchenst/DirectedDistanceFunction.git",
+        "commit": "ac83cd4a296157ceddbe08d142d41bec1f865a9f"
+    },
+    "email": "trevormhouchens@gmail.com",
+    "root": "F:/DirectedDistanceFunction",
+    "host": "DESKTOP-MRUQ26R",
+    "username": "Trevor",
+    "executable": "C:\\Users\\Trevor\\miniconda3\\envs\\ivlresearch\\python.exe"
+}

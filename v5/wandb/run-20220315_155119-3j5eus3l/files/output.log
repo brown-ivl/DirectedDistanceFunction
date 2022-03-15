@@ -1,0 +1,21 @@
+
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+----------------------------- EPOCH: 1/3 -----------------------------
+Training...
+  0%|                                                                                                                                                       | 0/63 [00:01<?, ?it/s]
+Traceback (most recent call last):
+  File "train.py", line 216, in <module>
+    train(Args.output_dir, Args.expt_name, NeuralODF, Mask3D, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
+  File "train.py", line 63, in train
+    mask_output = mask_model(mask_coords)
+  File "C:\Users\Trevor\miniconda3\envs\ivlresearch\lib\site-packages\torch\nn\modules\module.py", line 727, in _call_impl
+    result = self.forward(*input, **kwargs)
+  File "models\odf_models.py", line 115, in forward
+    x = input[B]
+IndexError: list index out of range

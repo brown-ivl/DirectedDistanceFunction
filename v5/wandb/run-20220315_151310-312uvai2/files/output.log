@@ -1,0 +1,7 @@
+
+[ INFO ]: Seeding RNGs with 42
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+Traceback (most recent call last):
+  File "train.py", line 172, in <module>
+    NeuralODF = ODFV5(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
+NameError: name 'ODFV5' is not defined

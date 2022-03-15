@@ -1,0 +1,234 @@
+2022-03-15 15:54:47,004 INFO    MainThread:18132 [internal.py:wandb_internal():89] W&B internal server running at pid: 18132, started at: 2022-03-15 15:54:47.004451
+2022-03-15 15:54:47,004 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: check_version
+2022-03-15 15:54:47,004 INFO    WriterThread:18132 [datastore.py:open_for_write():77] open: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\run-2gpvev5g.wandb
+2022-03-15 15:54:47,020 DEBUG   SenderThread:18132 [sender.py:send():235] send: header
+2022-03-15 15:54:47,020 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: check_version
+2022-03-15 15:54:47,098 DEBUG   SenderThread:18132 [sender.py:send():235] send: run
+2022-03-15 15:54:47,301 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: run_start
+2022-03-15 15:54:47,301 INFO    SenderThread:18132 [dir_watcher.py:__init__():169] watching files in: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files
+2022-03-15 15:54:47,301 INFO    SenderThread:18132 [sender.py:_start_run_threads():809] run started: 2gpvev5g with start time 1647374084
+2022-03-15 15:54:47,316 DEBUG   SenderThread:18132 [sender.py:send():235] send: summary
+2022-03-15 15:54:47,316 INFO    SenderThread:18132 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:54:48,316 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-summary.json
+2022-03-15 15:54:50,885 DEBUG   HandlerThread:18132 [meta.py:__init__():36] meta init
+2022-03-15 15:54:50,885 DEBUG   HandlerThread:18132 [meta.py:__init__():50] meta init done
+2022-03-15 15:54:50,885 DEBUG   HandlerThread:18132 [meta.py:probe():210] probe
+2022-03-15 15:54:50,948 DEBUG   HandlerThread:18132 [meta.py:_setup_git():200] setup git
+2022-03-15 15:54:51,073 DEBUG   HandlerThread:18132 [meta.py:_setup_git():207] setup git done
+2022-03-15 15:54:51,073 DEBUG   HandlerThread:18132 [meta.py:_save_pip():54] save pip
+2022-03-15 15:54:51,088 DEBUG   HandlerThread:18132 [meta.py:_save_pip():68] save pip done
+2022-03-15 15:54:51,088 DEBUG   HandlerThread:18132 [meta.py:_save_conda():75] save conda
+2022-03-15 15:54:51,338 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\requirements.txt
+2022-03-15 15:54:51,338 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\conda-environment.yaml
+2022-03-15 15:54:52,354 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\output.log
+2022-03-15 15:54:56,687 DEBUG   HandlerThread:18132 [meta.py:_save_conda():85] save conda done
+2022-03-15 15:54:56,687 DEBUG   HandlerThread:18132 [meta.py:probe():248] probe done
+2022-03-15 15:54:56,702 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: stop_status
+2022-03-15 15:54:56,702 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: stop_status
+2022-03-15 15:54:56,859 DEBUG   SenderThread:18132 [sender.py:send():235] send: run
+2022-03-15 15:54:56,984 INFO    SenderThread:18132 [sender.py:send_run():707] updated run: 2gpvev5g
+2022-03-15 15:54:56,984 DEBUG   SenderThread:18132 [sender.py:send():235] send: files
+2022-03-15 15:54:56,984 INFO    SenderThread:18132 [sender.py:_save_file():944] saving file wandb-metadata.json with policy now
+2022-03-15 15:54:57,421 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\config.yaml
+2022-03-15 15:54:57,421 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\conda-environment.yaml
+2022-03-15 15:54:57,421 INFO    Thread-12 :18132 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-metadata.json
+2022-03-15 15:54:57,671 INFO    Thread-17 :18132 [upload_job.py:push():137] Uploaded file C:\Users\Trevor\AppData\Local\Temp\tmpp7tcfhcowandb\3n787mqw-wandb-metadata.json
+2022-03-15 15:55:07,740 DEBUG   SenderThread:18132 [sender.py:send():235] send: telemetry
+2022-03-15 15:55:07,740 DEBUG   SenderThread:18132 [sender.py:send():235] send: exit
+2022-03-15 15:55:07,740 INFO    SenderThread:18132 [sender.py:send_exit():371] handling exit code: 1
+2022-03-15 15:55:07,740 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:07,740 INFO    SenderThread:18132 [sender.py:send_exit():373] handling runtime: 20
+2022-03-15 15:55:07,756 INFO    SenderThread:18132 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:55:07,756 INFO    SenderThread:18132 [sender.py:send_exit():379] send defer
+2022-03-15 15:55:07,756 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:07,756 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:07,756 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 0
+2022-03-15 15:55:07,756 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:07,756 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 0
+2022-03-15 15:55:07,756 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 1
+2022-03-15 15:55:07,756 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:07,756 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 1
+2022-03-15 15:55:07,850 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:07,850 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 1
+2022-03-15 15:55:07,850 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 2
+2022-03-15 15:55:07,850 DEBUG   SenderThread:18132 [sender.py:send():235] send: stats
+2022-03-15 15:55:07,850 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:07,850 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 2
+2022-03-15 15:55:07,850 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:07,850 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 2
+2022-03-15 15:55:07,850 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 3
+2022-03-15 15:55:07,850 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:07,850 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 3
+2022-03-15 15:55:07,850 DEBUG   SenderThread:18132 [sender.py:send():235] send: summary
+2022-03-15 15:55:07,865 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:07,865 INFO    SenderThread:18132 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:55:07,865 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:07,865 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 3
+2022-03-15 15:55:07,865 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 4
+2022-03-15 15:55:07,865 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:07,865 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:07,865 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 4
+2022-03-15 15:55:07,865 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:07,865 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 4
+2022-03-15 15:55:07,975 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:08,037 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 5
+2022-03-15 15:55:08,037 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:08,037 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:08,037 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 5
+2022-03-15 15:55:08,037 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:08,037 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 5
+2022-03-15 15:55:08,037 INFO    SenderThread:18132 [dir_watcher.py:finish():283] shutting down directory watcher
+2022-03-15 15:55:08,147 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-summary.json
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\config.yaml
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\output.log
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():313] scan: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\config.yaml config.yaml
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-summary.json wandb-summary.json
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\requirements.txt requirements.txt
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\conda-environment.yaml conda-environment.yaml
+2022-03-15 15:55:08,568 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\output.log output.log
+2022-03-15 15:55:08,584 INFO    SenderThread:18132 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-metadata.json wandb-metadata.json
+2022-03-15 15:55:08,584 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 6
+2022-03-15 15:55:08,584 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:08,584 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:08,584 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 6
+2022-03-15 15:55:08,584 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:08,584 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 6
+2022-03-15 15:55:08,584 INFO    SenderThread:18132 [file_pusher.py:finish():177] shutting down file pusher
+2022-03-15 15:55:08,693 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:08,693 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:08,803 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:08,803 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:08,912 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:08,912 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,021 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,021 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,053 INFO    Thread-20 :18132 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\requirements.txt
+2022-03-15 15:55:09,131 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,131 INFO    Thread-21 :18132 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\conda-environment.yaml
+2022-03-15 15:55:09,131 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,146 INFO    Thread-19 :18132 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\wandb-summary.json
+2022-03-15 15:55:09,162 INFO    Thread-18 :18132 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\config.yaml
+2022-03-15 15:55:09,240 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,240 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,349 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,349 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,459 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,459 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,568 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,568 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,677 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,677 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,793 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,793 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:09,903 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:09,903 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,012 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,012 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,121 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,121 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,231 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,231 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,340 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,340 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,449 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,449 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,559 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,559 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,668 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,668 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,777 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,777 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,887 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,887 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:10,996 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:10,996 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,105 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,105 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,215 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,215 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,324 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,324 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,434 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,434 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,544 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,544 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,654 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,654 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,762 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,762 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,871 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,872 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:11,981 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:11,981 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,088 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,089 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,201 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,201 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,310 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,310 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,419 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,419 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,530 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,531 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,637 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,637 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,746 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,746 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,856 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,856 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:12,965 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:12,965 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,075 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,075 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,186 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,186 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,295 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,295 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,403 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,403 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,512 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,512 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,639 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,648 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,768 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,768 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,875 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,876 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:13,956 INFO    Thread-22 :18132 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\files\output.log
+2022-03-15 15:55:13,983 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:13,984 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:14,121 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:14,121 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:14,166 INFO    Thread-11 :18132 [sender.py:transition_state():392] send defer: 7
+2022-03-15 15:55:14,167 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:14,167 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 7
+2022-03-15 15:55:14,167 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:14,167 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 7
+2022-03-15 15:55:14,228 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:14,247 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 8
+2022-03-15 15:55:14,248 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:14,249 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:14,249 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 8
+2022-03-15 15:55:14,250 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:14,250 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 8
+2022-03-15 15:55:14,250 INFO    SenderThread:18132 [sender.py:transition_state():392] send defer: 9
+2022-03-15 15:55:14,251 DEBUG   SenderThread:18132 [sender.py:send():235] send: final
+2022-03-15 15:55:14,252 DEBUG   SenderThread:18132 [sender.py:send():235] send: footer
+2022-03-15 15:55:14,254 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:55:14,255 INFO    HandlerThread:18132 [handler.py:handle_request_defer():154] handle defer: 9
+2022-03-15 15:55:14,255 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:55:14,255 INFO    SenderThread:18132 [sender.py:send_request_defer():388] handle sender defer: 9
+2022-03-15 15:55:14,366 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:55:14,366 DEBUG   SenderThread:18132 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:55:14,366 INFO    SenderThread:18132 [file_pusher.py:join():182] waiting for file pusher
+2022-03-15 15:55:14,742 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: get_summary
+2022-03-15 15:55:14,742 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: sampled_history
+2022-03-15 15:55:14,757 DEBUG   HandlerThread:18132 [handler.py:handle_request():131] handle_request: shutdown
+2022-03-15 15:55:14,758 INFO    HandlerThread:18132 [handler.py:finish():739] shutting down handler
+2022-03-15 15:55:15,265 INFO    WriterThread:18132 [datastore.py:close():281] close: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155444-2gpvev5g\run-2gpvev5g.wandb
+2022-03-15 15:55:15,750 INFO    SenderThread:18132 [sender.py:finish():1075] shutting down sender
+2022-03-15 15:55:15,750 INFO    SenderThread:18132 [file_pusher.py:finish():177] shutting down file pusher
+2022-03-15 15:55:15,750 INFO    SenderThread:18132 [file_pusher.py:join():182] waiting for file pusher
+2022-03-15 15:55:15,750 INFO    MainThread:18132 [internal.py:handle_exit():79] Internal process exited

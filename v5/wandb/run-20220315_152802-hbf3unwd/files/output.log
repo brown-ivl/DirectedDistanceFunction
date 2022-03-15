@@ -1,0 +1,17 @@
+
+wandb: WARNING Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+----------------------------- EPOCH: 1/3 -----------------------------
+Training...
+  0%|                                                                                                                                                       | 0/63 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "train.py", line 226, in <module>
+    train(Args.output_dir, Args.expt_name, NeuralODF, Mask3D, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
+  File "train.py", line 53, in train
+    coordinates, depths, surface_points = batch
+ValueError: not enough values to unpack (expected 3, got 2)
