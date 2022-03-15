@@ -1,0 +1,1 @@
+{"train_loss": 0.8327731490135193, "val_loss": 0.656010627746582, "train_odf_loss": 0.20374257862567902, "val_odf_loss": 0.03964133933186531, "train_mask_loss": 0.6290305852890015, "val_mask_loss": 0.6163692474365234, "_runtime": 30, "_timestamp": 1647374234, "_step": 0, "_wandb": {"runtime": 28}}

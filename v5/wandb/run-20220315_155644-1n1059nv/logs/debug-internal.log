@@ -1,0 +1,153 @@
+2022-03-15 15:56:46,457 INFO    MainThread:12080 [internal.py:wandb_internal():89] W&B internal server running at pid: 12080, started at: 2022-03-15 15:56:46.457068
+2022-03-15 15:56:46,457 INFO    WriterThread:12080 [datastore.py:open_for_write():77] open: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\run-1n1059nv.wandb
+2022-03-15 15:56:46,457 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: check_version
+2022-03-15 15:56:46,472 DEBUG   SenderThread:12080 [sender.py:send():235] send: header
+2022-03-15 15:56:46,472 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: check_version
+2022-03-15 15:56:46,582 DEBUG   SenderThread:12080 [sender.py:send():235] send: run
+2022-03-15 15:56:46,785 INFO    SenderThread:12080 [dir_watcher.py:__init__():169] watching files in: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files
+2022-03-15 15:56:46,785 INFO    SenderThread:12080 [sender.py:_start_run_threads():809] run started: 1n1059nv with start time 1647374204
+2022-03-15 15:56:46,785 DEBUG   SenderThread:12080 [sender.py:send():235] send: summary
+2022-03-15 15:56:46,785 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: run_start
+2022-03-15 15:56:46,800 INFO    SenderThread:12080 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:56:47,800 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-summary.json
+2022-03-15 15:56:50,243 DEBUG   HandlerThread:12080 [meta.py:__init__():36] meta init
+2022-03-15 15:56:50,243 DEBUG   HandlerThread:12080 [meta.py:__init__():50] meta init done
+2022-03-15 15:56:50,243 DEBUG   HandlerThread:12080 [meta.py:probe():210] probe
+2022-03-15 15:56:50,321 DEBUG   HandlerThread:12080 [meta.py:_setup_git():200] setup git
+2022-03-15 15:56:50,446 DEBUG   HandlerThread:12080 [meta.py:_setup_git():207] setup git done
+2022-03-15 15:56:50,446 DEBUG   HandlerThread:12080 [meta.py:_save_pip():54] save pip
+2022-03-15 15:56:50,446 DEBUG   HandlerThread:12080 [meta.py:_save_pip():68] save pip done
+2022-03-15 15:56:50,446 DEBUG   HandlerThread:12080 [meta.py:_save_conda():75] save conda
+2022-03-15 15:56:50,836 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\conda-environment.yaml
+2022-03-15 15:56:50,836 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\requirements.txt
+2022-03-15 15:56:51,852 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\output.log
+2022-03-15 15:56:55,998 DEBUG   HandlerThread:12080 [meta.py:_save_conda():85] save conda done
+2022-03-15 15:56:55,998 DEBUG   HandlerThread:12080 [meta.py:probe():248] probe done
+2022-03-15 15:56:56,014 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: stop_status
+2022-03-15 15:56:56,014 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: stop_status
+2022-03-15 15:56:56,134 DEBUG   SenderThread:12080 [sender.py:send():235] send: run
+2022-03-15 15:56:56,290 INFO    SenderThread:12080 [sender.py:send_run():707] updated run: 1n1059nv
+2022-03-15 15:56:56,290 DEBUG   SenderThread:12080 [sender.py:send():235] send: files
+2022-03-15 15:56:56,290 INFO    SenderThread:12080 [sender.py:_save_file():944] saving file wandb-metadata.json with policy now
+2022-03-15 15:56:56,899 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\conda-environment.yaml
+2022-03-15 15:56:56,899 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\config.yaml
+2022-03-15 15:56:56,899 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_created():217] file/dir created: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-metadata.json
+2022-03-15 15:56:57,040 INFO    Thread-17 :12080 [upload_job.py:push():137] Uploaded file C:\Users\Trevor\AppData\Local\Temp\tmp__54ae5nwandb\zkp0qt3v-wandb-metadata.json
+2022-03-15 15:57:11,156 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: stop_status
+2022-03-15 15:57:11,156 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: stop_status
+2022-03-15 15:57:14,874 DEBUG   SenderThread:12080 [sender.py:send():235] send: history
+2022-03-15 15:57:14,874 DEBUG   SenderThread:12080 [sender.py:send():235] send: summary
+2022-03-15 15:57:14,889 INFO    SenderThread:12080 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:57:14,982 DEBUG   SenderThread:12080 [sender.py:send():235] send: telemetry
+2022-03-15 15:57:14,983 DEBUG   SenderThread:12080 [sender.py:send():235] send: exit
+2022-03-15 15:57:14,983 INFO    SenderThread:12080 [sender.py:send_exit():371] handling exit code: 1
+2022-03-15 15:57:14,983 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:14,983 INFO    SenderThread:12080 [sender.py:send_exit():373] handling runtime: 28
+2022-03-15 15:57:14,987 INFO    SenderThread:12080 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:57:14,987 INFO    SenderThread:12080 [sender.py:send_exit():379] send defer
+2022-03-15 15:57:14,988 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:14,989 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:14,989 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 0
+2022-03-15 15:57:14,989 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:14,989 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 0
+2022-03-15 15:57:14,989 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 1
+2022-03-15 15:57:14,990 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:14,990 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 1
+2022-03-15 15:57:15,084 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:15,084 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 1
+2022-03-15 15:57:15,084 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 2
+2022-03-15 15:57:15,084 DEBUG   SenderThread:12080 [sender.py:send():235] send: stats
+2022-03-15 15:57:15,084 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:15,084 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 2
+2022-03-15 15:57:15,084 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:15,084 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 2
+2022-03-15 15:57:15,084 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 3
+2022-03-15 15:57:15,084 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:15,084 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 3
+2022-03-15 15:57:15,084 DEBUG   SenderThread:12080 [sender.py:send():235] send: summary
+2022-03-15 15:57:15,099 INFO    SenderThread:12080 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-03-15 15:57:15,099 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:15,099 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:15,099 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 3
+2022-03-15 15:57:15,099 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 4
+2022-03-15 15:57:15,099 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:15,099 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:15,099 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 4
+2022-03-15 15:57:15,099 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:15,099 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 4
+2022-03-15 15:57:15,131 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-summary.json
+2022-03-15 15:57:15,131 INFO    Thread-12 :12080 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\output.log
+2022-03-15 15:57:15,209 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:15,255 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 5
+2022-03-15 15:57:15,255 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:15,255 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:15,255 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 5
+2022-03-15 15:57:15,255 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:15,255 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 5
+2022-03-15 15:57:15,255 INFO    SenderThread:12080 [dir_watcher.py:finish():283] shutting down directory watcher
+2022-03-15 15:57:15,365 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,146 INFO    SenderThread:12080 [dir_watcher.py:_on_file_modified():230] file/dir modified: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\config.yaml
+2022-03-15 15:57:16,146 INFO    SenderThread:12080 [dir_watcher.py:finish():313] scan: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files
+2022-03-15 15:57:16,146 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\config.yaml config.yaml
+2022-03-15 15:57:16,146 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-summary.json wandb-summary.json
+2022-03-15 15:57:16,146 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\requirements.txt requirements.txt
+2022-03-15 15:57:16,161 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\conda-environment.yaml conda-environment.yaml
+2022-03-15 15:57:16,161 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\output.log output.log
+2022-03-15 15:57:16,161 INFO    SenderThread:12080 [dir_watcher.py:finish():327] scan save: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-metadata.json wandb-metadata.json
+2022-03-15 15:57:16,161 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 6
+2022-03-15 15:57:16,161 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,177 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:16,177 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 6
+2022-03-15 15:57:16,193 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:16,193 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 6
+2022-03-15 15:57:16,193 INFO    SenderThread:12080 [file_pusher.py:finish():177] shutting down file pusher
+2022-03-15 15:57:16,286 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,286 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,396 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,396 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,505 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,505 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,615 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,615 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,661 INFO    Thread-19 :12080 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\wandb-summary.json
+2022-03-15 15:57:16,677 INFO    Thread-20 :12080 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\requirements.txt
+2022-03-15 15:57:16,693 INFO    Thread-18 :12080 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\config.yaml
+2022-03-15 15:57:16,708 INFO    Thread-21 :12080 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\conda-environment.yaml
+2022-03-15 15:57:16,724 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,724 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,739 INFO    Thread-22 :12080 [upload_job.py:push():137] Uploaded file F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\files\output.log
+2022-03-15 15:57:16,833 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,833 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,943 INFO    Thread-11 :12080 [sender.py:transition_state():392] send defer: 7
+2022-03-15 15:57:16,943 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:16,943 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:16,943 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:16,943 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 7
+2022-03-15 15:57:16,943 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:16,943 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 7
+2022-03-15 15:57:17,052 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:17,552 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 8
+2022-03-15 15:57:17,552 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:17,567 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:17,567 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 8
+2022-03-15 15:57:17,567 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:17,567 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 8
+2022-03-15 15:57:17,567 INFO    SenderThread:12080 [sender.py:transition_state():392] send defer: 9
+2022-03-15 15:57:17,567 DEBUG   SenderThread:12080 [sender.py:send():235] send: final
+2022-03-15 15:57:17,567 DEBUG   SenderThread:12080 [sender.py:send():235] send: footer
+2022-03-15 15:57:17,567 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: defer
+2022-03-15 15:57:17,567 INFO    HandlerThread:12080 [handler.py:handle_request_defer():154] handle defer: 9
+2022-03-15 15:57:17,567 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: defer
+2022-03-15 15:57:17,567 INFO    SenderThread:12080 [sender.py:send_request_defer():388] handle sender defer: 9
+2022-03-15 15:57:17,677 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: poll_exit
+2022-03-15 15:57:17,677 DEBUG   SenderThread:12080 [sender.py:send_request():249] send_request: poll_exit
+2022-03-15 15:57:17,677 INFO    SenderThread:12080 [file_pusher.py:join():182] waiting for file pusher
+2022-03-15 15:57:17,927 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: get_summary
+2022-03-15 15:57:17,927 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: sampled_history
+2022-03-15 15:57:17,927 DEBUG   HandlerThread:12080 [handler.py:handle_request():131] handle_request: shutdown
+2022-03-15 15:57:17,927 INFO    HandlerThread:12080 [handler.py:finish():739] shutting down handler
+2022-03-15 15:57:18,583 INFO    WriterThread:12080 [datastore.py:close():281] close: F:\DirectedDistanceFunction\v5\wandb\run-20220315_155644-1n1059nv\run-1n1059nv.wandb
+2022-03-15 15:57:18,927 INFO    SenderThread:12080 [sender.py:finish():1075] shutting down sender
+2022-03-15 15:57:18,927 INFO    SenderThread:12080 [file_pusher.py:finish():177] shutting down file pusher
+2022-03-15 15:57:18,927 INFO    SenderThread:12080 [file_pusher.py:join():182] waiting for file pusher
+2022-03-15 15:57:18,927 INFO    MainThread:12080 [internal.py:handle_exit():79] Internal process exited
