@@ -36,9 +36,23 @@ class MaskLoss(nn.Module):
         B = len(target)
         losses = []
         for b in range(B):
+            # print("One instance")
+            # print(output[b][:10])
+            # print(self.bce_loss(output[b][:10], target[b][:10]))
             losses.append(self.bce_loss(output[b], target[b]))
         return torch.mean(torch.cat(losses))
 
+class MaskLossV2(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+    def forward(self, output, target):
+        assert isinstance(output, list)
+        B = len(target)
+        losses = []
+        for b in range(B):
+            losses.append(nn.functional.binary_cross_entropy_with_logits(output[b], target[b], reduction='none'))
+        return torch.mean(torch.cat(losses))
 
 
 class DepthLoss(nn.Module):
