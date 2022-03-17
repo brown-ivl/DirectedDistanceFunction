@@ -103,19 +103,20 @@ def save_checkpoint(save_dir, checkpoint_dict):
         f.write(f"{epoch}${checkpoint_dict['loss_history']['val'][-1]}")
         f.close()
 
-def build_checkpoint(odf_model, mask_model, name, epoch, optimizer, loss_history):
+def build_checkpoint(odf_model, mask_model, name, epoch, optimizer, scheduler, loss_history):
     checkpoint_dict = {
         'name': name,
         'epoch': epoch,
         'odf_model_state_dict': odf_model.state_dict(),
         'mask_model_state_dict': mask_model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
         'loss_history': loss_history,
     }
     return checkpoint_dict
 
-def checkpoint(odf_model, mask_model, save_dir, name, epoch, optimizer, loss_history):
-    checkpoint_dict = build_checkpoint(odf_model, mask_model, name, epoch, optimizer, loss_history)
+def checkpoint(odf_model, mask_model, save_dir, name, epoch, optimizer, scheduler, loss_history):
+    checkpoint_dict = build_checkpoint(odf_model, mask_model, name, epoch, optimizer, scheduler, loss_history)
     save_checkpoint(save_dir, checkpoint_dict)
 
 def expandTilde(Path):

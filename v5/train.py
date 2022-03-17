@@ -13,11 +13,13 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss, MaskLoss, ODFLoss
-from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH, ODFV5, IntersectionMask3D
+from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss, MaskLoss, ODFLoss, MaskLossV2
+from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH, ODFV5, IntersectionMask3D, IntersectionMask3DV2
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v5_utils
 from infer import infer
+
+torch.autograd.set_detect_anomaly(True)
 
 
 def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_loader, loss_history, hyperparameters, device, scheduler):
@@ -27,7 +29,7 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
     previous_epochs = 0
 
     odf_loss = ODFLoss()
-    mask_loss = MaskLoss()
+    mask_loss = MaskLossV2()
 
     if "train" in loss_history:
         previous_epochs = len(loss_history["train"])
@@ -52,22 +54,26 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
         for batch in tqdm(train_loader):
             odf_coords, odf_targets, mask_coords, mask_targets = batch
 
-            odf_coords = v5_utils.sendToDevice(odf_coords, device)
-            odf_targets = v5_utils.sendToDevice(odf_targets, device)
+            # odf_coords = v5_utils.sendToDevice(odf_coords, device)
+            # odf_targets = v5_utils.sendToDevice(odf_targets, device)
             mask_coords = v5_utils.sendToDevice(mask_coords, device)
             mask_targets = v5_utils.sendToDevice(mask_targets, device)
             optimizer.zero_grad()
 
             # #########   LOSSES   #########
-            odf_output = odf_model(odf_coords)
+            # odf_output = odf_model(odf_coords)
             mask_output = mask_model(mask_coords)
+            # print(len(mask_output))
+            # print([torch.mean(mask_output[i]) for i in range(len(mask_output))])
+            # print(f"Mean Mask: {sum([torch.mean(mask_output[i]) for i in range(len(mask_output))])/len(mask_output)}")
 
-            batch_odf_loss = odf_loss(odf_output, odf_targets)
+            # batch_odf_loss = odf_loss(odf_output, odf_targets)
             batch_mask_loss = mask_loss(mask_output, mask_targets)
 
-            all_train_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
+            # all_train_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
             all_train_mask_losses.append(batch_mask_loss.detach().cpu().numpy())
-            train_loss = batch_odf_loss + batch_mask_loss
+            # train_loss = batch_odf_loss + batch_mask_loss
+            train_loss = batch_mask_loss
             all_train_losses.append(train_loss.detach().cpu().numpy())
             train_loss.backward()
             optimizer.step()
@@ -85,38 +91,39 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
         for batch in tqdm(val_loader):
             odf_coords, odf_targets, mask_coords, mask_targets = batch
 
-            odf_coords = v5_utils.sendToDevice(odf_coords, device)
-            odf_targets = v5_utils.sendToDevice(odf_targets, device)
+            # odf_coords = v5_utils.sendToDevice(odf_coords, device)
+            # odf_targets = v5_utils.sendToDevice(odf_targets, device)
             mask_coords = v5_utils.sendToDevice(mask_coords, device)
             mask_targets = v5_utils.sendToDevice(mask_targets, device)
 
             # #########   LOSSES   #########
-            odf_output = odf_model(odf_coords)
+            # odf_output = odf_model(odf_coords)
             mask_output = mask_model(mask_coords)
 
-            batch_odf_loss = odf_loss(odf_output, odf_targets)
+            # batch_odf_loss = odf_loss(odf_output, odf_targets)
             batch_mask_loss = mask_loss(mask_output, mask_targets)
 
 
-            all_val_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
+            # all_val_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
             all_val_mask_losses.append(batch_mask_loss.detach().cpu().numpy())
-            val_loss = batch_odf_loss + batch_mask_loss
+            # val_loss = batch_odf_loss + batch_mask_loss
+            val_loss = batch_mask_loss
             all_val_losses.append(val_loss.detach().cpu().numpy())
         print(f"Validation Loss: {np.mean(np.asarray(all_val_losses)):.5f}\n")
 
         # track manually for matplotlib visualization
         loss_history["train"].append(np.mean(np.asarray(all_train_losses)))
         loss_history["val"].append(np.mean(np.asarray(all_val_losses)))
-        loss_history["train_odf"].append(np.mean(np.asarray(all_train_odf_losses)))
-        loss_history["val_odf"].append(np.mean(np.asarray(all_val_odf_losses)))
+        # loss_history["train_odf"].append(np.mean(np.asarray(all_train_odf_losses)))
+        # loss_history["val_odf"].append(np.mean(np.asarray(all_val_odf_losses)))
         loss_history["train_mask"].append(np.mean(np.asarray(all_train_mask_losses)))
         loss_history["val_mask"].append(np.mean(np.asarray(all_val_mask_losses)))
 
         # track using weights and biases
         loss_dict = {"train_loss": np.mean(np.asarray(all_train_losses)),
                     "val_loss": np.mean(np.asarray(all_val_losses)),
-                    "train_odf_loss": np.mean(np.asarray(all_train_odf_losses)),
-                    "val_odf_loss": np.mean(np.asarray(all_val_odf_losses)),
+                    # "train_odf_loss": np.mean(np.asarray(all_train_odf_losses)),
+                    # "val_odf_loss": np.mean(np.asarray(all_val_odf_losses)),
                     "train_mask_loss": np.mean(np.asarray(all_train_mask_losses)),
                     "val_mask_loss": np.mean(np.asarray(all_val_mask_losses)),
                     }
@@ -124,7 +131,7 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
 
 
         # save checkpoint
-        v5_utils.checkpoint(odf_model, mask_model, save_dir, name, previous_epochs+e, optimizer, loss_history)
+        v5_utils.checkpoint(odf_model, mask_model, save_dir, name, previous_epochs+e, optimizer, scheduler, loss_history)
         v5_utils.plotLosses(loss_history, save_dir, name)
         # wandb.watch(model)
 
@@ -160,7 +167,7 @@ if __name__ == '__main__':
 
     if Args.arch == 'standard':
         NeuralODF = ODFV5(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
-        Mask3D = IntersectionMask3D(n_blocks=4, hidden_size=256, radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc)
+        Mask3D = IntersectionMask3DV2(dim=3, hidden_size=256)
     # elif Args.arch == 'constant':
     #     NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     # elif Args.arch == 'SH':
@@ -199,13 +206,14 @@ if __name__ == '__main__':
         checkpoint_dict = v5_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=False)
         NeuralODF.load_state_dict(checkpoint_dict['odf_model_state_dict'])
         NeuralODF = NeuralODF.to(Device)
-        Mask3D = Mask3D.load_state_dict(checkpoint_dict['mask_model_state_dict'])
+        Mask3D.load_state_dict(checkpoint_dict['mask_model_state_dict'])
         Mask3D = Mask3D.to(Device)
         optimizer = torch.optim.Adam(list(NeuralODF.parameters()) + list(Mask3D.parameters()), lr=Args.learning_rate, weight_decay=1e-5)
         optimizer.load_state_dict(checkpoint_dict['optimizer_state_dict'])
         loss_history = checkpoint_dict['loss_history']
         # TODO: load scheduler
-        #scheduler = StepLR(optimizer, step_size=1000, gamma=0.25)
+        scheduler = StepLR(optimizer, step_size=1000, gamma=0.25)
+        scheduler.load_state_dict(checkpoint_dict['scheduler_state_dict'])
     else:
         NeuralODF = NeuralODF.to(Device)
         Mask3D = Mask3D.to(Device)
