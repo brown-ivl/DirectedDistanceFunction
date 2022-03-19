@@ -22,9 +22,11 @@ BaselineParser.add_argument('--expt-name', help='Provide a name for this experim
 BaselineParser.add_argument('--input-dir', help='Provide the input directory where datasets are stored.')
 BaselineParser.add_argument('--dataset', help='The dataset')
 BaselineParser.add_argument('--output-dir', help='Provide the *absolute* output directory where checkpoints, logs, and other output will be stored (under expt_name).')
-BaselineParser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant'], default='standard')
+BaselineParser.add_argument('--arch', help='Architecture to use.', choices=['standard', 'constant', 'SH', 'SH_constant'], default='standard')
 BaselineParser.add_argument('--use-posenc', help='Choose to use positional encoding.', action='store_true', required=False)
 BaselineParser.add_argument('-s', '--seed', help='Random seed.', required=False, type=int, default=42)
+BaselineParser.add_argument('--degrees', help='degree for [depth, intersect] or [depth, intersect, const, const mask]', type=lambda ds:[int(d) for d in ds.split(',')], required=False, default=[2, 2])
+
 
 def seedRandom(seed):
     # NOTE: This gets us very close to deterministic but there are some small differences in 1e-4 and smaller scales

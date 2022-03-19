@@ -235,14 +235,16 @@ class ODFSingleV3SH(torch.nn.Module):
         if self.pos_enc:
             self.pos_enc_layers = [4]
             self.input_size = 120
+            self.skip_connect = [4]
         else:
             self.pos_enc_layers = []
+            self.skip_connect = [4]
 
         # Define the main network body
         main_layers = []
         main_layers.append(nn.Linear(input_size//2, hidden_size))
         for l in range(n_layers - 1):
-            if l + 2 in self.pos_enc_layers:
+            if l + 2 in self.pos_enc_layers or l + 2 in self.skip_connect:
                 main_layers.append(nn.Linear(hidden_size + input_size//2, hidden_size))
             else:
                 main_layers.append(nn.Linear(hidden_size, hidden_size))
@@ -250,21 +252,21 @@ class ODFSingleV3SH(torch.nn.Module):
 
         # Define the intersection head
         intersection_layers = [
-            nn.Linear(hidden_size, hidden_size),
+            #nn.Linear(hidden_size, hidden_size),
             nn.Linear(hidden_size, n_intersections*(self.degrees[1]+1)**2)
         ]
         self.intersection_head = nn.ModuleList(intersection_layers)
 
         # Define the depth head
         depth_layers = [
-            nn.Linear(hidden_size, hidden_size),
+            #nn.Linear(hidden_size, hidden_size),
             nn.Linear(hidden_size, n_intersections*(self.degrees[0]+1)**2)
         ]
         self.depth_head = nn.ModuleList(depth_layers)
 
         self.relu = nn.ReLU()
         # No layernorm for now
-        # self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+        self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
 
     def forward(self, input):
         Input = input
@@ -273,6 +275,7 @@ class ODFSingleV3SH(torch.nn.Module):
         B = len(Input)
 
         CollateList = [None] * B
+        features = None
         for b in range(B):
             if not self.pos_enc:
                 # only use start point
@@ -282,25 +285,27 @@ class ODFSingleV3SH(torch.nn.Module):
                 x = o2utils.positional_encoding_tensor(Input[b][:, :3], L=10)
                 BInput = o2utils.positional_encoding_tensor(Input[b][:, :3], L=10)
             for i in range(len(self.network)):
-                if i + 1 in self.pos_enc_layers:
+                if i + 1 in self.pos_enc_layers or i + 1 in self.skip_connect:
                     x = self.network[i](torch.cat([BInput, x], dim=1))
                 else:
                     x = self.network[i](x)
                 x = self.relu(x)
-                # x = self.layernorm(x)
+                x = self.layernorm(x)
+                if i == 1:
+                    features = x
 
             # intersection head
-            intersect_coeff = self.intersection_head[0](x)
-            intersect_coeff = self.relu(intersect_coeff)
+            intersect_coeff = self.intersection_head[0](features)
+            #intersect_coeff = self.relu(intersect_coeff)
             # intersections = self.layernorm(intersections)
-            intersect_coeff = self.intersection_head[1](intersect_coeff)
+            #intersect_coeff = self.intersection_head[1](intersect_coeff)
             # intersections = torch.sigmoid(intersections)
 
             # depth head
             depth_coeff = self.depth_head[0](x)
-            depth_coeff = self.relu(depth_coeff)
+            #depth_coeff = self.relu(depth_coeff)
             # depths = self.layernorm(depths)
-            depth_coeff = self.depth_head[1](depth_coeff)
+            #depth_coeff = self.depth_head[1](depth_coeff)
             
             if self.return_coeff:
                 CollateList[b] = (intersect_coeff, depth_coeff)           
