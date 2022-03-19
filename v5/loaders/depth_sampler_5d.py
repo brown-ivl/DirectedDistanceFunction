@@ -198,8 +198,8 @@ class PositiveSampler():
         inToOutDepths = 0.001+torch.rand(len(inToOutCoor), 1)*0.1
         inToOutCoor[:,:3] = inToOutCoor[:,:3]+inToOutCoor[:,3:]*(self.Depths[mask_inside]-inToOutDepths) 
 
-        self.MaskPoints = torch.vstack([self.SurfacePoints, self.Coordinates[:,:3]])
-        self.MaskLabels = torch.vstack([torch.ones((self.SurfacePoints.shape[0], 1)), torch.zeros((self.Coordinates.shape[0], 1))])
+        self.MaskPoints = torch.unsqueeze(torch.vstack([self.SurfacePoints, self.Coordinates[:,:3]]), dim=2)
+        self.MaskLabels = torch.vstack([torch.ones((self.SurfacePoints.shape[0], 1))*0.5, mask_outside.reshape(-1,1).to(torch.float32)])
         self.Coordinates = torch.vstack([self.Coordinates, outToInCoor, inToOutCoor])
         self.Depths = torch.vstack([self.Depths, outToInDepths, inToOutDepths])
 

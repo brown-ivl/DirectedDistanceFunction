@@ -85,6 +85,105 @@ class ODFV5(torch.nn.Module):
         return DepthList
 
 
+class ResnetBlockConv1d(nn.Module):
+    ''' 1D-Convolutional ResNet block class.
+    Args:
+        size_in (int): input dimension
+        size_out (int): output dimension
+        size_h (int): hidden dimension
+    '''
+
+    def __init__(self, size_in):
+        super().__init__()
+        # Attributes
+        size_h = size_in
+        size_out = size_in
+
+        self.size_in = size_in
+        self.size_h = size_h
+        self.size_out = size_out
+        # Submodules
+        self.bn_0 = nn.BatchNorm1d(size_in)
+        self.bn_1 = nn.BatchNorm1d(size_h)
+
+        self.fc_0 = nn.Conv1d(size_in, size_h, 1)
+        self.fc_1 = nn.Conv1d(size_h, size_out, 1)
+        self.actvn = nn.ReLU()
+
+        # Initialization
+        nn.init.zeros_(self.fc_1.weight)
+
+    def forward(self, x):
+        net = self.fc_0(self.actvn(self.bn_0(x)))
+        dx = self.fc_1(self.actvn(self.bn_1(net)))
+
+        return x + dx
+
+
+class ODFMaskOccNet(torch.nn.Module):
+    '''
+    Occupancy Network Based Architecture
+    Based off the the  DecoderBatchNorm class from their code (Uses BatchNorm, ResNet Blocks)
+    Doesn't include latent codes since it is used for overfitting
+    '''
+
+    def __init__(self, dim=3, hidden_size=256, leaky=False):
+        super().__init__()
+        
+        self.fc_p = nn.Conv1d(dim, hidden_size, 1)
+        self.block0 = ResnetBlockConv1d(hidden_size)
+        self.block1 = ResnetBlockConv1d(hidden_size)
+        self.block2 = ResnetBlockConv1d(hidden_size)
+        self.block3= ResnetBlockConv1d(hidden_size)
+        self.block4 = ResnetBlockConv1d(hidden_size)
+
+        self.bn = nn.BatchNorm1d(hidden_size)
+
+        self.fc_out = nn.Conv1d(hidden_size, 1, 1)
+
+        if not leaky:
+            self.actvn = nn.functional.relu
+        else:
+            self.actvn = lambda x: nn.functional.leaky_relu(x, 0.2)
+
+    def forward(self, p,):
+        # this should change the dimensions to be batch x 1 x channels (3)
+        # with these dimensions a 1D convolution will correspond to a densely connected layer applied separately to each point in the batch
+        # p = p.transpose(1,2)
+        batch_size, D, T = p.size()
+        net = self.fc_p(p)
+
+        net = self.block0(net)
+        net = self.block1(net)
+        net = self.block2(net)
+        net = self.block3(net)
+        net = self.block4(net)
+
+        out = self.fc_out(self.actvn(self.bn(net)))
+        out = out.squeeze(1)
+
+        return out
+
+class IntersectionMask3DV2(torch.nn.Module):
+    '''
+    Uses the OccNet architecture but allows for list input
+    '''
+    def __init__(self, dim=3, hidden_size=256, leaky=False):
+        super().__init__()
+        self.network = ODFMaskOccNet(dim=dim, hidden_size=hidden_size, leaky=leaky)
+
+    def forward(self, input):
+        assert isinstance(input, list)
+        B = len(input)
+
+        OccupancyList = [None]*B
+        for b in range(B):
+            x = input[b]
+            
+            OccupancyList[b] = self.network(x)
+        return OccupancyList
+
+
 class IntersectionMask3D(torch.nn.Module):
     '''
     Predicts whether a given point in 3D space lies on the object surface
