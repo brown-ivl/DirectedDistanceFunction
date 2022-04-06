@@ -42,13 +42,15 @@ class DepthLoss(nn.Module):
             #ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
             ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
             #ValidRaysIdx = torch.logical_and(PredMaskMaxConfVal > self.Thresh, ValidDepthMask.to(torch.bool)) #Use both masks
-            Loss += 5.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            #Loss += 5.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            GTDepth[torch.logical_not(ValidRaysIdx)] = 1.0
+            Loss += 5.0 * self.L2(GTDepth, PredDepth)
         Loss /= B
 
         return Loss
 
     def L2(self, labels, predictions):
-        Loss = torch.mean(torch.square(labels - predictions))
+        Loss = torch.mean(torch.square(torch.clamp(labels, min=-0.5, max=0.5) - torch.clamp(predictions, min=-0.5, max=0.5)))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
         return Loss
