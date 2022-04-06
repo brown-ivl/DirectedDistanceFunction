@@ -31,7 +31,7 @@ import v3_utils
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False):
+    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False, aug=True):
         self.FileName = name + '.zip'
         self.DataURL = DEPTH_DATASET_URL
         self.nTargetSamples = target_samples # Per image
@@ -39,6 +39,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         self.Sampler = None
         self.CoordType = coord_type # Options: 'points', 'direction', 'pluecker'
         self.ad = ad #autodecoder
+        self.aug = aug
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}, Autodecoder: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType, self.ad))
 
         self.init(root, train, download, limit)
@@ -103,8 +104,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
 
     def __getitem__(self, idx, PosEnc=None):
         DepthData = self.LoadedDepths[idx]
-
-        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
+        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc, Aug=self.aug)
 
         #Include latent vector if we are using an AutoDecoder
         if not self.ad:
