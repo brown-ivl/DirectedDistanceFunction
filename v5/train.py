@@ -16,6 +16,7 @@ from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss, MaskLoss, ODFLoss, MaskLossV2
 from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH, ODFV5, IntersectionMask3D, IntersectionMask3DV2
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
+from occnet_loader import OccNetLoader as ONL
 import v5_utils
 from infer import infer
 
@@ -179,11 +180,14 @@ if __name__ == '__main__':
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    # TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    TrainData = ONL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    # ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    ValData = ONL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=False, target_samples=Args.rays_per_shape)
+
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 

@@ -214,6 +214,9 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
     # sampled_lookvecs = np.array([[1.0,1.0,1.0],[-1.0,-1.0,-1.0]])
     # sampled_lookvecs /= np.linalg.norm(sampled_lookvecs, axis=1, keepdims=True)
 
+    # NOTE: for roughly uniform surface sampling
+    
+
     if lookvecs is not None:
         sampled_lookvecs = lookvecs
     if camcenters is not None:

@@ -226,6 +226,43 @@ class IntersectionMask3D(torch.nn.Module):
         return OccupancyList
 
 
+class IntersectionMask3DMLP(torch.nn.Module):
+    '''
+    Predicts whether a given point in 3D space lies on the object surface
+    '''
+
+    def __init__(self, n_layers=4, hidden_size=256, radius=1.25, pos_enc=True):
+        super().__init__()
+
+        self.pos_enc = pos_enc
+        self.radius = radius
+        assert (n_layers > 1)
+
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+        main_layers = []
+        main_layers.append(nn.Linear(3, hidden_size))
+        for _ in range(n_layers-2):
+            main_layers.append(nn.Linear(hidden_size, hidden_size))
+        main_layers.append(nn.Linear(hidden_size, 1))
+        self.network = nn.ModuleList(main_layers)
+
+    def forward(self, input):
+        assert isinstance(input, list)
+        B = len(input)
+
+        OccupancyList = [None]*B
+        for b in range(B):
+            x = input[b]
+
+            for i in range(0, len(self.network)):
+                x = self.network[i](self.relu(x))                
+            x = self.sigmoid(x)
+            OccupancyList[b] = x
+        return OccupancyList
+
+
 
         
         

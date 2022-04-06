@@ -68,7 +68,7 @@ def run_inference(Network, Device, coordinates):
     sigmoid = torch.nn.Sigmoid()
 
     batch_size = 5000
-    for i in range(0, coordinates.shape[0], batch_size):
+    for i in tqdm(range(0, coordinates.shape[0], batch_size)):
         DataTD = v5_utils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
 
         output = Network([DataTD])[0]
@@ -90,6 +90,7 @@ def extract_mesh_3D_mask(Network, Device, resolution=256, ground_truth=None):
     bounds_mask = np.array(bounds_mask)
 
     masks = run_inference(Network, Device, coordinates)
+    masks = -1 * masks
 
     final_masks = np.ones((bounds_mask.shape[0],))
     masks[masks < 0.5] = -1.
