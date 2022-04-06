@@ -14,7 +14,7 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss, MaskLoss, ODFLoss, MaskLossV2
-from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH, ODFV5, IntersectionMask3D, IntersectionMask3DV2
+from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH, ODFV5, IntersectionMask3D, IntersectionMask3DV2, IntersectionMask3DMLP
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 from occnet_loader import OccNetLoader as ONL
 import v5_utils
@@ -29,13 +29,16 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
     arch = hyperparameters["architecture"]
     previous_epochs = 0
 
-    odf_loss = ODFLoss()
-    mask_loss = MaskLossV2()
+    # odf_loss = ODFLoss()
+    # mask_loss = MaskLossV2()
+
+    depth_loss = DepthLoss()
+    mask_loss = MaskLoss()
 
     if "train" in loss_history:
         previous_epochs = len(loss_history["train"])
     else:
-        all_losses = ["train", "val", "train_odf", "val_odf", "train_mask", "val_mask"]
+        all_losses = ["train", "val", "train_depth", "val_depth", "train_mask", "val_mask"]
         for loss in all_losses:
             loss_history[loss] = []
 
@@ -48,33 +51,37 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
         # Train on training batches
         print("Training...")
         all_train_losses = []
-        all_train_odf_losses = []
+        all_train_depth_losses = []
         all_train_mask_losses = []
         odf_model.train()
         mask_model.train()
         for batch in tqdm(train_loader):
-            odf_coords, odf_targets, mask_coords, mask_targets = batch
+            coords, targets = batch
 
             # odf_coords = v5_utils.sendToDevice(odf_coords, device)
             # odf_targets = v5_utils.sendToDevice(odf_targets, device)
-            mask_coords = v5_utils.sendToDevice(mask_coords, device)
-            mask_targets = v5_utils.sendToDevice(mask_targets, device)
+            # mask_coords = v5_utils.sendToDevice(mask_coords, device)
+            # mask_targets = v5_utils.sendToDevice(mask_targets, device)
+            coords = v5_utils.sendToDevice(coords, device)
+            targets = v5_utils.sendToDevice(targets, device)
             optimizer.zero_grad()
 
             # #########   LOSSES   #########
-            # odf_output = odf_model(odf_coords)
-            mask_output = mask_model(mask_coords)
+            odf_output = odf_model(coords)
+
+            projected_points = [coords[i][:,:3] + coords[i][:,3:]*torch.hstack([odf_output[i],]*3) for i in range(len(coords))]
+            mask_output = mask_model(projected_points)
             # print(len(mask_output))
             # print([torch.mean(mask_output[i]) for i in range(len(mask_output))])
             # print(f"Mean Mask: {sum([torch.mean(mask_output[i]) for i in range(len(mask_output))])/len(mask_output)}")
 
-            # batch_odf_loss = odf_loss(odf_output, odf_targets)
-            batch_mask_loss = mask_loss(mask_output, mask_targets)
+            batch_depth_loss = depth_loss(odf_output, targets)
+            batch_mask_loss = mask_loss(mask_output, targets)
 
-            # all_train_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
+            all_train_depth_losses.append(batch_depth_loss.detach().cpu().numpy())
             all_train_mask_losses.append(batch_mask_loss.detach().cpu().numpy())
-            # train_loss = batch_odf_loss + batch_mask_loss
-            train_loss = batch_mask_loss
+            train_loss = batch_depth_loss + batch_mask_loss
+            # train_loss = batch_mask_loss
             all_train_losses.append(train_loss.detach().cpu().numpy())
             train_loss.backward()
             optimizer.step()
@@ -85,46 +92,49 @@ def train(save_dir, name, odf_model, mask_model, optimizer, train_loader, val_lo
         # Validate on validation batches
         print("Validation...")
         all_val_losses = []
-        all_val_odf_losses = []
+        all_val_depth_losses = []
         all_val_mask_losses = []
         odf_model.eval()
         mask_model.eval()
         for batch in tqdm(val_loader):
-            odf_coords, odf_targets, mask_coords, mask_targets = batch
+            coords, targets = batch
 
             # odf_coords = v5_utils.sendToDevice(odf_coords, device)
             # odf_targets = v5_utils.sendToDevice(odf_targets, device)
-            mask_coords = v5_utils.sendToDevice(mask_coords, device)
-            mask_targets = v5_utils.sendToDevice(mask_targets, device)
+            # mask_coords = v5_utils.sendToDevice(mask_coords, device)
+            # mask_targets = v5_utils.sendToDevice(mask_targets, device)
+            coords = v5_utils.sendToDevice(coords, device)
+            targets = v5_utils.sendToDevice(targets, device)
 
             # #########   LOSSES   #########
-            # odf_output = odf_model(odf_coords)
-            mask_output = mask_model(mask_coords)
+            odf_output = odf_model(coords)
+            projected_points = [coords[i][:,:3] + coords[i][:,3:]*torch.hstack([odf_output[i],]*3) for i in range(len(coords))]
+            mask_output = mask_model(projected_points)
 
-            # batch_odf_loss = odf_loss(odf_output, odf_targets)
-            batch_mask_loss = mask_loss(mask_output, mask_targets)
+            batch_depth_loss = depth_loss(odf_output, targets)
+            batch_mask_loss = mask_loss(mask_output, targets)
 
 
-            # all_val_odf_losses.append(batch_odf_loss.detach().cpu().numpy())
+            all_val_depth_losses.append(batch_depth_loss.detach().cpu().numpy())
             all_val_mask_losses.append(batch_mask_loss.detach().cpu().numpy())
-            # val_loss = batch_odf_loss + batch_mask_loss
-            val_loss = batch_mask_loss
+            val_loss = batch_depth_loss + batch_mask_loss
+            # val_loss = batch_mask_loss
             all_val_losses.append(val_loss.detach().cpu().numpy())
         print(f"Validation Loss: {np.mean(np.asarray(all_val_losses)):.5f}\n")
 
         # track manually for matplotlib visualization
         loss_history["train"].append(np.mean(np.asarray(all_train_losses)))
         loss_history["val"].append(np.mean(np.asarray(all_val_losses)))
-        # loss_history["train_odf"].append(np.mean(np.asarray(all_train_odf_losses)))
-        # loss_history["val_odf"].append(np.mean(np.asarray(all_val_odf_losses)))
+        loss_history["train_depth"].append(np.mean(np.asarray(all_train_depth_losses)))
+        loss_history["val_depth"].append(np.mean(np.asarray(all_val_depth_losses)))
         loss_history["train_mask"].append(np.mean(np.asarray(all_train_mask_losses)))
         loss_history["val_mask"].append(np.mean(np.asarray(all_val_mask_losses)))
 
         # track using weights and biases
         loss_dict = {"train_loss": np.mean(np.asarray(all_train_losses)),
                     "val_loss": np.mean(np.asarray(all_val_losses)),
-                    # "train_odf_loss": np.mean(np.asarray(all_train_odf_losses)),
-                    # "val_odf_loss": np.mean(np.asarray(all_val_odf_losses)),
+                    "train_depth_loss": np.mean(np.asarray(all_train_depth_losses)),
+                    "val_depth_loss": np.mean(np.asarray(all_val_depth_losses)),
                     "train_mask_loss": np.mean(np.asarray(all_train_mask_losses)),
                     "val_mask_loss": np.mean(np.asarray(all_val_mask_losses)),
                     }
@@ -168,7 +178,8 @@ if __name__ == '__main__':
 
     if Args.arch == 'standard':
         NeuralODF = ODFV5(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
-        Mask3D = IntersectionMask3DV2(dim=3, hidden_size=256)
+        # Mask3D = IntersectionMask3DV2(dim=3, hidden_size=256)
+        Mask3D = IntersectionMask3DMLP(n_layers=3, pos_enc=False)
     # elif Args.arch == 'constant':
     #     NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     # elif Args.arch == 'SH':
@@ -180,13 +191,13 @@ if __name__ == '__main__':
 
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    # TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
-    TrainData = ONL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape)
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    # TrainData = ONL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    # ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
-    ValData = ONL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=False, target_samples=Args.rays_per_shape)
+    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    # ValData = ONL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=False, target_samples=Args.rays_per_shape)
 
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))

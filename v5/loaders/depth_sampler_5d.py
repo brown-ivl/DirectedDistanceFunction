@@ -127,10 +127,13 @@ class DepthMapSampler():
         return self.Coordinates[item], (self.Intersects[item], self.Depths[item])
 
     def __len__(self):
-        return len(self.Depths)\
+        return len(self.Depths)
 
 
 class PositiveSampler():
+    '''
+    Samples only intersecting rays
+    '''
     def __init__(self, NPData, TargetRays, UsePosEnc=False):
         self.NPData = NPData
         self.nTargetRays = TargetRays
