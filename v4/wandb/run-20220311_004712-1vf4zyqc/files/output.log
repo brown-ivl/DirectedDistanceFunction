@@ -1,7 +1,0 @@
-
-[ INFO ]: Seeding RNGs with 42
-[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
-Traceback (most recent call last):
-  File "/gpfs/home/clu52/new/DirectedDistanceFunction/v4/train.py", line 189, in <module>
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, additional_intersections=Args.additional_intersections, near_surface_threshold=Args.near_surface_threshold, tangent_rays_ratio=Args.tangent_rays_ratio)
-TypeError: __init__() got an unexpected keyword argument 'additional_intersections'

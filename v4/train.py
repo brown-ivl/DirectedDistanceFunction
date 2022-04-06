@@ -30,7 +30,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         previous_epochs = len(loss_history["train"])
     else:
         all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection"]
-        if arch == "constant":
+        if "constant" in arch:
             all_losses += ["train_dfr", "val_dfr", "train_cr", "val_cr"]
         for loss in all_losses:
             loss_history[loss] = []
@@ -66,7 +66,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             train_intersection_loss = intersection_loss_fn(output, targets)
             all_train_intersection_losses.append(train_intersection_loss.detach().cpu().numpy())
             train_loss = train_depth_loss + train_intersection_loss
-            if arch == "constant":
+            if 'constant' in arch:
                 train_dfr_loss = dfr_loss_fn(model, data)
                 all_train_dfr_losses.append(train_dfr_loss.detach().cpu().numpy())
                 train_cr_loss = cr_loss_fn(model, data)
@@ -99,7 +99,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             val_intersection_loss = intersection_loss_fn(output, targets)
             all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
             val_loss = val_depth_loss + val_intersection_loss
-            if arch == "constant":
+            if "constant" in arch:
                 val_dfr_loss = dfr_loss_fn(model, data)
                 all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
                 val_cr_loss = cr_loss_fn(model, data)
@@ -115,7 +115,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         loss_history["val_depth"].append(np.mean(np.asarray(all_val_depth_losses)))
         loss_history["train_intersection"].append(np.mean(np.asarray(all_train_intersection_losses)))
         loss_history["val_intersection"].append(np.mean(np.asarray(all_val_intersection_losses)))
-        if arch == "constant":
+        if "constant" in arch:
             loss_history["train_dfr"].append(np.mean(np.asarray(all_train_dfr_losses)))
             loss_history["val_dfr"].append(np.mean(np.asarray(all_val_dfr_losses)))
             loss_history["train_cr"].append(np.mean(np.asarray(all_train_cr_losses)))
@@ -129,7 +129,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
                     "train_intersection_loss": np.mean(np.asarray(all_train_intersection_losses)),
                     "val_intersection_loss": np.mean(np.asarray(all_val_intersection_losses)),
                     }
-        if arch == "constant":
+        if "constant" in arch:
             loss_dict.update({"train_dfr_loss": np.mean(np.asarray(all_train_dfr_losses)),
                     "val_dfr_loss": np.mean(np.asarray(all_val_dfr_losses)),
                     "train_cr_loss": np.mean(np.asarray(all_train_cr_losses)),
@@ -165,7 +165,7 @@ if __name__ == '__main__':
         exit()
 
     #wandb.init(project=Args.dataset, entity="neural-odf")
-    wandb.init(project="bunny", entity="neural-odf")
+    wandb.init(project="torus", entity="neural-odf")
     wandb.run.name = Args.expt_name
     wandb.run.save()
 

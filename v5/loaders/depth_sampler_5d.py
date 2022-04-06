@@ -127,10 +127,13 @@ class DepthMapSampler():
         return self.Coordinates[item], (self.Intersects[item], self.Depths[item])
 
     def __len__(self):
-        return len(self.Depths)\
+        return len(self.Depths)
 
 
 class PositiveSampler():
+    '''
+    Samples only intersecting rays
+    '''
     def __init__(self, NPData, TargetRays, UsePosEnc=False):
         self.NPData = NPData
         self.nTargetRays = TargetRays
@@ -198,8 +201,10 @@ class PositiveSampler():
         inToOutDepths = 0.001+torch.rand(len(inToOutCoor), 1)*0.1
         inToOutCoor[:,:3] = inToOutCoor[:,:3]+inToOutCoor[:,3:]*(self.Depths[mask_inside]-inToOutDepths) 
 
-        self.MaskPoints = torch.unsqueeze(torch.vstack([self.SurfacePoints, self.Coordinates[:,:3]]), dim=2)
-        self.MaskLabels = torch.vstack([torch.ones((self.SurfacePoints.shape[0], 1))*0.5, mask_outside.reshape(-1,1).to(torch.float32)])
+        # self.MaskPoints = torch.unsqueeze(torch.vstack([self.SurfacePoints, self.Coordinates[:,:3]]), dim=2)
+        # self.MaskLabels = torch.vstack([torch.ones((self.SurfacePoints.shape[0], 1))*0.5, mask_outside.reshape(-1,1).to(torch.float32)])
+        self.MaskPoints = torch.unsqueeze(self.Coordinates[:,:3], dim=2)
+        self.MaskLabels = mask_outside.reshape(-1,1).to(torch.float32)
         self.Coordinates = torch.vstack([self.Coordinates, outToInCoor, inToOutCoor])
         self.Depths = torch.vstack([self.Depths, outToInDepths, inToOutDepths])
 
