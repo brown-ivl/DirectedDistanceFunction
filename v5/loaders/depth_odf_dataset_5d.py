@@ -3,7 +3,7 @@ import argparse
 import zipfile
 import glob
 import random
-import sys
+import sys, os
 import trimesh
 from tqdm import tqdm
 
@@ -17,6 +17,7 @@ from EaselModule import EaselModule
 from Easel import Easel
 import OpenGL.GL as gl
 import OpenGL.arrays.vbo as glvbo
+from v4.loaders.depth_sampler_5d import DepthMapSampler
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, '../'))
@@ -52,11 +53,15 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
 
     @staticmethod
     def collate_fn(batch):
-        coords = [item[0] for item in batch]
-        depths = [item[1] for item in batch]
-        mask_points = [item[2] for item in batch]
-        mask_labels = [item[3] for item in batch]
-        return (coords, depths, mask_points, mask_labels)
+        # coords = [item[0] for item in batch]
+        # depths = [item[1] for item in batch]
+        # mask_points = [item[2] for item in batch]
+        # mask_labels = [item[3] for item in batch]
+        # return (coords, depths, mask_points, mask_labels)
+        data = [item[0] for item in batch]
+        target = [item[1] for item in batch]
+        return (data, target)
+
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -106,11 +111,11 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
     def __getitem__(self, idx, PosEnc=None):
         DepthData = self.LoadedDepths[idx]
 
-        self.Sampler = PositiveSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
+        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
 
         #Include latent vector if we are using an AutoDecoder
         if not self.ad:
-            return (self.Sampler.Coordinates, self.Sampler.Depths, self.Sampler.MaskPoints, self.Sampler.MaskLabels)
+            return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
             return (self.Sampler.Coordinates, torch.tensor([idx]*self.Sampler.Coordinates.size()[0])), (self.Sampler.Intersects, self.Sampler.Depths)
 

@@ -36,10 +36,11 @@ class MaskLoss(nn.Module):
         B = len(target)
         losses = []
         for b in range(B):
+            GTMask, _ = target[b]
             # print("One instance")
             # print(output[b][:10])
             # print(self.bce_loss(output[b][:10], target[b][:10]))
-            losses.append(self.bce_loss(output[b], target[b]))
+            losses.append(self.bce_loss(output[b], GTMask))
         return torch.mean(torch.cat(losses))
 
 class MaskLossV2(nn.Module):
@@ -72,19 +73,12 @@ class DepthLoss(nn.Module):
             # Single batch version
             GTMask, GTDepth = target[b]
 
-            if len(output[b]) == 2:
-                PredMaskConf, PredDepth = output[b]
-            else:
-                PredMaskConf, PredDepth, PredMaskConst, PredConst = output[b]
-                PredDepth += self.Sigmoid(PredMaskConst)*PredConst
+            PredDepth = output[b]
 
 
-            #PredMaskConfSig = self.Sigmoid(PredMaskConf)
-            #PredMaskMaxConfVal = PredMaskConfSig
-            #ValidRaysIdx = PredMaskMaxConfVal > self.Thresh  # Use predicted mask
+
             ValidRaysIdx = GTMask.to(torch.bool)  # Use ground truth mask
-            #ValidRaysIdx = torch.logical_and(PredMaskMaxConfVal > self.Thresh, ValidDepthMask.to(torch.bool)) #Use both masks
-            Loss += 5.0 * self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
+            Loss += self.L2(GTDepth[ValidRaysIdx], PredDepth[ValidRaysIdx])
         Loss /= B
 
         return Loss
