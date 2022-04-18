@@ -1,0 +1,13 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+Traceback (most recent call last):
+  File "train_ad.py", line 183, in <module>
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, ad=True, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/loaders/depth_odf_dataset_5d.py", line 52, in __init__
+    self.loadData()
+  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/loaders/depth_odf_dataset_5d.py", line 123, in loadData
+    print(FileName)
+  File "/users/thouchen/.conda/envs/bodymodel/lib/python3.8/site-packages/numpy/lib/npyio.py", line 424, in load
+    magic = fid.read(N)
+KeyboardInterrupt

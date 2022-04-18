@@ -1,0 +1,23 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+DATA SIZE: 1000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: False
+[ INFO ]: Training data has 1000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+----------------------------- EPOCH: 1/10 -----------------------------
+Training...
+
+
+
+ 79%|██████████████████████████████████▏        | 50/63 [00:07<00:01,  9.32it/s]
+Training Loss: 0.92729
+100%|███████████████████████████████████████████| 63/63 [00:08<00:00,  7.33it/s]
+ 62%|███████████████████████████                 | 8/13 [00:00<00:00, 14.11it/s]
+100%|███████████████████████████████████████████| 13/13 [00:00<00:00, 14.49it/s]
+Traceback (most recent call last):
+  File "train.py", line 227, in <module>
+    train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
+  File "train.py", line 142, in train
+    v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history)
+TypeError: checkpoint() missing 1 required positional argument: 'loss_history'

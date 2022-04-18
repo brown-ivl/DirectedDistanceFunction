@@ -1,0 +1,14 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+DATA SIZE: 500
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[ INFO ]: Training data has 500 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+Loading checkpoint airplane_ad_test2_checkpoint_000001.tar
+Traceback (most recent call last):
+  File "train_ad.py", line 221, in <module>
+    lat_vecs.load_state_dict(checkpoint_dict["latent_vectors"])
+  File "/users/thouchen/.conda/envs/bodymodel/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1379, in load_state_dict
+    state_dict = state_dict.copy()
+AttributeError: 'tuple' object has no attribute 'copy'

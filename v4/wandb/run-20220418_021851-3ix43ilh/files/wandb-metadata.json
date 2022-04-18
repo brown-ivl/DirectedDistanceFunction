@@ -1,0 +1,35 @@
+{
+    "os": "Linux-3.10.0-1062.el7.x86_64-x86_64-with-glibc2.10",
+    "python": "3.8.10",
+    "heartbeatAt": "2022-04-18T06:18:52.964187",
+    "startedAt": "2022-04-18T06:18:51.843885",
+    "docker": null,
+    "gpu": "NVIDIA GeForce GTX 1080 Ti",
+    "gpu_count": 2,
+    "cpu_count": 32,
+    "cuda": null,
+    "args": [
+        "--expt-name",
+        "airplane_ad_test",
+        "--input-dir",
+        "/gpfs/data/ssrinath/neural-odf/data/shapenetv2",
+        "--dataset",
+        "airplane_02691156",
+        "--output-dir",
+        "/gpfs/data/ssrinath/neural-odf/output",
+        "--epochs",
+        "10"
+    ],
+    "state": "running",
+    "program": "train_ad.py",
+    "codePath": "v4/train_ad.py",
+    "git": {
+        "remote": "https://github.com/brown-ivl/DirectedDistanceFunction.git",
+        "commit": "416d68c294406394a3903420fa15a3422f615acc"
+    },
+    "email": "trevormhouchens@gmail.com",
+    "root": "/gpfs/home/thouchen/DirectedDistanceFunction",
+    "host": "gpu717.oscar.ccv.brown.edu",
+    "username": "thouchen",
+    "executable": "/users/thouchen/.conda/envs/bodymodel/bin/python"
+}

@@ -75,9 +75,9 @@ class DepthMapSampler():
         SampledNegDir /= SampledNegDirNorm[:, np.newaxis]
         SampledNegDepths = np.zeros(len(SampledNegEndPts))
         SampledNegIntersects = np.zeros((len(SampledNegEndPts), 1))
-        if self.Interior:
+        # if self.Interior:
             # All interior rays should intersect
-            assert(AllNegIdx.shape[0] == 0)
+            # assert(AllNegIdx.shape[0] == 0)
             # SampledNegDir = -1. * SampledNegDir
             # SampledNegDepths =-1. * SampledNegDepths
 

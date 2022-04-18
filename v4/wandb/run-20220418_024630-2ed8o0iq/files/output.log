@@ -1,0 +1,34 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+DATA SIZE: 500
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+[ INFO ]: Training data has 500 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 200 shapes and 10 rays per sample.
+ 28%|████████████▍                               | 9/32 [00:01<00:03,  6.90it/s]
+----------------------------- EPOCH: 1/2 -----------------------------
+
+ 78%|█████████████████████████████████▌         | 25/32 [00:03<00:00,  8.51it/s]
+Training Loss: 1.19897
+Validation...
+100%|███████████████████████████████████████████| 32/32 [00:04<00:00,  7.79it/s]
+100%|███████████████████████████████████████████| 13/13 [00:00<00:00, 13.24it/s]
+QStandardPaths: XDG_RUNTIME_DIR not set, defaulting to '/tmp/runtime-thouchen'
+ 44%|██████████████████▊                        | 14/32 [00:01<00:02,  8.61it/s]
+----------------------------- EPOCH: 2/2 -----------------------------
+100%|███████████████████████████████████████████| 32/32 [00:03<00:00,  8.90it/s]
+  0%|                                                    | 0/13 [00:00<?, ?it/s]
+Training Loss: 0.51622
+100%|███████████████████████████████████████████| 13/13 [00:00<00:00, 13.22it/s]
+ 92%|███████████████████████████████████████▋   | 12/13 [00:00<00:00, 13.19it/s]
+Validation Loss: 0.45624
+Loading checkpoint airplane_ad_test2_checkpoint_000001.tar
+100%|███████████████████████████████████████████| 13/13 [00:00<00:00, 13.69it/s]
+Traceback (most recent call last):
+  File "train_ad.py", line 269, in <module>
+    losses, depth_error, precision, recall, accuracy, f1 = infer_ad(Args.expt_name, NeuralODF, lat_vecs, ValDataLoader, hyperparameters, Device)
+  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/infer.py", line 197, in infer_ad
+    depth_error = avg_depth_error(all_outputs, all_targets)
+  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/infer.py", line 54, in avg_depth_error
+    GTMask, GTDepth, ValidDepthMask = target[b]
+ValueError: not enough values to unpack (expected 3, got 2)

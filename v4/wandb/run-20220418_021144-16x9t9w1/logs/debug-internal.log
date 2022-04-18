@@ -1,0 +1,47 @@
+2022-04-18 02:11:45,872 INFO    MainThread:17168 [internal.py:wandb_internal():89] W&B internal server running at pid: 17168, started at: 2022-04-18 02:11:45.872065
+2022-04-18 02:11:45,876 DEBUG   SenderThread:17168 [sender.py:send():235] send: header
+2022-04-18 02:11:45,876 INFO    WriterThread:17168 [datastore.py:open_for_write():77] open: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/run-16x9t9w1.wandb
+2022-04-18 02:11:45,877 DEBUG   HandlerThread:17168 [handler.py:handle_request():131] handle_request: check_version
+2022-04-18 02:11:45,877 DEBUG   SenderThread:17168 [sender.py:send_request():249] send_request: check_version
+2022-04-18 02:11:45,936 DEBUG   SenderThread:17168 [sender.py:send():235] send: run
+2022-04-18 02:11:46,114 DEBUG   HandlerThread:17168 [handler.py:handle_request():131] handle_request: run_start
+2022-04-18 02:11:46,117 INFO    SenderThread:17168 [dir_watcher.py:__init__():169] watching files in: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files
+2022-04-18 02:11:46,118 INFO    SenderThread:17168 [sender.py:_start_run_threads():809] run started: 16x9t9w1 with start time 1650262304
+2022-04-18 02:11:46,118 DEBUG   SenderThread:17168 [sender.py:send():235] send: summary
+2022-04-18 02:11:46,118 INFO    SenderThread:17168 [sender.py:_save_file():944] saving file wandb-summary.json with policy end
+2022-04-18 02:11:46,120 DEBUG   HandlerThread:17168 [meta.py:__init__():36] meta init
+2022-04-18 02:11:46,120 DEBUG   HandlerThread:17168 [meta.py:__init__():50] meta init done
+2022-04-18 02:11:46,121 DEBUG   HandlerThread:17168 [meta.py:probe():210] probe
+2022-04-18 02:11:46,131 DEBUG   HandlerThread:17168 [meta.py:_setup_git():200] setup git
+2022-04-18 02:11:46,162 DEBUG   HandlerThread:17168 [meta.py:_setup_git():207] setup git done
+2022-04-18 02:11:46,162 DEBUG   HandlerThread:17168 [meta.py:_save_pip():54] save pip
+2022-04-18 02:11:46,163 DEBUG   HandlerThread:17168 [meta.py:_save_pip():68] save pip done
+2022-04-18 02:11:46,163 DEBUG   HandlerThread:17168 [meta.py:_save_conda():75] save conda
+2022-04-18 02:11:47,119 INFO    Thread-8  :17168 [dir_watcher.py:_on_file_created():217] file/dir created: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/conda-environment.yaml
+2022-04-18 02:11:47,119 INFO    Thread-8  :17168 [dir_watcher.py:_on_file_created():217] file/dir created: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/requirements.txt
+2022-04-18 02:11:47,120 INFO    Thread-8  :17168 [dir_watcher.py:_on_file_created():217] file/dir created: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/wandb-summary.json
+2022-04-18 02:11:47,319 WARNING MainThread:17168 [internal.py:wandb_internal():152] Internal process interrupt: 1
+2022-04-18 02:11:47,394 DEBUG   HandlerThread:17168 [meta.py:_save_conda():85] save conda done
+2022-04-18 02:11:47,394 DEBUG   HandlerThread:17168 [meta.py:probe():248] probe done
+2022-04-18 02:11:47,400 DEBUG   SenderThread:17168 [sender.py:send():235] send: files
+2022-04-18 02:11:47,400 INFO    SenderThread:17168 [sender.py:_save_file():944] saving file wandb-metadata.json with policy now
+2022-04-18 02:11:47,847 INFO    Thread-11 :17168 [upload_job.py:push():137] Uploaded file /tmp/tmp61yve5kawandb/a5tyg11f-wandb-metadata.json
+2022-04-18 02:11:48,118 INFO    Thread-8  :17168 [dir_watcher.py:_on_file_created():217] file/dir created: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/wandb-metadata.json
+2022-04-18 02:11:58,696 WARNING MainThread:17168 [internal.py:wandb_internal():152] Internal process interrupt: 2
+2022-04-18 02:11:58,696 ERROR   MainThread:17168 [internal.py:wandb_internal():155] Internal process interrupted.
+2022-04-18 02:11:59,401 INFO    WriterThread:17168 [datastore.py:close():281] close: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/run-16x9t9w1.wandb
+2022-04-18 02:11:59,401 INFO    SenderThread:17168 [sender.py:finish():1075] shutting down sender
+2022-04-18 02:11:59,402 INFO    SenderThread:17168 [dir_watcher.py:finish():283] shutting down directory watcher
+2022-04-18 02:11:59,412 INFO    HandlerThread:17168 [handler.py:finish():739] shutting down handler
+2022-04-18 02:12:00,120 INFO    SenderThread:17168 [dir_watcher.py:finish():313] scan: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files
+2022-04-18 02:12:00,120 INFO    SenderThread:17168 [dir_watcher.py:finish():327] scan save: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/conda-environment.yaml conda-environment.yaml
+2022-04-18 02:12:00,120 INFO    SenderThread:17168 [dir_watcher.py:finish():327] scan save: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/wandb-metadata.json wandb-metadata.json
+2022-04-18 02:12:00,120 INFO    SenderThread:17168 [dir_watcher.py:finish():327] scan save: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/config.yaml config.yaml
+2022-04-18 02:12:00,120 INFO    SenderThread:17168 [dir_watcher.py:finish():327] scan save: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/requirements.txt requirements.txt
+2022-04-18 02:12:00,123 INFO    SenderThread:17168 [dir_watcher.py:finish():327] scan save: /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/wandb-summary.json wandb-summary.json
+2022-04-18 02:12:00,126 INFO    SenderThread:17168 [file_pusher.py:finish():177] shutting down file pusher
+2022-04-18 02:12:00,127 INFO    SenderThread:17168 [file_pusher.py:join():182] waiting for file pusher
+2022-04-18 02:12:00,517 INFO    Thread-13 :17168 [upload_job.py:push():137] Uploaded file /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/requirements.txt
+2022-04-18 02:12:00,522 INFO    Thread-14 :17168 [upload_job.py:push():137] Uploaded file /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/wandb-summary.json
+2022-04-18 02:12:00,592 INFO    Thread-12 :17168 [upload_job.py:push():137] Uploaded file /gpfs/home/thouchen/DirectedDistanceFunction/v4/wandb/run-20220418_021144-16x9t9w1/files/config.yaml
+2022-04-18 02:12:01,237 INFO    MainThread:17168 [internal.py:handle_exit():79] Internal process exited

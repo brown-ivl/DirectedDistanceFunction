@@ -1,0 +1,20 @@
+[ INFO ]: Seeding RNGs with 42
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
+DATA SIZE: 2000
+[ INFO ]: Loading DepthODFDatasetLoader dataset. Positional Encoding: False, Coordinate Type: direction, Autodecoder: True
+[ INFO ]: Training data has 2000 shapes and 1000 rays per sample.
+[ INFO ]: Validation data has 500 shapes and 10 rays per sample.
+----------------------------- EPOCH: 1/10 -----------------------------
+Training...
+  0%|                                                   | 0/125 [00:00<?, ?it/s]
+Traceback (most recent call last):
+  File "train_ad.py", line 261, in <module>
+    train(Args.output_dir, Args.expt_name, NeuralODF, lat_vecs, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
+  File "train_ad.py", line 64, in train
+    output = model(data, lat_vecs)
+  File "/users/thouchen/.conda/envs/bodymodel/lib/python3.8/site-packages/torch/nn/modules/module.py", line 1051, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/models/odf_models.py", line 163, in forward
+    lat_vecs = embeddings(indices)
+UnboundLocalError: local variable 'indices' referenced before assignment

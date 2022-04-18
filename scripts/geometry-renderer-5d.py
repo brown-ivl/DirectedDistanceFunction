@@ -53,8 +53,8 @@ def make_mesh(vertices, faces):
 # %%
 # data loading
 
-# common_objects_data_path = '/gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/data/'
-common_objects_data_path = 'F:\\ivl-data\\common-3d-test-models\\data\\'
+common_objects_data_path = '/gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/data/'
+# common_objects_data_path = 'F:\\ivl-data\\common-3d-test-models\\data\\'
 
 
 def load_object(obj_name, data_path=common_objects_data_path):

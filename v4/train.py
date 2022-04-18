@@ -164,8 +164,8 @@ if __name__ == '__main__':
         Parser.print_help()
         exit()
 
-    #wandb.init(project=Args.dataset, entity="neural-odf")
-    wandb.init(project="torus", entity="neural-odf")
+    wandb.init(project=Args.dataset, entity="neural-odf")
+    #wandb.init(project="torus", entity="neural-odf")
     wandb.run.name = Args.expt_name
     wandb.run.save()
 

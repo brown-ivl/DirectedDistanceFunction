@@ -105,7 +105,7 @@ def save_checkpoint(save_dir, checkpoint_dict):
         f.write(f"{epoch}${checkpoint_dict['loss_history']['val'][-1]}")
         f.close()
 
-def build_checkpoint(model, name, epoch, optimizer, loss_history):
+def build_checkpoint(model, latent_vectors, name, epoch, optimizer, loss_history):
     checkpoint_dict = {
         'name': name,
         'epoch': epoch,
@@ -113,10 +113,12 @@ def build_checkpoint(model, name, epoch, optimizer, loss_history):
         'optimizer_state_dict': optimizer.state_dict(),
         'loss_history': loss_history,
     }
+    if latent_vectors is not None:
+        checkpoint_dict["latent_vectors"] = latent_vectors.state_dict()
     return checkpoint_dict
 
-def checkpoint(model, save_dir, name, epoch, optimizer, loss_history):
-    checkpoint_dict = build_checkpoint(model, name, epoch, optimizer, loss_history)
+def checkpoint(model, save_dir, name, epoch, optimizer, loss_history, latent_vectors=None):
+    checkpoint_dict = build_checkpoint(model, latent_vectors, name, epoch, optimizer, loss_history)
     save_checkpoint(save_dir, checkpoint_dict)
 
 def expandTilde(Path):
