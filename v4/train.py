@@ -165,7 +165,11 @@ if __name__ == '__main__':
         exit()
 
     wandb.init(project=Args.dataset, entity="neural-odf")
+<<<<<<< HEAD
     # wandb.init(project="torus", entity="neural-odf")
+=======
+    #wandb.init(project="torus", entity="neural-odf")
+>>>>>>> 349f9b76a2cae1605cc9e1b9365d01d140698f9b
     wandb.run.name = Args.expt_name
     wandb.run.save()
 

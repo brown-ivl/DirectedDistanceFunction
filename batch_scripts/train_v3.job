@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -p gpu --gres=gpu:1
+#SBATCH -p 3090-gcondo --gres=gpu:1
 #SBATCH -t 12:00:00
 #SBATCH --mem=64G
 #SBATCH -n 2
 #SBATCH -C geforce3090
 
 module load cuda/11.1.1
-python ../v3/train.py --expt-name mar03_armadillo_standard_additional_intersections --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d/ --dataset armadillo --output-dir /gpfs/data/ssrinath/neural-odf/output/ --arch standard --epochs 500 -s 42 --rays-per-shape 1000 --additional-intersections 3
+python ../v3/train.py --expt-name mar09_bunny_standard22_scheduled_nearsurface --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d/ --dataset bunny_watertight_small --output-dir /gpfs/data/ssrinath/neural-odf/output/ --arch standard --epochs 500 -s 42 --rays-per-shape 1000 --schedule 100 --tangent-rays-ratio 0.0 --additional-intersections 0 --n-layers 8 --learning-rate 0.0005

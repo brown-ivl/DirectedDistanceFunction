@@ -31,7 +31,7 @@ import v3_utils
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, additional_intersections=0, near_surface_threshold=-1., tangent_rays_ratio=0., usePositionalEncoding=True, coord_type='direction', ad=False):
+    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, additional_intersections=0, near_surface_threshold=-1., near_surface_fraction=0.1, tangent_rays_ratio=0., usePositionalEncoding=True, coord_type='direction', ad=False):
         self.FileName = name + '.zip'
         self.DataURL = DEPTH_DATASET_URL
         self.nTargetSamples = target_samples # Per image
@@ -42,6 +42,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         self.additional_intersections = additional_intersections
         self.near_surface_threshold = near_surface_threshold
         self.tangent_rays_ratio = tangent_rays_ratio
+        self.near_surface_fraction = near_surface_fraction
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}, Autodecoder: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType, self.ad))
 
         self.init(root, train, download, limit)
@@ -58,6 +59,9 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         data = [item[0] for item in batch]
         target = [item[1] for item in batch]
         return (data, target)
+
+    def increaseNearSurfaceFraction(self, v):
+        self.near_surface_fraction += v
 
     def loadData(self):
         # First check if unzipped directory exists
@@ -107,7 +111,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
     def __getitem__(self, idx, PosEnc=None):
         DepthData = self.LoadedDepths[idx]
 
-        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc, AdditionalIntersections=self.additional_intersections, NearSurfacePointsOffset=self.near_surface_threshold, TangentRaysRatio=self.tangent_rays_ratio)
+        self.Sampler = DepthMapSampler(DepthData, TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc, AdditionalIntersections=self.additional_intersections, NearSurfacePointsOffset=self.near_surface_threshold, NearSurfaceFraction=self.near_surface_fraction, TangentRaysRatio=self.tangent_rays_ratio)
 
         #Include latent vector if we are using an AutoDecoder
         if not self.ad:

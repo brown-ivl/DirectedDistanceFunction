@@ -1,6 +1,6 @@
 # %%
 import numpy as np
-import open3d as o3d
+# import open3d as o3d
 import trimesh
 import os, glob
 from scipy.spatial import KDTree
@@ -12,6 +12,8 @@ import pyrender
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as scipy_rotation
 import argparse
+import json
+from tqdm import tqdm
 
 # %%
 # open3d utils
@@ -53,14 +55,34 @@ def make_mesh(vertices, faces):
 # %%
 # data loading
 
-common_objects_data_path = '/gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/data/'
+# common_objects_data_path = '/gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/data/'
 # common_objects_data_path = 'F:\\ivl-data\\common-3d-test-models\\data\\'
 
+def as_mesh(scene_or_mesh):
+    """
+    Convert a possible scene to a mesh.
 
-def load_object(obj_name, data_path=common_objects_data_path):
-    obj_file = os.path.join(data_path, obj_name)
+    If conversion occurs, the returned mesh has only vertex and face data.
+    """
+    if isinstance(scene_or_mesh, trimesh.Scene):
+        if len(scene_or_mesh.geometry) == 0:
+            mesh = None  # empty scene
+        else:
+            # we lose texture information here
+            mesh = trimesh.util.concatenate(
+                tuple(trimesh.Trimesh(vertices=g.vertices, faces=g.faces)
+                    for g in scene_or_mesh.geometry.values()))
+    else:
+        assert(isinstance(scene_or_mesh, trimesh.Trimesh))
+        mesh = scene_or_mesh
+    return mesh
 
-    obj_mesh = trimesh.load(obj_file)
+
+def load_object(object_path):
+    obj_file = os.path.join(object_path, "models", "model_normalized.obj")
+
+    obj_mesh = trimesh.load_mesh(obj_file)
+    obj_mesh = as_mesh(obj_mesh)
     # obj_mesh.show()
 
     ## deepsdf normalization
@@ -117,7 +139,6 @@ def get_viewpoint_samples_5d(camcenters, lookvecs, selected_samples_count=50):
     
     center_samples = camcenters[sample_indices[:selected_samples_count]]
     look_samples = lookvecs[sample_indices[:selected_samples_count]]
-    print(center_samples.shape)
     
     
     # ray_directions = all_viewpoints / np.linalg.norm(all_viewpoints, axis=1)[:,None]
@@ -204,7 +225,7 @@ def sphere_surface_sampler(num_points, radius=1.00):
     return surface_samples
 
 
-def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200, camcenters=None, lookvecs=None, show=False):  
+def main(mesh_vertices, mesh_faces, obj_mesh, write_dir, val_start_counter=100, num_viewpoints=120, camcenters=None, lookvecs=None, show=False):  
     
     # sample viewpoints on sphere
     sampled_camcenters = sphere_interior_sampler(num_viewpoints)
@@ -239,13 +260,14 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
     line_points = np.asarray([[0., 0., 0.]])
     line_indices = np.asarray([[0, 1]])
 
-    if not os.path.exists(data_save_dir):
-        os.makedirs(os.path.join(data_save_dir))
+    if not os.path.exists(write_dir):
+        os.makedirs(os.path.join(write_dir))
+    obj_name = os.path.basename(write_dir)
     
     data_split = 'train'
     # start_counter=50
-    for iter in range(0, min(num_viewpoints, opengl_camera_pose_matrix.shape[0])): 
-        print("iter: {}/{}".format(iter, min(num_viewpoints, opengl_camera_pose_matrix.shape[0])))
+    for iter in tqdm(range(0, min(num_viewpoints, opengl_camera_pose_matrix.shape[0]))): 
+        # print("iter: {}/{}".format(iter, min(num_viewpoints, opengl_camera_pose_matrix.shape[0])))
         if iter >= val_start_counter:
             data_split = 'val'
         camera_viewpoint_pose = opengl_camera_pose_matrix[iter]
@@ -290,10 +312,10 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
         data_dict['viewpoint'] = viewpoint_samples[iter]
         data_dict['unprojected_normalized_pts'] = unprojected_3D_points
         data_dict['invalid_depth_mask'] = invalid_depth_mask
-        if not os.path.exists(os.path.join(data_save_dir, obj_name, 'depth', data_split)):
-            os.makedirs(os.path.join(data_save_dir, obj_name, 'depth', data_split))
-        print(os.path.join(data_save_dir, obj_name, 'depth', data_split, 'data_{}.npy'.format(str(iter).zfill(4))))
-        np.save(os.path.join(data_save_dir, obj_name, 'depth', data_split, 'data_{}.npy'.format(str(iter).zfill(4))), data_dict)
+        if not os.path.exists(os.path.join(write_dir, 'depth', data_split)):
+            os.makedirs(os.path.join(write_dir, 'depth', data_split))
+        # print(os.path.join(write_dir, 'depth', data_split, '{}_{}.npy'.format(obj_name, str(iter).zfill(4))))
+        np.save(os.path.join(write_dir, 'depth', data_split, '{}_{}.npy'.format(obj_name, str(iter).zfill(4))), data_dict)
 
         #     os.system('mkdir -p ' + os.path.join(renderings_save_dir, str(iter).zfill(4)))
         #     np.save(os.path.join(renderings_save_dir, str(iter).zfill(4), 'depth_map.npy'), depth)
@@ -325,39 +347,61 @@ def main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir=None, val_
 # print(f"Fraction in positive octant: {np.sum(positive)/10000000}")
 
 
-all_obj_files = glob.glob(os.path.join(common_objects_data_path, '*.obj'))
-# data_save_dir = '/gpfs/data/ssrinath/human-modeling/datasets/common-3d-test-models/rendered_data_new/'
-data_save_dir = 'F:\\ivl-data\\common-3d-test-models\\rendered-data-5d\\'
-for obj_file in all_obj_files:
-    obj_name = os.path.basename(obj_file).split('.')[0]
-    if obj_name in ["tetrahedron"]:
-        print(obj_name, "obj_name")
-        mesh_vertices, mesh_faces, obj_mesh = load_object(obj_name + '.obj')
-        is_watertight = len(trimesh.repair.broken_faces(obj_mesh)) == 0
-        if not is_watertight:
-            print(f"Skipping {obj_name}.obj because it is not watertight")
-        else:
-            main(mesh_vertices, mesh_faces, obj_mesh, obj_name, data_save_dir)
 
+# os.makedirs(path, exist_ok=True)
 
-# import numpy as np
-# data = np.load('data_0000.npy', allow_pickle=True).item()
-# print(data.keys())
-# print(data['unprojected_normalized_pts'].shape)
-# print(unprojected_normalized_pts[unprojected_normalized_pts[:,2]!=-1].shape)
+def generate_class_data(class_name, class_dir, write_dir, n_objects=1200, n_views=100):
+    '''
+    Takes in a ShapeNetCore.v2 class and renders multi-view depth images for that object
+    '''
+    object_dirs = os.listdir(class_dir)
+    # object_indices = range(len(object_dirs))
+    # random.shuffle(object_indices)
+    random.shuffle(object_dirs)
+    object_dirs = object_dirs[:n_objects]
+
+    class_write_path = os.path.join(write_dir, f"{class_name}_{os.path.basename(class_dir)}")
+
+    for i, object_name in enumerate(object_dirs):
+        full_object_path = os.path.join(class_dir, object_name)
+        object_write_path = os.path.join(class_write_path, object_name)
+
+        # load in the object mesh
+        mesh_vertices, mesh_faces, obj_mesh = load_object(full_object_path)
+
+        print(f"Object {i+1}/{n_objects}")
+        main(mesh_vertices, mesh_faces, obj_mesh, object_write_path)
 
 if __name__ == "__main__":
-    parser = argparse.argument_parser()
-    parser.add_argument("--data-dir", help="The directory with the meshes")
-    parser.add_argument("--object", help="The obj file to render")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--shapenet-dir", default="/gpfs/data/ssrinath/datasets/ShapeNetCore.v2/", help="The path to the ShapeNet V2 directory")
+    parser.add_argument("--subdir", default="02691156", type=str, help="The subdir name for the desired object") #default is airplane
+    parser.add_argument("--write-dir", default="/gpfs/data/ssrinath/neural-odf/data/shapenetv2/")
     args = parser.parse_args()
 
-    camcenters = [[3., 0., 0.]]
-    lookvecs = [[-1, 0., 0.]]
+    # Find out which object we are dumping data for
+    taxonomy_file = open(os.path.join(args.shapenet_dir, "taxonomy.json"), "r")
+    taxonomy_str = taxonomy_file.read()
+    taxonomy = json.loads(taxonomy_str)
+    class_name = None
+    for d in taxonomy:
+        if d["synsetId"] == args.subdir:
+            class_name = d["name"].split(",")[0]
+
+    if class_name == None:
+        print(f"Unable to find directory '{args.subdir}' in ShapeNetCore.v2")
+    else:
+        class_dir = os.path.join(args.shapenet_dir, args.subdir)
 
 
-    mesh_vertices, mesh_faces, obj_mesh = load_object(args.object, args.data_dir)
 
-    main(mesh_vertices, mesh_faces, obj_mesh, args.object, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200, camcenters=camcenters, lookvecs=lookvecs, show=True)
+        camcenters = [[3., 0., 0.]]
+        lookvecs = [[-1, 0., 0.]]
+
+        generate_class_data(class_name, class_dir, args.write_dir)
+
+        # mesh_vertices, mesh_faces, obj_mesh = load_object(args.object, args.data_dir)
+
+        # main(mesh_vertices, mesh_faces, obj_mesh, args.object, data_save_dir=None, val_start_counter=1000, num_viewpoints=1200, camcenters=camcenters, lookvecs=lookvecs, show=True)
 
 

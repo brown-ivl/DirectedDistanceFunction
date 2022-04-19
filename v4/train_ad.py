@@ -1,10 +1,12 @@
+from cv2 import DescriptorMatcher
 import torch
 import sys, os
 import multiprocessing as mp
 from tqdm import tqdm
 import numpy as np
 import wandb
-import math
+from torch.optim.lr_scheduler import StepLR
+
 
 FileDirPath = os.path.dirname(__file__)
 sys.path.append(os.path.join(FileDirPath, 'loaders'))
@@ -13,12 +15,13 @@ sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
 from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss
-from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
+from odf_models import ODFSingleV3, ODFADV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v3_utils
-from infer import infer
+from infer import infer, infer_ad
 
-def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_history, hyperparameters, device):
+
+def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, loss_history, hyperparameters, device, scheduler):
     
     epochs = hyperparameters["epochs"]
     arch = hyperparameters["architecture"]
@@ -28,7 +31,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         previous_epochs = len(loss_history["train"])
     else:
         all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection"]
-        if arch == "constant":
+        if "constant" in arch:
             all_losses += ["train_dfr", "val_dfr", "train_cr", "val_cr"]
         for loss in all_losses:
             loss_history[loss] = []
@@ -58,13 +61,13 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             optimizer.zero_grad()
 
             # #########   LOSSES   #########
-            output = model(data)
+            output = model(data, lat_vecs)
             train_depth_loss = depth_loss_fn(output, targets)
             all_train_depth_losses.append(train_depth_loss.detach().cpu().numpy())
             train_intersection_loss = intersection_loss_fn(output, targets)
             all_train_intersection_losses.append(train_intersection_loss.detach().cpu().numpy())
             train_loss = train_depth_loss + train_intersection_loss
-            if arch == "constant":
+            if 'constant' in arch:
                 train_dfr_loss = dfr_loss_fn(model, data)
                 all_train_dfr_losses.append(train_dfr_loss.detach().cpu().numpy())
                 train_cr_loss = cr_loss_fn(model, data)
@@ -73,6 +76,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             all_train_losses.append(train_loss.detach().cpu().numpy())
             train_loss.backward()
             optimizer.step()
+        scheduler.step()
         print(f"Training Loss: {np.mean(np.asarray(all_train_losses)):.5f}\n")
 
 
@@ -90,13 +94,13 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
             targets = v3_utils.sendToDevice(targets, device)
 
             # #########   LOSSES   #########
-            output = model(data)
+            output = model(data, lat_vecs)
             val_depth_loss = depth_loss_fn(output, targets)
             all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
             val_intersection_loss = intersection_loss_fn(output, targets)
             all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
             val_loss = val_depth_loss + val_intersection_loss
-            if arch == "constant":
+            if "constant" in arch:
                 val_dfr_loss = dfr_loss_fn(model, data)
                 all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
                 val_cr_loss = cr_loss_fn(model, data)
@@ -112,7 +116,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
         loss_history["val_depth"].append(np.mean(np.asarray(all_val_depth_losses)))
         loss_history["train_intersection"].append(np.mean(np.asarray(all_train_intersection_losses)))
         loss_history["val_intersection"].append(np.mean(np.asarray(all_val_intersection_losses)))
-        if arch == "constant":
+        if "constant" in arch:
             loss_history["train_dfr"].append(np.mean(np.asarray(all_train_dfr_losses)))
             loss_history["val_dfr"].append(np.mean(np.asarray(all_val_dfr_losses)))
             loss_history["train_cr"].append(np.mean(np.asarray(all_train_cr_losses)))
@@ -126,7 +130,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
                     "train_intersection_loss": np.mean(np.asarray(all_train_intersection_losses)),
                     "val_intersection_loss": np.mean(np.asarray(all_val_intersection_losses)),
                     }
-        if arch == "constant":
+        if "constant" in arch:
             loss_dict.update({"train_dfr_loss": np.mean(np.asarray(all_train_dfr_losses)),
                     "val_dfr_loss": np.mean(np.asarray(all_val_dfr_losses)),
                     "train_cr_loss": np.mean(np.asarray(all_train_cr_losses)),
@@ -136,7 +140,7 @@ def train(save_dir, name, model, optimizer, train_loader, val_loader, loss_histo
 
 
         # save checkpoint
-        v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history)
+        v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history, latent_vectors=lat_vecs)
         v3_utils.plotLosses(loss_history, save_dir, name)
         # wandb.watch(model)
 
@@ -149,20 +153,23 @@ if __name__ == '__main__':
     Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
     Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
     Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
-    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
+    Parser.add_argument('--lr-latvecs', help='Choose the learning rate for the latent vectors.', default=0.001, type=float)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=11, type=int)
     Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
     Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
     Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
-    Parser.add_argument('--schedule', help="Halve the learning rate every x epochs. Does not halve if zero is passed.", default=0, type=int)
     Parser.add_argument('--additional-intersections', type=int, default=0, help="The number of addtional intersecting rays to generate per surface point")
     Parser.add_argument('--near-surface-threshold', type=float, default=-1., help="Sample an additional near-surface (within threshold) point for each intersecting ray. No sampling if negative.")
     Parser.add_argument('--tangent-rays-ratio', type=float, default=0., help="The proportion of sampled rays that should be roughly tangent to the object.")
+    Parser.add_argument('--latent-size', type=int, default=256, help="Size of latent vectors in autodecoder")
+    Parser.add_argument('--latent-stdev', type=float, default=0.001**2, help="The standard deviation of the zero mean gaussian used to initialize latent vectors")
     Args, _ = Parser.parse_known_args()
     if len(sys.argv) <= 1:
         Parser.print_help()
         exit()
 
     wandb.init(project=Args.dataset, entity="neural-odf")
+    #wandb.init(project="torus", entity="neural-odf")
     wandb.run.name = Args.expt_name
     wandb.run.save()
 
@@ -171,23 +178,14 @@ if __name__ == '__main__':
     nCores = 0#mp.cpu_count()
 
     if Args.arch == 'standard':
-        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
-    elif Args.arch == 'constant':
-        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
-    elif Args.arch == 'SH':
-        NeuralODF = ODFSingleV3SH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
-        print('[ INFO ]: Degrees {}'.format(Args.degrees))
-    elif Args.arch == 'SH_constant':
-        NeuralODF = ODFSingleV3ConstantSH(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers, degrees=Args.degrees)
-        print('[ INFO ]: Degrees {}'.format(Args.degrees))
-
+        NeuralODF = ODFADV3(input_size=(120 if Args.use_posenc else 6), latent_size=Args.latent_size, radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
 
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, additional_intersections=Args.additional_intersections, near_surface_threshold=Args.near_surface_threshold, near_surface_fraction=0.0, tangent_rays_ratio=Args.tangent_rays_ratio)
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, ad=True, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, ad=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
 
@@ -199,11 +197,20 @@ if __name__ == '__main__':
         "epochs": Args.epochs,
         "batch_size": Args.batch_size,
         "architecture": Args.arch,
-        "dataset": Args.dataset,
-        "layers": Args.n_layers,
+        "dataset": Args.dataset
     }
 
     wandb.config = hyperparameters
+
+     # Initialize embeddings for the training examples
+    lat_vecs = torch.nn.Embedding(TrainData.n_instances, Args.latent_size)
+    torch.nn.init.normal_(
+        lat_vecs.weight.data,
+        0.0,
+        # get_spec_with_default(specs, "CodeInitStdDev", 1.0) / math.sqrt(latent_size),
+        Args.latent_stdev
+    )
+
 
     loss_history = {}
     previous_epochs = 0
@@ -211,30 +218,47 @@ if __name__ == '__main__':
         checkpoint_dict = v3_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=False)
         NeuralODF.load_state_dict(checkpoint_dict['model_state_dict'])
         NeuralODF = NeuralODF.to(Device)
-        optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
+        lat_vecs.load_state_dict(checkpoint_dict["latent_vectors"])
+        lat_vecs = lat_vecs.to(Device)
+        # optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(
+        [
+            {
+                "params": NeuralODF.parameters(),
+                "lr": Args.learning_rate,
+                "weight_decay": 1e-5,
+            },
+            {
+                "params": lat_vecs.parameters(),
+                "lr": Args.lr_latvecs,
+            },
+        ]
+        )
         optimizer.load_state_dict(checkpoint_dict['optimizer_state_dict'])
         loss_history = checkpoint_dict['loss_history']
+        # TODO: load scheduler
+        scheduler = StepLR(optimizer, step_size=1000, gamma=0.25)
     else:
         NeuralODF = NeuralODF.to(Device)
-        optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
+        lat_vecs = lat_vecs.to(Device)
+        # optimizer = torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(
+        [
+            {
+                "params": NeuralODF.parameters(),
+                "lr": Args.learning_rate,
+                "weight_decay": 1e-5,
+            },
+            {
+                "params": lat_vecs.parameters(),
+                "lr": Args.lr_latvecs,
+            },
+        ]
+        )
+        scheduler = StepLR(optimizer, step_size=1000, gamma=0.25)
 
-    if Args.schedule > 0: 
-        # optimizers = [optimizer]
-        # for i in range(math.ceil(Args.epochs/float(Args.schedule))-1):
-        #     optimizers.append(torch.optim.Adam(NeuralODF.parameters(), lr=Args.learning_rate*2.**(-(i+1)), weight_decay=1e-5))
-        # DataLoaders = [torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn, )]
 
-        hyperparameters["epochs"] = Args.schedule
-
-        for i in range(math.ceil(Args.epochs/float(Args.schedule))):
-            if i != 0:
-                for g in optimizer.param_groups:
-                    g['lr'] = g['lr'] * 0.5
-                TrainData.increaseNearSurfaceFraction(0.04)
-                TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
-            train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
-    else:
-        train(Args.output_dir, Args.expt_name, NeuralODF, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device)
+    train(Args.output_dir, Args.expt_name, NeuralODF, lat_vecs, optimizer, TrainDataLoader, ValDataLoader, loss_history, hyperparameters, Device, scheduler)
 
 
     # Now load the best checkpoint for evaluation
@@ -242,7 +266,7 @@ if __name__ == '__main__':
     NeuralODF.load_state_dict(checkpoint_dict['model_state_dict'])
     NeuralODF.to(Device)
 
-    losses, depth_error, precision, recall, accuracy, f1 = infer(Args.expt_name, NeuralODF, ValDataLoader, hyperparameters, Device)
+    losses, depth_error, precision, recall, accuracy, f1 = infer_ad(Args.expt_name, NeuralODF, lat_vecs, ValDataLoader, hyperparameters, Device)
 
 
     all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection"]

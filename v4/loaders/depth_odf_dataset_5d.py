@@ -1,3 +1,4 @@
+from lib2to3.pytree import Base
 import torch.utils.data
 import argparse
 import zipfile
@@ -29,6 +30,8 @@ import v3_utils
 
 # DEPTH_DATASET_NAME = 'torus'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
+AD_TRAIN_CUTOFF = 30 #number of instances to use for training the autodecoder. further instances are used as validation
+AD_VAL_CUTOFF = 36
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
     def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False, aug=True):
@@ -41,6 +44,9 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         self.ad = ad #autodecoder
         self.aug = aug
         print('[ INFO ]: Loading {} dataset. Positional Encoding: {}, Coordinate Type: {}, Autodecoder: {}'.format(self.__class__.__name__, self.PositionalEnc, self.CoordType, self.ad))
+
+        self.DepthList = None
+        self.IndicesList = None
 
         self.init(root, train, download, limit)
         self.loadData()
@@ -74,13 +80,37 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
                 print('[ INFO ]: Unzipping.')
                 File2Unzip.extractall(v3_utils.expandTilde(self.DataDir))
 
-        FilesPath = os.path.join(DatasetDir, 'depth', 'val')
-        if self.isTrainData:
-            FilesPath = os.path.join(DatasetDir, 'depth', 'train')
+        if self.ad:
+            FilesPath = os.path.join(DatasetDir, "*", "depth", "train")
+            instance_list = os.listdir(DatasetDir)
+            instance_list.sort()
+            if self.isTrainData:
+                instance_list = instance_list[:AD_TRAIN_CUTOFF]
+            else:
+                instance_list = instance_list[AD_TRAIN_CUTOFF:AD_VAL_CUTOFF]
 
-        self.BaseDirPath = FilesPath
-        self.DepthList = (glob.glob(os.path.join(FilesPath, '*.npy'))) # Only npy supported
-        self.DepthList.sort()
+            self.n_instances = len(instance_list)
+            
+            instance_numbers = range(self.n_instances)
+            instance_index_map = {instance_list[i] : instance_numbers[i] for i in range(self.n_instances)}
+
+            self.DepthList = []
+            self.IndicesList = []
+
+            for instance in instance_list:
+                new_depths = (glob.glob(os.path.join(DatasetDir, instance, "depth", "train", "*.npy")))
+                index = instance_index_map[instance]
+                new_indices = [index,]*len(new_depths)
+                self.DepthList += new_depths
+                self.IndicesList += new_indices
+        else:
+            FilesPath = os.path.join(DatasetDir, 'depth', 'val')
+            if self.isTrainData:
+                FilesPath = os.path.join(DatasetDir, 'depth', 'train')
+
+            self.BaseDirPath = FilesPath
+            self.DepthList = (glob.glob(os.path.join(FilesPath, '*.npy'))) # Only npy supported
+            self.DepthList.sort()
 
         if len(self.DepthList) == 0 or self.DepthList is None:
             raise RuntimeError('[ ERR ]: No depth image files found during data loading.')
@@ -91,13 +121,13 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         self.DepthList = self.DepthList[:DatasetLength]
 
         self.LoadedDepths = []
-        for FileName in self.DepthList:
+        for i, FileName in enumerate(self.DepthList):
+            # print(f"{i}/{len(self.DepthList)}")
             DepthData = np.load(FileName, allow_pickle=True).item()
             self.LoadedDepths.append(DepthData)
         
         # for i in range(100):
         #     self.Sampler = DepthMapSampler(self.LoadedDepths[i], TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
-
 
     def __len__(self):
         return (len(self.DepthList))
@@ -110,7 +140,8 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         if not self.ad:
             return self.Sampler.Coordinates, (self.Sampler.Intersects, self.Sampler.Depths)
         else:
-            return (self.Sampler.Coordinates, torch.tensor([idx]*self.Sampler.Coordinates.size()[0])), (self.Sampler.Intersects, self.Sampler.Depths)
+            instance_idx = self.IndicesList[idx] 
+            return (self.Sampler.Coordinates, torch.tensor([instance_idx]*self.Sampler.Coordinates.size()[0])), (self.Sampler.Intersects, self.Sampler.Depths)
 
 Parser = argparse.ArgumentParser()
 Parser.add_argument('-d', '--data-dir', help='Specify the location of the directory to download and store dataset.', required=True)

@@ -51,7 +51,7 @@ def avg_depth_error(output, target):
     total_depth_error = 0.
     total_depths = 0.
     for b in range(B):
-        GTMask, GTDepth, ValidDepthMask = target[b]
+        GTMask, GTDepth = target[b]
 
         if len(output[b]) == 2:
             PredMaskConf, PredDepth = output[b]
@@ -62,7 +62,7 @@ def avg_depth_error(output, target):
         PredMaskConfSig = Sigmoid(PredMaskConf)
         PredMaskMaxConfVal = PredMaskConfSig
         ValidRaysIdx = PredMaskMaxConfVal > v3_utils.INTERSECTION_MASK_THRESHOLD  # Use predicted mask
-        ValidRaysIdx = torch.logical_and(ValidRaysIdx, ValidDepthMask)
+        ValidRaysIdx = torch.logical_and(ValidRaysIdx, GTMask)
         
         # compute mean depth only when it is defined by both prediction and ground truth
         if torch.max(ValidRaysIdx) > 0.:
@@ -108,6 +108,70 @@ def infer(name, model, val_loader, hyperparameters, device):
         
         # #########   LOSSES   #########
         output = model(data)
+        all_outputs += output
+        val_depth_loss = depth_loss_fn(output, targets)
+        all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
+        val_intersection_loss = intersection_loss_fn(output, targets)
+        all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
+        val_loss = val_depth_loss + val_intersection_loss
+        if arch == "constant":
+            val_dfr_loss = dfr_loss_fn(model, data)
+            all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
+            val_cr_loss = cr_loss_fn(model, data)
+            all_val_cr_losses.append(val_cr_loss.detach().cpu().numpy())
+            val_loss += val_dfr_loss + val_cr_loss
+        all_val_losses.append(val_loss.detach().cpu().numpy())
+
+    losses = {}
+    losses["val"] = np.mean(np.asarray(all_val_losses))
+    losses["val_depth"] = np.mean(np.asarray(all_val_depth_losses))
+    losses["val_intersection"] = np.mean(np.asarray(all_val_intersection_losses))
+    if arch == "constant":
+        losses["val_dfr"] = np.mean(np.asarray(all_val_dfr_losses))
+        losses["val_cr"] =  np.mean(np.asarray(all_val_cr_losses))
+
+    depth_error = avg_depth_error(all_outputs, all_targets)
+    precision, recall, accuracy, f1 = praf1(all_outputs, all_targets)
+
+    return losses, depth_error, precision, recall, accuracy, f1
+
+def infer_ad(name, model, lat_vecs, val_loader, hyperparameters, device):
+
+    model.eval()
+    arch = hyperparameters["architecture"]
+
+
+    # loss functions
+    depth_loss_fn = DepthLoss()
+    intersection_loss_fn = IntersectionLoss()
+    dfr_loss_fn = DepthFieldRegularizingLoss()
+    cr_loss_fn = ConstantRegularizingLoss()
+
+    losses = {}
+    loss_names = ["val", "val_depth", "val_intersection"]
+    if arch == "constant":
+        loss_names += ["val_dfr", "val_cr"]
+    for loss in loss_names:
+        losses[loss] = []
+
+    all_val_losses = []
+    all_val_depth_losses = []
+    all_val_intersection_losses = []
+    all_val_dfr_losses = []
+    all_val_cr_losses = []
+
+    all_targets = []
+    all_outputs = []
+
+    print(f"Evaluating model {name}...")
+    for batch in tqdm(val_loader):
+        data, targets = batch
+        data = v3_utils.sendToDevice(data, device)
+        targets = v3_utils.sendToDevice(targets, device)
+        all_targets += targets
+        
+        # #########   LOSSES   #########
+        output = model(data, lat_vecs)
         all_outputs += output
         val_depth_loss = depth_loss_fn(output, targets)
         all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())

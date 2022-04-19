@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#SBATCH -p 3090-gcondo --gres=gpu:1
+#SBATCH -t 12:00:00
+#SBATCH --mem=64G
+#SBATCH -n 2
+#SBATCH -C geforce3090
+
+module load cuda/11.1.1
+python ../v4/train.py --arch standard --expt-name apr14_test2 --input-dir /gpfs/data/ssrinath/neural-odf/data/common-3d-test-models/rendered-data-5d --output-dir /gpfs/data/ssrinath/neural-odf/output  --epochs 5000 --dataset bunny_watertight_balance --learning-rate 0.0005 --batch-size 96
