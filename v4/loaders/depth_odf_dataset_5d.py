@@ -30,11 +30,14 @@ import v3_utils
 
 # DEPTH_DATASET_NAME = 'torus'
 DEPTH_DATASET_URL = 'TDB'# 'https://neuralodf.s3.us-east-2.amazonaws.com/' + DEPTH_DATASET_NAME + '.zip'
-AD_TRAIN_CUTOFF = 30 #number of instances to use for training the autodecoder. further instances are used as validation
-AD_VAL_CUTOFF = 36
+# AD_TRAIN_CUTOFF = 30 #number of instances to use for training the autodecoder. further instances are used as validation
+# AD_VAL_CUTOFF = 36
+N_INSTANCES_AD = 1
+TRAIN_PER_INSTANCE_AD = 20
+VAL_PER_INSTANCE_AD = 4
 
 class DepthODFDatasetLoader(torch.utils.data.Dataset):
-    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False, aug=True):
+    def __init__(self, root, name, train=True, download=True, limit=None, target_samples=1e3, usePositionalEncoding=True, coord_type='direction', ad=False, aug=True, instance_index_map=None):
         self.FileName = name + '.zip'
         self.DataURL = DEPTH_DATASET_URL
         self.nTargetSamples = target_samples # Per image
@@ -47,6 +50,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
 
         self.DepthList = None
         self.IndicesList = None
+        self.instance_index_map = instance_index_map
 
         self.init(root, train, download, limit)
         self.loadData()
@@ -81,25 +85,31 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
                 File2Unzip.extractall(v3_utils.expandTilde(self.DataDir))
 
         if self.ad:
-            FilesPath = os.path.join(DatasetDir, "*", "depth", "train")
-            instance_list = os.listdir(DatasetDir)
-            instance_list.sort()
-            if self.isTrainData:
-                instance_list = instance_list[:AD_TRAIN_CUTOFF]
-            else:
-                instance_list = instance_list[AD_TRAIN_CUTOFF:AD_VAL_CUTOFF]
+            if self.instance_index_map is None:
+                instance_list = os.listdir(DatasetDir)
+                instance_list.sort()
+                instance_list = instance_list[:N_INSTANCES_AD]
+                    
+                self.n_instances = len(instance_list)
 
-            self.n_instances = len(instance_list)
-            
-            instance_numbers = range(self.n_instances)
-            instance_index_map = {instance_list[i] : instance_numbers[i] for i in range(self.n_instances)}
+                instance_numbers = range(self.n_instances)
+                self.instance_index_map = {instance_list[i] : instance_numbers[i] for i in range(self.n_instances)}
+            else:
+                self.n_instances = len(self.instance_index_map)
 
             self.DepthList = []
             self.IndicesList = []
 
-            for instance in instance_list:
-                new_depths = (glob.glob(os.path.join(DatasetDir, instance, "depth", "train", "*.npy")))
-                index = instance_index_map[instance]
+            for instance in self.instance_index_map.keys():
+                if self.isTrainData:
+                    new_depths = (glob.glob(os.path.join(DatasetDir, instance, "depth", "train", "*.npy")))
+                    new_depths.sort()
+                    new_depths = new_depths[:TRAIN_PER_INSTANCE_AD]
+                else:
+                    new_depths = (glob.glob(os.path.join(DatasetDir, instance, "depth", "val", "*.npy")))
+                    new_depths.sort()
+                    new_depths = new_depths[:VAL_PER_INSTANCE_AD]
+                index = self.instance_index_map[instance]
                 new_indices = [index,]*len(new_depths)
                 self.DepthList += new_depths
                 self.IndicesList += new_indices
@@ -128,6 +138,7 @@ class DepthODFDatasetLoader(torch.utils.data.Dataset):
         
         # for i in range(100):
         #     self.Sampler = DepthMapSampler(self.LoadedDepths[i], TargetRays=self.nTargetSamples, UsePosEnc=self.PositionalEnc)
+
 
     def __len__(self):
         return (len(self.DepthList))

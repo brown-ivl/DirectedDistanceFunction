@@ -105,6 +105,19 @@ def save_checkpoint(save_dir, checkpoint_dict):
         f.write(f"{epoch}${checkpoint_dict['loss_history']['val'][-1]}")
         f.close()
 
+def save_instance_index_map(save_dir, name, instance_index_map):
+    if not os.path.exists(os.path.join(save_dir, name)):
+        os.mkdir(os.path.join(save_dir, name))
+    out_file = os.path.join(save_dir, name, f"instance_index_map.npy")
+    np.save(out_file, instance_index_map)
+
+def read_instance_index_map(save_dir, name):
+    out_file = os.path.join(save_dir, name, f"instance_index_map.npy")
+    if not os.path.exists(out_file):
+        return None
+    data = np.load(out_file, allow_pickle=True).item()
+    return data
+
 def build_checkpoint(model, latent_vectors, name, epoch, optimizer, loss_history):
     checkpoint_dict = {
         'name': name,

@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH -p 3090-gcondo --gres=gpu:1
+#SBATCH -p gpu --gres=gpu:1
 #SBATCH -t 12:00:00
 #SBATCH --mem=64G
 #SBATCH -n 2
 #SBATCH -C geforce3090
 
 module load cuda/11.1.1
-python ../v4/train_ad.py --expt-name apr16_airplane_ad --input-dir /gpfs/data/ssrinath/neural-odf/data/shapenetv2 --dataset airplane_02691156 --output-dir /gpfs/data/ssrinath/neural-odf/output  --epochs 1000
+python ../v4/train_ad.py --expt-name apr22_airplane_ad_1instance_noclamp --input-dir /gpfs/data/ssrinath/neural-odf/data/shapenetv2 --dataset airplane_02691156 --output-dir /gpfs/data/ssrinath/neural-odf/output  --epochs 400

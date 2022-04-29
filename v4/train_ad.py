@@ -14,14 +14,14 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss
+from losses import DepthLoss, IntersectionLoss, DepthFieldRegularizingLoss, ConstantRegularizingLoss, LatentPriorLoss
 from odf_models import ODFSingleV3, ODFADV3, ODFSingleV3Constant, ODFSingleV3SH, ODFSingleV3ConstantSH
 from depth_odf_dataset_5d import DepthODFDatasetLoader as DDL
 import v3_utils
 from infer import infer, infer_ad
 
 
-def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, loss_history, hyperparameters, device, scheduler):
+def train(save_dir, name, model, embeddings, optimizer, train_loader, val_loader, loss_history, hyperparameters, device, scheduler):
     
     epochs = hyperparameters["epochs"]
     arch = hyperparameters["architecture"]
@@ -30,9 +30,7 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
     if "train" in loss_history:
         previous_epochs = len(loss_history["train"])
     else:
-        all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection"]
-        if "constant" in arch:
-            all_losses += ["train_dfr", "val_dfr", "train_cr", "val_cr"]
+        all_losses = ["train", "val", "train_depth", "val_depth", "train_intersection", "val_intersection", "train_prior", "val_prior"]
         for loss in all_losses:
             loss_history[loss] = []
 
@@ -40,8 +38,9 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
     # loss functions
     depth_loss_fn = DepthLoss()
     intersection_loss_fn = IntersectionLoss()
-    dfr_loss_fn = DepthFieldRegularizingLoss()
-    cr_loss_fn = ConstantRegularizingLoss()
+    prior_loss_fn = LatentPriorLoss()
+    # dfr_loss_fn = DepthFieldRegularizingLoss()
+    # cr_loss_fn = ConstantRegularizingLoss()
     
 
     for e in range(epochs):
@@ -51,8 +50,7 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
         all_train_losses = []
         all_train_depth_losses = []
         all_train_intersection_losses = []
-        all_train_dfr_losses = []
-        all_train_cr_losses = []
+        all_train_prior_losses = []
         model.train()
         for batch in tqdm(train_loader):
             data, targets = batch
@@ -61,18 +59,15 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
             optimizer.zero_grad()
 
             # #########   LOSSES   #########
-            output = model(data, lat_vecs)
+            output = model(data, embeddings)
             train_depth_loss = depth_loss_fn(output, targets)
             all_train_depth_losses.append(train_depth_loss.detach().cpu().numpy())
+            # print(f"Train Depth Loss: {train_depth_loss.detach().cpu().numpy():.3f}")
             train_intersection_loss = intersection_loss_fn(output, targets)
             all_train_intersection_losses.append(train_intersection_loss.detach().cpu().numpy())
+            train_prior_loss = prior_loss_fn(embeddings, data)
+            all_train_prior_losses.append(train_prior_loss.detach().cpu().numpy())
             train_loss = train_depth_loss + train_intersection_loss
-            if 'constant' in arch:
-                train_dfr_loss = dfr_loss_fn(model, data)
-                all_train_dfr_losses.append(train_dfr_loss.detach().cpu().numpy())
-                train_cr_loss = cr_loss_fn(model, data)
-                all_train_cr_losses.append(train_cr_loss.detach().cpu().numpy())
-                train_loss += train_dfr_loss + train_cr_loss
             all_train_losses.append(train_loss.detach().cpu().numpy())
             train_loss.backward()
             optimizer.step()
@@ -85,8 +80,7 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
         all_val_losses = []
         all_val_depth_losses = []
         all_val_intersection_losses = []
-        all_val_dfr_losses = []
-        all_val_cr_losses = []
+        all_val_prior_losses = []
         model.eval()
         for batch in tqdm(val_loader):
             data, targets = batch
@@ -94,18 +88,14 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
             targets = v3_utils.sendToDevice(targets, device)
 
             # #########   LOSSES   #########
-            output = model(data, lat_vecs)
+            output = model(data, embeddings)
             val_depth_loss = depth_loss_fn(output, targets)
             all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
             val_intersection_loss = intersection_loss_fn(output, targets)
             all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
             val_loss = val_depth_loss + val_intersection_loss
-            if "constant" in arch:
-                val_dfr_loss = dfr_loss_fn(model, data)
-                all_val_dfr_losses.append(val_dfr_loss.detach().cpu().numpy())
-                val_cr_loss = cr_loss_fn(model, data)
-                all_val_cr_losses.append(val_cr_loss.detach().cpu().numpy())
-                val_loss += val_dfr_loss + val_cr_loss
+            val_prior_loss = prior_loss_fn(embeddings, data)
+            all_val_prior_losses.append(val_prior_loss.detach().cpu().numpy())
             all_val_losses.append(val_loss.detach().cpu().numpy())
         print(f"Validation Loss: {np.mean(np.asarray(all_val_losses)):.5f}\n")
 
@@ -116,11 +106,8 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
         loss_history["val_depth"].append(np.mean(np.asarray(all_val_depth_losses)))
         loss_history["train_intersection"].append(np.mean(np.asarray(all_train_intersection_losses)))
         loss_history["val_intersection"].append(np.mean(np.asarray(all_val_intersection_losses)))
-        if "constant" in arch:
-            loss_history["train_dfr"].append(np.mean(np.asarray(all_train_dfr_losses)))
-            loss_history["val_dfr"].append(np.mean(np.asarray(all_val_dfr_losses)))
-            loss_history["train_cr"].append(np.mean(np.asarray(all_train_cr_losses)))
-            loss_history["val_cr"].append(np.mean(np.asarray(all_val_cr_losses)))
+        loss_history["train_prior"].append(np.mean(np.asarray(all_train_prior_losses)))
+        loss_history["val_prior"].append(np.mean(np.asarray(all_val_prior_losses)))
 
         # track using weights and biases
         loss_dict = {"train_loss": np.mean(np.asarray(all_train_losses)),
@@ -129,13 +116,9 @@ def train(save_dir, name, model, lat_vecs, optimizer, train_loader, val_loader, 
                     "val_depth_loss": np.mean(np.asarray(all_val_depth_losses)),
                     "train_intersection_loss": np.mean(np.asarray(all_train_intersection_losses)),
                     "val_intersection_loss": np.mean(np.asarray(all_val_intersection_losses)),
+                    "train_prior_loss": np.mean(np.asarray(all_train_prior_losses)),
+                    "val_prior_loss": np.mean(np.asarray(all_val_prior_losses)),
                     }
-        if "constant" in arch:
-            loss_dict.update({"train_dfr_loss": np.mean(np.asarray(all_train_dfr_losses)),
-                    "val_dfr_loss": np.mean(np.asarray(all_val_dfr_losses)),
-                    "train_cr_loss": np.mean(np.asarray(all_train_cr_losses)),
-                    "val_cr_loss": np.mean(np.asarray(all_val_cr_losses))
-            })
         wandb.log(loss_dict)
 
 
@@ -180,14 +163,20 @@ if __name__ == '__main__':
     if Args.arch == 'standard':
         NeuralODF = ODFADV3(input_size=(120 if Args.use_posenc else 6), latent_size=Args.latent_size, radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
 
+    # load instance mappings if they have already been dumped   
+    instance_index_map = v3_utils.read_instance_index_map(Args.output_dir, Args.expt_name)
+
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, ad=True, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, ad=True, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc, instance_index_map=instance_index_map)
     print(f"DATA SIZE: {len(TrainData)}")
     if Args.force_test_on_train:
         print('[ WARN ]: VALIDATING ON TRAINING DATA.')
-    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, ad=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc)
+    ValData = DDL(root=Args.input_dir, name=Args.dataset, train=Args.force_test_on_train, download=True, ad=True, target_samples=Args.val_rays_per_shape, usePositionalEncoding=Args.use_posenc, instance_index_map=instance_index_map)
     print('[ INFO ]: Training data has {} shapes and {} rays per sample.'.format(len(TrainData), Args.rays_per_shape))
     print('[ INFO ]: Validation data has {} shapes and {} rays per sample.'.format(len(ValData), Args.val_rays_per_shape))
+
+    if instance_index_map is None:
+        v3_utils.save_instance_index_map(Args.output_dir, Args.expt_name, TrainData.instance_index_map)   
 
     TrainDataLoader = torch.utils.data.DataLoader(TrainData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
     ValDataLoader = torch.utils.data.DataLoader(ValData, batch_size=Args.batch_size, shuffle=True, num_workers=nCores, collate_fn=DDL.collate_fn)
