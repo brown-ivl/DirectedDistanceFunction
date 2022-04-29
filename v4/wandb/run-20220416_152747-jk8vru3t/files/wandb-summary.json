@@ -1,1 +1,0 @@
-{"train_loss": 0.10362698137760162, "val_loss": 0.13176549971103668, "train_depth_loss": 0.050670526921749115, "val_depth_loss": 0.05237400159239769, "train_intersection_loss": 0.05295645073056221, "val_intersection_loss": 0.0793914869427681, "_runtime": 166, "_timestamp": 1650137433, "_step": 9, "_wandb": {"runtime": 167}}

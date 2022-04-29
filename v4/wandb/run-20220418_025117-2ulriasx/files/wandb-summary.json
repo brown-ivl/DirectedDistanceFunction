@@ -1,1 +1,0 @@
-{"_runtime": 19, "_timestamp": 1650264696, "_step": 1, "val_loss": 0.5055738091468811, "val_depth_loss": 0.25614845752716064, "val_intersection_loss": 0.24942533671855927, "depth_error": 0.22199292480945587, "mask precision": 0.5167557066537154, "mask recall": 1.0, "mask f1": 0.6813960934998399, "mask accuracy": 0.5167557066537154, "_wandb": {"runtime": 21}}

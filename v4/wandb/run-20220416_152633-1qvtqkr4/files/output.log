@@ -1,9 +1,0 @@
-
-[ INFO ]: Seeding RNGs with 42
-[34m[1mwandb[39m[22m: [33mWARNING[39m Calling wandb.run.save without any arguments is deprecated.Changes to attributes are automatically persisted.
-Traceback (most recent call last):
-  File "train.py", line 189, in <module>
-    TrainData = DDL(root=Args.input_dir, name=Args.dataset, train=True, download=False, target_samples=Args.rays_per_shape, usePositionalEncoding=Args.use_posenc)
-  File "/gpfs/home/thouchen/DirectedDistanceFunction/v4/loaders/depth_odf_dataset_5d.py", line 35, in __init__
-    self.FileName = name + '.zip'
-TypeError: unsupported operand type(s) for +: 'NoneType' and 'str'
