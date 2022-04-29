@@ -105,7 +105,7 @@ class LatentPriorLoss(nn.Module):
         for b in range(B):
             _, indices = input[b]
             lat_vecs = embeddings(indices)
-            Loss += torch.mean(torch.linalg.norm(lat_vecs, dim=-1))
+            Loss += torch.mean(self.scale**2 * torch.linalg.norm(lat_vecs, dim=-1)**2)
         Loss /= B
         return Loss
 
