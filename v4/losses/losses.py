@@ -50,7 +50,8 @@ class DepthLoss(nn.Module):
         return Loss
 
     def L2(self, labels, predictions):
-        Loss = torch.mean(torch.square(torch.clamp(labels, min=-0.5, max=0.5) - torch.clamp(predictions, min=-0.5, max=0.5)))
+        # Loss = torch.mean(torch.square(torch.clamp(labels, min=-0.5, max=0.5) - torch.clamp(predictions, min=-0.5, max=0.5)))
+        Loss = torch.mean(torch.square(labels - predictions))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
         return Loss
@@ -87,6 +88,28 @@ class IntersectionLoss(nn.Module):
         Loss /= B
 
         return Loss
+        
+
+class LatentPriorLoss(nn.Module):
+    def __init__(self, scale=0.01):
+        super().__init__()
+        self.scale = scale
+    
+    def forward(self, embeddings, input):
+
+        assert isinstance(input, list)
+        B = len(input)
+
+
+        Loss = 0
+        for b in range(B):
+            _, indices = input[b]
+            lat_vecs = embeddings(indices)
+            Loss += torch.mean(self.scale**2 * torch.linalg.norm(lat_vecs, dim=-1)**2)
+        Loss /= B
+        return Loss
+
+
 
 
 class DepthFieldRegularizingLoss(nn.Module):
