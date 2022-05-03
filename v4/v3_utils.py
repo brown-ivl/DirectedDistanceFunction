@@ -66,6 +66,7 @@ def load_checkpoint(save_dir, name, device="cpu", load_best=False):
         return torch.load(all_checkpoints[-1], map_location=device)
     else:
         checkpoint_dir = os.path.join(save_dir, name, "checkpoints")
+        print(f"CHECKPOINT DIR: {checkpoint_dir}")
         best_file = os.path.join(save_dir, name, "best_checkpoint.txt")
         if not os.path.exists(best_file):
             raise Exception(f"Could not identify the best checkpoint. {best_file} was not found.")
@@ -73,7 +74,9 @@ def load_checkpoint(save_dir, name, device="cpu", load_best=False):
         best_epoch = int(f.read().split("$")[0])
         f.close()
         checkpoint_file = os.path.join(checkpoint_dir, checkpoint_filename(name, best_epoch))
+        print(checkpoint_file)
         print(f"Loading checkpoint {os.path.basename(checkpoint_file)}")
+        # checkpoint_file = "F:\\ivl-data\\outputAD\\apr16_airplane_ad\\checkpoints\\apr16_airplane_ad_checkpoint_000702.tar"
         return torch.load(checkpoint_file, map_location=device)
 
 def save_checkpoint(save_dir, checkpoint_dict):
