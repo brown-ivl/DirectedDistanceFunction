@@ -22,8 +22,8 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from odf_models import ODFSingleV3, ODFSingleV3Constant, IntersectionMask3DMLP, ODFV5
-import v5_utils
+from odf_models import ODFSingleV3, ODFSingleV3Constant
+import v3_utils
 
 # RADIUS = 1.25
 
@@ -66,51 +66,35 @@ def show_mesh(verts, faces, ground_truth=None):
     viewer.run()
     viewer.destroy_window()
 
-def run_inference(Network, Mask3D, Device, coordinates):
+def run_inference(Network, Device, coordinates):
     all_depths = []
     all_masks = []
-    all_interiors = []
 
     sigmoid = torch.nn.Sigmoid()
 
     batch_size = 5000
-
     for i in range(0, coordinates.shape[0], batch_size):
-        DataTD = v5_utils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
+        DataTD = v3_utils.sendToDevice(coordinates[i:i+batch_size, ...], Device)
 
-        PredDepth = Network([DataTD])[0]
+        output = Network([DataTD])[0]
 
-        # if len(output) == 2:
-        #     PredMaskConf, PredDepth = output
-        # else:
-        #     PredMaskConf, PredDepth, PredMaskConst, PredConst = output
-        #     PredDepth += sigmoid(PredMaskConst)*PredConst
-        stacked_depths = torch.hstack([PredDepth[:],]*3)
+        if len(output) == 2:
+            PredMaskConf, PredDepth = output
+        else:
+            PredMaskConf, PredDepth, PredMaskConst, PredConst = output
+            PredDepth += sigmoid(PredMaskConst)*PredConst
+
+        depths = PredDepth.detach().cpu().numpy()
+        masks = sigmoid(PredMaskConf)
+        masks = masks.detach().cpu().numpy()
         
-        projections_3d = DataTD[:, :3] + stacked_depths * DataTD[:, 3:]
-        # print(f"projections shape - {projections_3d.shape}")
-        PredMaskConf = Mask3D([projections_3d])[0]
-        # print(f"3D mask shape - {PredMaskConf.shape}")
-
-        depth_vals = PredDepth.detach().cpu().numpy()
-        intersection_vals = PredMaskConf.detach().cpu().numpy()
-
-        interior = np.logical_and(depth_vals < 0.0, intersection_vals > 0.5)
-        interior[interior < 0.5] = -1.0
-        # masks = sigmoid(PredMaskConf)
-        # masks = masks.detach().cpu().numpy()
-        # all_depths.append(depths)
-        # all_masks.append(masks)
-        all_interiors.append(interior)
-    # depths = np.concatenate(all_depths, axis=0)
-    # masks = np.concatenate(all_masks, axis=0)
-    interior = np.concatenate(all_interiors, axis=0)
-    # print(f"interior shape: {interior.shape}")
-    # print(interior[0])
-    # depths = depths.flatten()
-    # masks = masks.flatten()
-    interior = interior.flatten()
-    return interior
+        all_depths.append(depths)
+        all_masks.append(masks)
+    depths = np.concatenate(all_depths, axis=0)
+    masks = np.concatenate(all_masks, axis=0)
+    depths = depths.flatten()
+    masks = masks.flatten()
+    return depths, masks
 
 
 def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resolution, ground_truth):
@@ -160,11 +144,9 @@ def show_mask_threshold_curve(depths, bounds_masks, intersection_masks, resoluti
     plt.show()
 
 
-def extract_mesh_multiple_directions(Network, Mask3D, Device, resolution=256, ground_truth=None, show_curve=False):
+def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_truth=None, show_curve=False):
     Network.eval()  # switch to evaluation mode
     Network.to(Device)
-    Mask3D.eval()
-    Mask3D.to(Device)
 
     # directions = [[1.,0.,0.],
     #               [-1.,0.,0.],
@@ -196,9 +178,8 @@ def extract_mesh_multiple_directions(Network, Mask3D, Device, resolution=256, gr
     # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
     # directions = [x/np.linalg.norm(x) for x in directions]
 
-    # all_depths = []
-    # all_intersection_masks = []
-    all_interior = []
+    all_depths = []
+    all_intersection_masks = []
     all_bounds_masks = []
 
 
@@ -207,12 +188,10 @@ def extract_mesh_multiple_directions(Network, Mask3D, Device, resolution=256, gr
         coordinates, bounds_mask = generate_marching_cubes_coordinates(resolution=resolution, direction=dir)
         coordinates = coordinates[bounds_mask]
         bounds_mask = np.array(bounds_mask)
-        # print(f"# Coordinates - {coordinates.shape[0]}, # in bounds - {np.sum(bounds_mask)}")
-        # print(coordinates.shape[0]*3)
         # final_depths = np.ones(bounds_mask.shape, dtype=float)
 
 
-        interior = run_inference(Network, Mask3D,  Device, coordinates)
+        depths, intersection_mask = run_inference(Network, Device, coordinates)
         # print(f"applying mask: {MASK_THRESH}")
         # masks = masks > MASK_THRESH
         # depths[np.logical_not(masks)] = 1.0
@@ -221,23 +200,21 @@ def extract_mesh_multiple_directions(Network, Mask3D, Device, resolution=256, gr
 
 
         all_bounds_masks.append(bounds_mask)
-        # all_depths.append(depths)
-        # all_intersection_masks.append(intersection_mask)
-        all_interior.append(interior)
+        all_depths.append(depths)
+        all_intersection_masks.append(intersection_mask)
 
-    # if ground_truth is not None and show_curve:
-    #     print("Calculating distances")
-    #     show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
+    if ground_truth is not None and show_curve:
+        print("Calculating distances")
+        show_mask_threshold_curve(all_depths, all_bounds_masks, all_intersection_masks, resolution, ground_truth)
 
     all_final_depths = []
-    for i in range(len(all_interior)):
+    for i in range(len(all_depths)):
         final_depths = np.ones(all_bounds_masks[i].shape, dtype=float)
-        # curr_intersection_mask = all_intersection_masks[i] > MASK_THRESH
-        # curr_depths = all_depths[i]
-        # curr_depths[np.logical_not(curr_intersection_mask)] = 1.0
-        final_depths[all_bounds_masks[i]] = all_interior[i]
+        curr_intersection_mask = all_intersection_masks[i] > MASK_THRESH
+        curr_depths = all_depths[i]
+        curr_depths[np.logical_not(curr_intersection_mask)] = 1.0
+        final_depths[all_bounds_masks[i]] = curr_depths
         final_depths = final_depths.reshape((resolution, resolution, resolution))
-        print(np.min(final_depths))
         all_final_depths.append(final_depths)
 
     threshold = len(directions)/2.
@@ -262,10 +239,10 @@ def extract_mesh_multiple_directions(Network, Mask3D, Device, resolution=256, gr
 
 
 if __name__ == '__main__':
-    Parser = v5_utils.BaselineParser
+    Parser = v3_utils.BaselineParser
     Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
     Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
-    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=7, type=int)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
     Parser.add_argument('--object', help="Name of the object", type=str)
     Parser.add_argument('--show-curve', action="store_true", help="Show the mesh similarity curve using different mask threshold values.")
 
@@ -275,38 +252,36 @@ if __name__ == '__main__':
         Parser.print_help()
         exit()
 
-    v5_utils.seedRandom(Args.seed)
+    v3_utils.seedRandom(Args.seed)
     nCores = 0#mp.cpu_count()
     Device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print(f"Using {Device}")
 
     if Args.arch == 'standard':
         print("Using original architecture")
-        NeuralODF = ODFV5(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
-        # Mask3D = IntersectionMask3DV2(dim=3, hidden_size=256)
-        Mask3D = IntersectionMask3DMLP(n_layers=3, pos_enc=False)
-
+        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
+    elif Args.arch == 'constant':
+        print("Using constant prediction architecture")
+        NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
 
 
     # check to see if we have a model checkpoint
     if os.path.exists(os.path.join(Args.output_dir, Args.expt_name, "checkpoints")):
-        checkpoint_dict = v5_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=True)
-        NeuralODF.load_state_dict(checkpoint_dict['odf_model_state_dict'])
+        checkpoint_dict = v3_utils.load_checkpoint(Args.output_dir, Args.expt_name, device=Device, load_best=True)
+        NeuralODF.load_state_dict(checkpoint_dict['model_state_dict'])
         NeuralODF.to(Device)
-        Mask3D.load_state_dict(checkpoint_dict['mask_model_state_dict'])
-        Mask3D.to(Device)
     else:
         print(f"Unable to extract mesh for model {Args.expt_name} because no checkpoints were found")
 
     gt_mesh = None
     if Args.mesh_dir is not None and Args.object is not None:
-        gt_vertices, gt_faces, gt_mesh = v5_utils.load_object(Args.object, Args.mesh_dir)
+        gt_vertices, gt_faces, gt_mesh = v3_utils.load_object(Args.object, Args.mesh_dir)
     else:
         print("Provide a mesh directory and object name if you want to visualize the ground truth.")
 
 
     # verts, faces, normals = extract_mesh(NeuralODF, Device, resolution=Args.resolution)
-    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Mask3D, Device, resolution=Args.resolution, ground_truth=gt_mesh, show_curve=Args.show_curve)
+    verts, faces, normals = extract_mesh_multiple_directions(NeuralODF, Device, resolution=Args.resolution, ground_truth=gt_mesh, show_curve=Args.show_curve)
 
     show_mesh(verts, faces, ground_truth=gt_mesh)
 

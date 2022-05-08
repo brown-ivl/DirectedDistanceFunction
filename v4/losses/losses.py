@@ -50,8 +50,8 @@ class DepthLoss(nn.Module):
         return Loss
 
     def L2(self, labels, predictions):
-        # Loss = torch.mean(torch.square(torch.clamp(labels, min=-0.5, max=0.5) - torch.clamp(predictions, min=-0.5, max=0.5)))
-        Loss = torch.mean(torch.square(labels - predictions))
+        Loss = torch.mean(torch.square(torch.clamp(labels, min=-0.5, max=0.5) - torch.clamp(predictions, min=-0.5, max=0.5)))
+        #Loss = torch.mean(torch.square(labels - predictions))
         if math.isnan(Loss) or math.isinf(Loss):
             return torch.tensor(0)
         return Loss
@@ -105,7 +105,8 @@ class LatentPriorLoss(nn.Module):
         for b in range(B):
             _, indices = input[b]
             lat_vecs = embeddings(indices)
-            Loss += torch.mean(self.scale**2 * torch.linalg.norm(lat_vecs, dim=-1)**2)
+            #Loss += torch.mean(self.scale**2 * torch.linalg.norm(lat_vecs, dim=-1)**2)
+            Loss += torch.mean((self.scale**2) * lat_vecs.pow(2))
         Loss /= B
         return Loss
 

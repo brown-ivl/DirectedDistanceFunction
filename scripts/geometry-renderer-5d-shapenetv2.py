@@ -225,11 +225,52 @@ def sphere_surface_sampler(num_points, radius=1.00):
     return surface_samples
 
 
-def main(mesh_vertices, mesh_faces, obj_mesh, write_dir, val_start_counter=100, num_viewpoints=120, camcenters=None, lookvecs=None, show=False):  
+def main(mesh_vertices, mesh_faces, obj_mesh, write_dir, val_start_counter=32, num_viewpoints=132, camcenters=None, lookvecs=None, show=False):  
     
     # sample viewpoints on sphere
-    sampled_camcenters = sphere_interior_sampler(num_viewpoints)
-    sampled_lookvecs = sphere_surface_sampler(num_viewpoints)
+    #sampled_camcenters = sphere_interior_sampler(num_viewpoints)
+    #sampled_lookvecs = sphere_surface_sampler(num_viewpoints)
+
+    gr = (1+5**0.5)/2
+    sampled_camcenters = np.array([[gr, gr, gr],
+                                   [gr, gr, -gr],
+                                   [gr, -gr, gr],
+                                   [-gr, gr, gr],
+                                   [gr, -gr, -gr],
+                                   [-gr, gr, -gr],
+                                   [-gr, -gr, gr],
+                                   [-gr, -gr, -gr],
+                                   [0, gr**2, 1],
+                                   [0, gr**2, -1],
+                                   [0, -gr**2, 1],
+                                   [0, -gr**2, -1],
+                                   [gr**2, 1, 0],
+                                   [gr**2, -1, 0],
+                                   [-gr**2, 1, 0],
+                                   [-gr**2, -1, 0],
+                                   [1, 0, gr**2],
+                                   [1, 0, -gr**2],
+                                   [-1, 0, gr**2],
+                                   [-1, 0, -gr**2],
+                                   [1, 0, gr], 
+                                   [1, 0, -gr], 
+                                   [-1, 0, gr], 
+                                   [-1, 0, -gr], 
+                                   [0, 1, gr], 
+                                   [0, 1, -gr], 
+                                   [0, -1, gr], 
+                                   [0, -1, -gr], 
+                                   [1, gr, 0], 
+                                   [1, -gr, 0], 
+                                   [-1, gr, 0], 
+                                   [-1, -gr, 0]])
+    sampled_camcenters /= np.linalg.norm(sampled_camcenters, axis=1)[:, np.newaxis]
+    sampled_camcenters *= 1.3
+    sampled_camcenters = np.vstack((sampled_camcenters, sphere_surface_sampler(num_viewpoints-val_start_counter, radius=1.3)))
+    sampled_lookvecs = np.copy(sampled_camcenters)
+    sampled_lookvecs /= np.linalg.norm(sampled_camcenters, axis=1, keepdims=True)
+
+
     # sampled_camcenters = np.array([[0.7,0.7,0.7],[0.7,0.7,0.7]])
     # sampled_camcenters = np.zeros((2,3))
     # sampled_lookvecs = np.array([[1.0,1.0,1.0],[-1.0,-1.0,-1.0]])
@@ -350,7 +391,7 @@ def main(mesh_vertices, mesh_faces, obj_mesh, write_dir, val_start_counter=100, 
 
 # os.makedirs(path, exist_ok=True)
 
-def generate_class_data(class_name, class_dir, write_dir, n_objects=1200, n_views=100):
+def generate_class_data(class_name, class_dir, write_dir, n_objects=1250, n_views=100):
     '''
     Takes in a ShapeNetCore.v2 class and renders multi-view depth images for that object
     '''
@@ -367,7 +408,11 @@ def generate_class_data(class_name, class_dir, write_dir, n_objects=1200, n_view
         object_write_path = os.path.join(class_write_path, object_name)
 
         # load in the object mesh
-        mesh_vertices, mesh_faces, obj_mesh = load_object(full_object_path)
+        try:
+            mesh_vertices, mesh_faces, obj_mesh = load_object(full_object_path)
+        except:
+            print("Skip {}".format(object_name))
+            continue
 
         print(f"Object {i+1}/{n_objects}")
         main(mesh_vertices, mesh_faces, obj_mesh, object_write_path)
@@ -375,8 +420,8 @@ def generate_class_data(class_name, class_dir, write_dir, n_objects=1200, n_view
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--shapenet-dir", default="/gpfs/data/ssrinath/datasets/ShapeNetCore.v2/", help="The path to the ShapeNet V2 directory")
-    parser.add_argument("--subdir", default="02691156", type=str, help="The subdir name for the desired object") #default is airplane
-    parser.add_argument("--write-dir", default="/gpfs/data/ssrinath/neural-odf/data/shapenetv2/")
+    parser.add_argument("--subdir", default="02958343", type=str, help="The subdir name for the desired object") #default is airplane
+    parser.add_argument("--write-dir", default="/gpfs/data/ssrinath/neural-odf/data/new/")#shapenetv2/")
     args = parser.parse_args()
 
     # Find out which object we are dumping data for

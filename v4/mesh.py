@@ -11,7 +11,7 @@ import trimesh
 import matplotlib.pyplot as plt
 
 # MASK_THRESH = 0.995
-MASK_THRESH = 0.99
+MASK_THRESH = 0.5
 # MASK_THRESH = 0.995
 
 MESH_RADIUS = 1.0
@@ -22,7 +22,7 @@ sys.path.append(os.path.join(FileDirPath, 'losses'))
 sys.path.append(os.path.join(FileDirPath, 'models'))
 
 from depth_sampler_5d import DEPTH_SAMPLER_RADIUS
-from odf_models import ODFSingleV3, ODFSingleV3Constant
+from odf_models import ODFSingleV3, ODFSingleV3Constant, ODFADV3
 import v3_utils
 
 # RADIUS = 1.25
@@ -172,7 +172,7 @@ def extract_mesh_multiple_directions(Network, Device, resolution=256, ground_tru
                   [-1.,-1.,-1.],
                   ]
 
-    # directions = [[1.,1.,0.]]
+    directions = [[1.,1.,0.]]
 
     # n_dirs = 100
     # directions = [np.random.normal(size=3) for _ in range(n_dirs)]
@@ -242,7 +242,7 @@ if __name__ == '__main__':
     Parser = v3_utils.BaselineParser
     Parser.add_argument('--resolution', help='Resolution of the mesh to extract', type=int, default=256)
     Parser.add_argument('--mesh-dir', help="Mesh with ground truth .obj files", type=str)
-    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=10, type=int)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=7, type=int)
     Parser.add_argument('--object', help="Name of the object", type=str)
     Parser.add_argument('--show-curve', action="store_true", help="Show the mesh similarity curve using different mask threshold values.")
 
@@ -259,7 +259,8 @@ if __name__ == '__main__':
 
     if Args.arch == 'standard':
         print("Using original architecture")
-        NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
+        #NeuralODF = ODFSingleV3(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
+        NeuralODF = ODFADV3(input_size=(120 if Args.use_posenc else 6), latent_size=Args.latent_size, radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)
     elif Args.arch == 'constant':
         print("Using constant prediction architecture")
         NeuralODF = ODFSingleV3Constant(input_size=(120 if Args.use_posenc else 6), radius=DEPTH_SAMPLER_RADIUS, pos_enc=Args.use_posenc, n_layers=Args.n_layers)

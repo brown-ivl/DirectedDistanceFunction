@@ -72,8 +72,8 @@ def run_inference(Network, Device, DataLoader):
 def vis(data, gt_depth, gt_mask, pred_depth, pred_mask):
     #print(data)
     mask = (pred_mask>0.5).reshape(-1)
-    mask = (np.abs(pred_depth)<0.05).reshape(-1)
-    mask = np.logical_and((pred_mask>0.5).reshape(-1), (np.abs(pred_depth)<0.05).reshape(-1))
+    #mask = (np.abs(pred_depth)<0.05).reshape(-1)
+    #mask = np.logical_and((pred_mask>0.5).reshape(-1), (np.abs(pred_depth)<0.05).reshape(-1))
     #mask = (gt_mask==1).reshape(-1)
     #mask = (gt_depth<0.99).reshape(-1)
     #print(np.unique(np.abs(pred_depth)[mask]))

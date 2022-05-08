@@ -157,6 +157,7 @@ class ODFADV3(torch.nn.Module):
         self.relu = nn.ReLU()
         # No layernorm for now
         self.layernorm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+        self.dropout = torch.nn.Dropout(p=0.2)
 
     def forward(self, input, embeddings):
         Input = input
@@ -180,7 +181,7 @@ class ODFADV3(torch.nn.Module):
                 if i + 1 in self.pos_enc_layers or i + 1 in self.skip_connect:
                     x = self.network[i](torch.cat([BInput, x], dim=1))
                 else:
-                    x = self.network[i](x)
+                    x = self.dropout(self.network[i](x))
                 x = self.relu(x)
                 x = self.layernorm(x)
                 if i == 1:

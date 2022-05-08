@@ -51,9 +51,9 @@ def run_inference(Network, Device, DataLoader):
         TargetsTD = (torch.tensor(TargetsTDInt).to(Device), torch.tensor(TargetsTDDep).to(Device))
         mask = torch.ones(TargetsTDDep.shape).to(Device)
         DataTD0 = DataTD.cpu().numpy()
-        step = torch.tensor(0.25).to(Device)
-        clamp = torch.tensor(0.25).to(Device)
-        for j in range(20):
+        step = torch.tensor(0.5).to(Device)
+        clamp = torch.tensor(0.5).to(Device)
+        for j in range(10):
             if j>0: 
                 out = torch.where(output[1]>clamp, clamp, torch.min(step, output[1]))
                 DataTD[:, :3] = (DataTD[:, :3]+DataTD[:, 3:]*out).detach()

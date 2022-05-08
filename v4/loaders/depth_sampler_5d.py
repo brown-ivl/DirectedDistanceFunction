@@ -108,14 +108,15 @@ class DepthMapSampler():
             # augment inside points from outside points
             outToInCoor = self.Coordinates[mask3]
             outToInInt = torch.ones((len(outToInCoor), 1))
-            outToInDepths = -(0.001+torch.rand(len(outToInCoor), 1)*0.1)
+            outToInDepths = -(torch.rand(len(outToInCoor), 1)*0.001)#*0.1)
             outToInCoor[:,:3] = outToInCoor[:,:3]+outToInCoor[:,3:]*(self.Depths[mask3]-outToInDepths)
+            
             # augment outside points from inside points
             inToOutCoor = self.Coordinates[mask4]
             inToOutInt = torch.ones((len(inToOutCoor), 1))
-            inToOutDepths = 0.001+torch.rand(len(inToOutCoor), 1)*0.1
+            inToOutDepths = torch.rand(len(inToOutCoor), 1)*0.001#0.1
             inToOutCoor[:,:3] = inToOutCoor[:,:3]+inToOutCoor[:,3:]*(self.Depths[mask4]-inToOutDepths)   
-
+           
             #print(self.Coordinates.shape, self.Intersects.shape, self.Depths.shape)
             self.Coordinates = torch.vstack([self.Coordinates, outToInCoor, inToOutCoor])
             self.Intersects = torch.vstack([self.Intersects, outToInInt, inToOutInt])

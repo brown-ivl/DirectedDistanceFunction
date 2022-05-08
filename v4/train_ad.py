@@ -67,7 +67,7 @@ def train(save_dir, name, model, embeddings, optimizer, train_loader, val_loader
             all_train_intersection_losses.append(train_intersection_loss.detach().cpu().numpy())
             train_prior_loss = prior_loss_fn(embeddings, data)
             all_train_prior_losses.append(train_prior_loss.detach().cpu().numpy())
-            train_loss = train_depth_loss + train_intersection_loss
+            train_loss = train_depth_loss + train_intersection_loss + train_prior_loss
             all_train_losses.append(train_loss.detach().cpu().numpy())
             train_loss.backward()
             optimizer.step()
@@ -93,8 +93,9 @@ def train(save_dir, name, model, embeddings, optimizer, train_loader, val_loader
             all_val_depth_losses.append(val_depth_loss.detach().cpu().numpy())
             val_intersection_loss = intersection_loss_fn(output, targets)
             all_val_intersection_losses.append(val_intersection_loss.detach().cpu().numpy())
-            val_loss = val_depth_loss + val_intersection_loss
+            #val_loss = val_depth_loss + val_intersection_loss
             val_prior_loss = prior_loss_fn(embeddings, data)
+            val_loss = val_depth_loss + val_intersection_loss + val_prior_loss
             all_val_prior_losses.append(val_prior_loss.detach().cpu().numpy())
             all_val_losses.append(val_loss.detach().cpu().numpy())
         print(f"Validation Loss: {np.mean(np.asarray(all_val_losses)):.5f}\n")
@@ -123,8 +124,9 @@ def train(save_dir, name, model, embeddings, optimizer, train_loader, val_loader
 
 
         # save checkpoint
-        v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history, latent_vectors=lat_vecs)
-        v3_utils.plotLosses(loss_history, save_dir, name)
+        if e%100==0:
+            v3_utils.checkpoint(model, save_dir, name, previous_epochs+e, optimizer, loss_history, latent_vectors=lat_vecs)
+        #v3_utils.plotLosses(loss_history, save_dir, name)
         # wandb.watch(model)
 
 
@@ -134,10 +136,10 @@ import faulthandler; faulthandler.enable()
 if __name__ == '__main__':
     Parser = v3_utils.BaselineParser
     Parser.add_argument('--epochs', help='Number of epochs to train for', type=int, default=10)
-    Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=16, type=int)
-    Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.001, type=float)
-    Parser.add_argument('--lr-latvecs', help='Choose the learning rate for the latent vectors.', default=0.001, type=float)
-    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=11, type=int)
+    Parser.add_argument('--batch-size', help='Choose mini-batch size.', required=False, default=100, type=int)
+    Parser.add_argument('--learning-rate', help='Choose the learning rate.', default=0.0005, type=float)
+    Parser.add_argument('--lr-latvecs', help='Choose the learning rate for the latent vectors.', default=0.0005, type=float)
+    Parser.add_argument('--n-layers', help="Number of layers in the network backbone", default=7, type=int)
     Parser.add_argument('--rays-per-shape', help='Number of samples to use during testing.', default=1000, type=int)
     Parser.add_argument('--val-rays-per-shape', help='Number of ray samples per object shape for validation.', default=10, type=int)
     Parser.add_argument('--force-test-on-train', help='Choose to test on the training data. CAUTION: Use this for debugging only.', action='store_true', required=False)
