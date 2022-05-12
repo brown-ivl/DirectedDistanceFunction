@@ -45,11 +45,14 @@ class DepthMapSampler():
     def sample(self, TargetRays, RatioPositive=DEPTH_SAMPLER_POS_RATIO):
         AllEndPoints = self.NPData['unprojected_normalized_pts']
         StartPoint = self.NPData['viewpoint'] # There is only 1 start point, the camera center
-        AllStartPoints = np.tile(StartPoint, (AllEndPoints.shape[0], 1))
+        if len(StartPoint.shape)==1:
+            AllStartPoints = np.tile(StartPoint, (AllEndPoints.shape[0], 1))
+        else:
+            AllStartPoints = StartPoints
         AllIntersects = self.NPData['invalid_depth_mask']
 
-        nPosTargetRays = math.floor(TargetRays*RatioPositive)
-        nNegTargetRays = (TargetRays-nPosTargetRays)
+        nPosTargetRays = math.floor(TargetRays*RatioPositive) # 65536
+        nNegTargetRays = (TargetRays-nPosTargetRays) # 65536
 
         AllPosIdx = np.where(AllIntersects == False)[0]
         AllNegIdx = np.where(AllIntersects == True)[0]
